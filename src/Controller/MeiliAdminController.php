@@ -10,8 +10,8 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 class MeiliAdminController extends AbstractController
 {
 //defaults={"anything" = null}, requirements={"anything"=".+"}
-    #[Route('/meili/admin{anything}', name: 'app_meili_admin', defaults: ['anything' => null], requirements: ['anything' => '.+'])]
-    public function index(UrlGeneratorInterface $urlGenerator): Response
+    #[Route('/meili/admin{anything}', name: 'survos_meili_admin', defaults: ['anything' => null], requirements: ['anything' => '.+'])]
+    public function dashboard(UrlGeneratorInterface $urlGenerator): Response
     {
         $config = json_decode(<<<END
 {
@@ -35,7 +35,8 @@ class MeiliAdminController extends AbstractController
 END
 );
 
-        $config->rootURL = $urlGenerator->generate('app_meili_admin');
+        // this seems problematic
+        $config->rootURL = $urlGenerator->generate('survos_meili_admin');
 //        dd($config, json_encode($config, JSON_PRETTY_PRINT+JSON_UNESCAPED_SLASHES));
 //        return $this->render('@SurvosBootstrap/base.html.twig', [
         return $this->render('@SurvosMeiliAdmin/dashboard.html.twig', [
