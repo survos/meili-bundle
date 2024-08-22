@@ -1,0 +1,9 @@
+/vendor/
+composer.lock
+/phpunit.xml
+/tests/cache
+/tests/project-dir/var
+/.phpunit.cache
+/coverage
+*.pixie*
+*.pixie*

@@ -3,6 +3,7 @@
 namespace Survos\MeiliAdminBundle\Controller;
 
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
@@ -45,4 +46,51 @@ END
             'controller_name' => 'MeiliAdminController',
         ]);
     }
+
+    #[Route(path: '/stats/{indexName}.{_format}', name: 'survos_index_stats', methods: ['GET'])]
+    public function stats(
+        string  $indexName,
+        Request $request,
+        string $_format='html'
+    ): Response
+    {
+        $index = $this->meili->getIndex($indexName);
+        $stats = $index->stats();
+        // idea: meiliStats as a component?
+        $data =  [
+            'indexName' => $indexName,
+            'settings' => $index->getSettings(),
+            'stats' => $stats
+        ];
+        return $_format == 'json'
+            ? $this->json($data)
+            : $this->render('@SurvosApiGrid/stats.html.twig', $data);
+
+        // Get the base URL
+//        $url = "/api/projects";//.$indexName;
+        $url = "/api/" . $indexName;
+        $queryParams = ['limit' => 0, 'offset' => 0, '_index' => false];
+        $queryParams['_locale'] = $translator->getLocale();
+        $settings = $index->getSettings();
+        foreach ($settings['filterableAttributes'] as $filterableAttribute) {
+            $queryParams['facets'][$filterableAttribute] = 1;
+        }
+        $queryParams = http_build_query($queryParams);
+
+        $data = $client->request('GET', $finalUrl = $baseUrl . $url . "?" . $queryParams, [
+            'headers' => [
+                'Content-Type' => 'application/ld+json;charset=utf-8',
+            ]
+        ]);
+
+        dd($finalUrl, $data->getStatusCode());
+        assert($index);
+        return $this->render('meili/stats.html.twig', [
+            'stats' => $index->stats(),
+            'settings' => $index->getSettings()
+        ]);
+
+
+    }
+
 }
