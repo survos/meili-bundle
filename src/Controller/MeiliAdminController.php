@@ -2,14 +2,87 @@
 
 namespace Survos\MeiliAdminBundle\Controller;
 
+use Survos\ApiGrid\Service\MeiliService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Attribute\MapQueryParameter;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use Symfony\UX\Chartjs\Builder\ChartBuilderInterface;
+use Symfony\UX\Chartjs\Model\Chart;
 
 class MeiliAdminController extends AbstractController
 {
+    public function __construct(
+        private MeiliService  $meili,
+        private ?ChartBuilderInterface $chartBuilder = null,
+        private string $coreName='core'
+    )
+    {
+//        $this->helper = $helper;
+    }
+
+    #[Route(path: '/facet/{indexName}/{fieldName}/{max}', name: 'survos_facet_show', methods: ['GET'])]
+    public function facet(string $indexName, string $fieldName,
+                          #[MapQueryParameter] string $tableName=null,
+                          int $max = 25): Response
+    {
+        $index = $this->meili->getIndex($indexName);
+
+        $params = ['limit' => 0,
+            'facets' => [$fieldName]];
+        if ($tableName) {
+            $params['filter'] = $this->coreName . "=" . $tableName;
+        }
+        $data = $index->rawSearch("", $params);
+        dd($data, $params);
+
+        $facetDistributionCounts = $data['facetDistribution'][$fieldName]??[];
+//        $translations = $projectService->getNonObjectTranslations($project->getCode(), $field->getCoreCode(), $locale); // , '=');
+        $counts = [];
+        foreach ($facetDistributionCounts as $label => $count) {
+            $counts[] = [
+                'label' => $label,
+                'count' => $count
+            ];
+        }
+        $chartData = [];
+        foreach (array_slice($counts, 0, $max) as $count) {
+            $chartData[$count['label'] ?? $count['code']] = $count['count'];
+        }
+        $chart = null;
+        if ($this->chartBuilder) {
+            $chart = $this->chartBuilder->createChart(Chart::TYPE_PIE);
+            $chart->setData([
+                'labels' => array_keys($chartData),
+                'datasets' => [
+                    [
+                        'label' => 'Data Distribution',
+                        'backgroundColor' => array_map(fn ($x) => sprintf('rgb(%d, %d, %d', random_int(0, 255), random_int(0, 255), random_int(0, 255)), array_values($chartData)),
+                        'borderColor' => 'rgb(255, 99, 132)',
+                        'data' => array_values($chartData),
+                    ],
+                ],
+            ]);
+
+            $chart->setOptions([
+                'maintainAspectRatio' => false,
+            ]);
+
+        }
+
+        return $this->render('@SurvosApiGrid/facet.html.twig', get_defined_vars() + [
+                'tableData' => $counts,
+                'chartData' => $chartData,
+                'chart' => $chart,
+                'currentField' => $fieldName,
+                'indexName' => $indexName,
+                'max' => $max,
+                // we need the facets to get a menu. Alas, this needs to run without the bootstrap bundle
+                'facetFields' =>  $index->getFilterableAttributes(),
+            ]);
+    }
 //defaults={"anything" = null}, requirements={"anything"=".+"}
     #[Route('/meili/admin{anything}', name: 'survos_meili_admin', defaults: ['anything' => null], requirements: ['anything' => '.+'])]
     public function dashboard(UrlGeneratorInterface $urlGenerator): Response
