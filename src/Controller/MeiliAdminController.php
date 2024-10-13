@@ -36,7 +36,7 @@ class MeiliAdminController extends AbstractController
             $params['filter'] = $this->coreName . "=" . $tableName;
         }
         $data = $index->rawSearch("", $params);
-        dd($data, $params);
+//        dd($data, indexName: $indexName, tableName: $tableName, fieldName: $fieldName, params: $params, dist: $data['facetDistribution'][$fieldName]);
 
         $facetDistributionCounts = $data['facetDistribution'][$fieldName]??[];
 //        $translations = $projectService->getNonObjectTranslations($project->getCode(), $field->getCoreCode(), $locale); // , '=');
