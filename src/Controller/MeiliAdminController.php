@@ -83,7 +83,8 @@ class MeiliAdminController extends AbstractController
                 'facetFields' =>  $index->getFilterableAttributes(),
             ]);
     }
-//defaults={"anything" = null}, requirements={"anything"=".+"}
+
+    //defaults={"anything" = null}, requirements={"anything"=".+"}
     #[Route('/meili/admin{anything}', name: 'survos_meili_admin', defaults: ['anything' => null], requirements: ['anything' => '.+'])]
     public function dashboard(UrlGeneratorInterface $urlGenerator): Response
     {
@@ -120,7 +121,17 @@ END
         ]);
     }
 
-    #[Route(path: '/stats/{indexName}.{_format}', name: 'survos_index_stats', methods: ['GET'])]
+    //defaults={"anything" = null}, requirements={"anything"=".+"}
+    #[Route('/riccox/{anything}', name: 'survos_riccox', defaults: ['anything' => null], requirements: ['anything' => '.+'])]
+    public function riccox(Request $request, UrlGeneratorInterface $urlGenerator): Response
+    {
+        return $this->render('@SurvosMeiliAdmin/riccox.html.twig', [
+        ]);
+
+    }
+
+
+        #[Route(path: '/stats/{indexName}.{_format}', name: 'survos_index_stats', methods: ['GET'])]
     public function stats(
         string  $indexName,
         Request $request,
