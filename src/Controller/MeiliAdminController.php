@@ -122,7 +122,7 @@ END
     }
 
     //defaults={"anything" = null}, requirements={"anything"=".+"}
-    #[Route('/riccox/{anything}', name: 'survos_riccox', defaults: ['anything' => null], requirements: ['anything' => '.+'])]
+    #[Route('/riccox/{anything}', name: 'riccox_meili_admin', defaults: ['anything' => null], requirements: ['anything' => '.+'])]
     public function riccox(Request $request, UrlGeneratorInterface $urlGenerator): Response
     {
         return $this->render('@SurvosMeiliAdmin/riccox.html.twig', [
