@@ -1,19 +1,21 @@
 {
     "name": "survos/meili-admin-bundle",
+    "description": "Utilies for managing a meilisearch server",
     "keywords": [
-        "symfony-ux",
-        "symfony6"
+        "symfony-ux"
     ],
     "license": "MIT",
     "type": "symfony-bundle",
     "require": {
         "php": "^8.3",
+        "symfony/console": "^7.3",
         "symfony/config": "^6.4 || ^7.1",
         "symfony/dependency-injection": "^6.4 || ^7.1",
         "symfony/http-kernel": "^6.4 || ^7.1",
         "twig/twig": "^3.4",
         "survos/installer": "^1.5 || ^2.0",
-        "symfony/property-access": "^7.2"
+        "symfony/property-access": "^7.2",
+        "meilisearch/meilisearch-php": "^1.14"
     },
     "require-dev": {
         "phpstan/phpstan": "^2.0",
@@ -22,7 +24,9 @@
         "symfony/phpunit-bridge": "^6.4 || ^7.1",
         "symfony/twig-bundle": "^6.4 || ^7.1",
         "symfony/var-dumper": "^6.4 || ^7.1",
-        "rector/rector": "dev-main"
+        "rector/rector": "^2.0",
+        "symfony/ux-chartjs": "^2.23",
+        "symfony/http-client": "^7.2"
     },
     "autoload": {
         "psr-4": {
@@ -31,7 +35,8 @@
     },
     "config": {
         "allow-plugins": {
-            "survos/installer": true
+            "survos/installer": true,
+            "php-http/discovery": true
         }
     }
 }

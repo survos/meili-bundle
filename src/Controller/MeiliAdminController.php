@@ -2,7 +2,7 @@
 
 namespace Survos\MeiliAdminBundle\Controller;
 
-use Survos\ApiGrid\Service\MeiliService;
+use Survos\MeiliAdminBundle\Service\MeiliService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
