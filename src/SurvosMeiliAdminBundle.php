@@ -20,7 +20,9 @@ class SurvosMeiliAdminBundle extends AbstractBundle
     public function loadExtension(array $config, ContainerConfigurator $container, ContainerBuilder $builder): void
     {
 
-        $builder->register($id = 'meili_service', MeiliService::class)
+        $id = 'meili_service_in_admin';
+//        $builder->register($id, MeiliService::class);
+        $builder->autowire(MeiliService::class)
 //            ->setArgument('$entityManager', new Reference('doctrine.orm.entity_manager'))
             ->setArgument('$config',$config)
             ->setArgument('$meiliHost',$config['meiliHost'])
@@ -32,14 +34,15 @@ class SurvosMeiliAdminBundle extends AbstractBundle
             ->setPublic(true)
             ->setAutoconfigured(true)
         ;
-        $container->services()->alias(MeiliService::class,$id);
+//        dd($config);
+        $container->services()->alias($id, MeiliService::class,);
 
         // we don't need both controllers!  But we do anyway, a mess
         $builder->autowire(MeiliAdminController::class)
             ->addTag('container.service_subscriber')
             ->addTag('controller.service_arguments')
             ->setArgument('$coreName', $config['core_name'])
-            ->setArgument('$meili', new Reference('meili_service')) // @todo: move from api to meiliadmin
+            ->setArgument('$meili', new Reference($id)) // @todo: move from api to meiliadmin
             ->setArgument('$chartBuilder', new Reference('chartjs.builder', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->setAutoconfigured(true)
             ->setPublic(true)
@@ -55,7 +58,7 @@ class SurvosMeiliAdminBundle extends AbstractBundle
         $builder->autowire(MeiliController::class)
             ->addTag('container.service_subscriber')
             ->addTag('controller.service_arguments')
-            ->setArgument('$meili', new Reference('meili_service')) // @todo: move from api to meiliadmin
+            ->setArgument('$meili', new Reference($id)) // @todo: move from api to meiliadmin
             ->setArgument('$chartBuilder', new Reference('chartjs.builder', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->setAutoconfigured(true)
             ->setPublic(true)

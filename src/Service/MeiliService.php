@@ -10,6 +10,7 @@ use Meilisearch\Endpoints\Indexes;
 use Meilisearch\Exceptions\ApiException;
 use Psr\Http\Client\ClientInterface;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
@@ -26,6 +27,7 @@ class MeiliService
         private ?LoggerInterface $logger = null,
         protected ?ClientInterface $httpClient = null,
     ) {
+        assert($this->meiliKey);
     }
 
     public function getConfig(): array
@@ -61,6 +63,28 @@ class MeiliService
             }
         }
     }
+
+    public function getRelated(array $facets, string $indexName, string $locale): array
+    {
+        $lookups = [];
+        if (str_ends_with($indexName, '_obj'))
+        {
+            foreach ($facets as $facet) {
+                if (!in_array($facet, ['type','cla','cat'])) {
+                    continue;
+                }
+                $related = str_replace('_obj', '_' . $facet, $indexName);
+                $index = $this->getIndexEndpoint($related);
+                $docs = $index->getDocuments();
+                foreach ($docs as $doc) {
+                    $lookups[$facet][$doc['id']] = $doc['t'][$locale]['label'];
+                }
+            }
+        }
+        return $lookups;
+
+    }
+
 
     public function waitForTask(array|string|int $taskId, ?Indexes $index = null, bool $stopOnError = true, mixed $dataToDump = null): array
     {
@@ -157,11 +181,11 @@ class MeiliService
         }
         return $index;
     }
-    
+
     public function getIndexEndpoint(string $indexName): Indexes
     {
         return $this->getMeiliClient()->index($indexName);
-        
+
     }
 
     public function loadExistingIndexes()
