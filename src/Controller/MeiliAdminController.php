@@ -2,7 +2,10 @@
 
 namespace Survos\MeiliAdminBundle\Controller;
 
+use Adbar\Dot;
+use cebe\openapi\Reader;
 use Survos\MeiliAdminBundle\Service\MeiliService;
+use Symfony\Bridge\Twig\Attribute\Template;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -22,6 +25,22 @@ class MeiliAdminController extends AbstractController
     {
 //        $this->helper = $helper;
     }
+
+    //
+    #[Route(path: '/docs', name: 'meili_admin_docs', methods: ['GET'])]
+    #[Template('@SurvosMeiliAdmin/docs.html.twig')]
+    public function docs(): Response|array
+    {
+        $url = 'https://raw.githubusercontent.com/meilisearch/open-api/refs/heads/main/open-api.json';
+        $dot = new Dot(json_decode(file_get_contents($url), true));
+
+// realpath is needed for resolving references with relative Paths or URLs
+//        $openapi = Reader::readFromJsonFile($url);
+        return [
+            'json' => $dot,
+        ];
+    }
+
 
     #[Route(path: '/facet/{indexName}/{fieldName}/{max}', name: 'survos_facet_show', methods: ['GET'])]
     public function facet(string $indexName, string $fieldName,

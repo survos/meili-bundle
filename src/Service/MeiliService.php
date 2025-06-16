@@ -21,13 +21,13 @@ class MeiliService
     public function __construct(
         protected ParameterBagInterface $bag,
         private string $meiliHost,
-        private string $meiliKey,
+        private ?string $meiliKey=null,
         private array $config = [],
         private array $groupsByClass = [],
         private ?LoggerInterface $logger = null,
         protected ?ClientInterface $httpClient = null,
     ) {
-        assert($this->meiliKey);
+//        assert($this->meiliKey);
     }
 
     public function getConfig(): array

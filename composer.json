@@ -15,7 +15,9 @@
         "twig/twig": "^3.4",
         "survos/installer": "^1.5 || ^2.0",
         "symfony/property-access": "^7.2",
-        "meilisearch/meilisearch-php": "^1.14"
+        "meilisearch/meilisearch-php": "^1.14",
+        "adbario/php-dot-notation": "^3.3",
+        "cebe/php-openapi": "^1.8"
     },
     "require-dev": {
         "phpstan/phpstan": "^2.0",
