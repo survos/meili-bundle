@@ -53,7 +53,7 @@ class CreateCommand
         #[Option] ?string $host=null,
         #[Option] ?string $apiKey=null,
         #[Option] ?string $provider=null,
-        #[Option] string $embed='my-embedder',
+        #[Option] string $embed='default',
         #[Option] ?int $embedSize=null,
         #[Option] bool $reset = false,
     )
@@ -72,9 +72,10 @@ class CreateCommand
         if ($provider === 'openAi') {
             $embedder = [
                 $embed => [
-                    'source' => 'openAi',
-                    'model' => 'text-embedding-3-small',
-                    'apiKey' => $this->apiKey,
+                    'source' => 'userProvided', // openAi?
+                    'dimensions' => 1024, //
+//                    'model' => 'text-embedding-3-small',
+//                    'apiKey' => $this->apiKey,
 //                    'documentTemplate' => null, // $documentTemplate,
                 ]
             ];

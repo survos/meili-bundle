@@ -10,6 +10,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapQueryParameter;
+use Symfony\Component\PropertyAccess\PropertyAccessor;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\UX\Chartjs\Builder\ChartBuilderInterface;
@@ -32,7 +33,9 @@ class MeiliAdminController extends AbstractController
     public function docs(): Response|array
     {
         $url = 'https://raw.githubusercontent.com/meilisearch/open-api/refs/heads/main/open-api.json';
-        $dot = new Dot(json_decode(file_get_contents($url), true));
+        $data = json_decode(file_get_contents($url), true);
+        $dot = new Dot($data);
+
 
 // realpath is needed for resolving references with relative Paths or URLs
 //        $openapi = Reader::readFromJsonFile($url);
