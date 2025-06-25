@@ -31,8 +31,8 @@ use Symfony\Component\Yaml\Yaml;
 use Zenstruck\Alias;
 
 #[AsCommand(
-    name: 'grid:index',
-    description: 'Index entities for use with api-grid',
+    name: 'meili:index',
+    description: 'Index entities for use with meilisearch',
 )]
 class IndexCommand extends Command
 {
@@ -49,6 +49,15 @@ class IndexCommand extends Command
     )
     {
         parent::__construct();
+    }
+
+    /**
+     * @param array $settings
+     * @return array
+     */
+    public function getFilterableAttributes(array $settings): array
+    {
+        return $this->settingsService->getFieldsWithAttribute($settings, 'browsable');
     }
 
     protected function configure(): void
@@ -100,7 +109,6 @@ class IndexCommand extends Command
 
         foreach ($classes as $class=>$groups) {
             $indexName = $this->meiliService->getPrefixedIndexName((new \ReflectionClass($class))->getShortName());
-
             $this->io->title($indexName);
             if ($reset=$input->getOption('reset')) {
                 $this->meiliService->reset($indexName);
@@ -163,12 +171,12 @@ class IndexCommand extends Command
         $index = $this->meiliService->getIndex($indexName, $primaryKey);
 //        $index->updateSortableAttributes($this->datatableService->getFieldsWithAttribute($settings, 'sortable'));
 //        $index->updateSettings(); // could do this in one call
-
+        $filterable = $this->getFilterableAttributes($settings);
             $results = $index->updateSettings($debug = [
 //                'searchFacets' => false, // search _within_ facets
                 'localizedAttributes' => $localizedAttributes,
                 'displayedAttributes' => ['*'],
-                'filterableAttributes' => $this->settingsService->getFieldsWithAttribute($settings, 'browsable'),
+                'filterableAttributes' => $filterable,
                 'sortableAttributes' => $this->settingsService->getFieldsWithAttribute($settings, 'sortable'),
                 "faceting" => [
                     "sortFacetValuesBy" => ["*" => "count"],
