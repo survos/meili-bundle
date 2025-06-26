@@ -368,6 +368,7 @@ class IndexCommand extends Command
                 // no settings if it doesn't exist
             }
             $table->render();;
+            $this->io->writeln($index->getUid());
         }
 
     }

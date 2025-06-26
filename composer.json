@@ -15,12 +15,9 @@
         "twig/twig": "^3.4",
         "survos/installer": "^1.5 || ^2.0",
         "symfony/property-access": "^7.2",
-        "meilisearch/meilisearch-php": "^1.15",
+        "meilisearch/meilisearch-php": "^1.14",
         "adbario/php-dot-notation": "^3.3",
-        "cebe/php-openapi": "^1.8",
-        "survos/core-bundle": "^1.5",
-        "symfony/options-resolver": "^7.3",
-        "nyholm/psr7": "^1.0"
+        "cebe/php-openapi": "^1.8"
     },
     "require-dev": {
         "phpstan/phpstan": "^2.0",
@@ -31,9 +28,7 @@
         "symfony/var-dumper": "^6.4 || ^7.1",
         "rector/rector": "^2.0",
         "symfony/ux-chartjs": "^2.23",
-        "symfony/http-client": "^7.2",
-        "api-platform/core": "^4.1",
-        "doctrine/orm": "^3.4"
+        "symfony/http-client": "^7.2"
     },
     "autoload": {
         "psr-4": {
