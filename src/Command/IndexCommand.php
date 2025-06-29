@@ -62,18 +62,6 @@ class IndexCommand extends Command
         return $this->settingsService->getFieldsWithAttribute($settings, 'browsable');
     }
 
-    protected function xxconfigure(): void
-    {
-        $this
-            ->addArgument('class', InputArgument::OPTIONAL, 'Class to index', null)
-            ->addOption('reset', null, InputOption::VALUE_NONE, 'Reset the indexes')
-            ->addOption('batch-size', null, InputOption::VALUE_REQUIRED, 'Batch size to meili', 100)
-            ->addOption('limit', null, InputOption::VALUE_REQUIRED, 'limit', 0)
-            ->addOption('filter', null, InputOption::VALUE_REQUIRED, 'filter in yaml format')
-            ->addOption('dump', null, InputOption::VALUE_REQUIRED, 'dump the nth item', 0)
-        ;
-    }
-
     public function __invoke(
         SymfonyStyle $io,
         #[Argument("Class name")] ?string $class = null,
@@ -87,14 +75,14 @@ class IndexCommand extends Command
     {
 
         $filterArray = $filter ? Yaml::parse($filter) : null;
-        if (!$class && !class_exists($class)) {
+        if ($class && !class_exists($class)) {
             $class = "App\\Entity\\$class";
             //
 //            if (class_exists(Alias::class)) {
 //                $class = Alias::classFor('user');
 //            }
         }
-            $classes = [];
+        $classes = [];
 
 
             // https://abendstille.at/blog/?p=163
