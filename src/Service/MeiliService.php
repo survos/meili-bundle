@@ -20,7 +20,7 @@ class MeiliService
 {
     public function __construct(
         protected ParameterBagInterface $bag,
-        private string $meiliHost,
+        private ?string $meiliHost='http://localhost:7700',
         private ?string $meiliKey=null,
         private array $config = [],
         private array $groupsByClass = [],
@@ -159,7 +159,7 @@ class MeiliService
     public function getMeiliClient(?string $host=null, ?string $apiKey=null): Client
     {
         static $client;
-//        if (!$client)
+        if (!$client)
         {
             $client = new Client(
                 $host??$this->meiliHost, $apiKey??$this->meiliKey,

@@ -3,10 +3,12 @@
 namespace Survos\MeiliAdminBundle;
 
 use Survos\MeiliAdminBundle\Command\CreateCommand;
+use Survos\MeiliAdminBundle\Command\IndexCommand;
 use Survos\MeiliAdminBundle\Command\ListCommand;
 use Survos\MeiliAdminBundle\Controller\MeiliAdminController;
 use Survos\MeiliAdminBundle\Controller\MeiliController;
 use Survos\MeiliAdminBundle\Service\MeiliService;
+use Survos\MeiliAdminBundle\Service\SettingsService;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -22,7 +24,9 @@ class SurvosMeiliAdminBundle extends AbstractBundle
     {
 
         $id = 'meili_service_in_admin';
-//        $builder->register($id, MeiliService::class);
+        $builder->autowire(SettingsService::class)
+            ->setPublic(true)
+            ;
         $builder->autowire(MeiliService::class)
 //            ->setArgument('$entityManager', new Reference('doctrine.orm.entity_manager'))
             ->setArgument('$config',$config)
@@ -49,7 +53,7 @@ class SurvosMeiliAdminBundle extends AbstractBundle
             ->setPublic(true)
         ;
 
-        foreach ([ListCommand::class, CreateCommand::class] as $class) {
+        foreach ([IndexCommand::class, ListCommand::class, CreateCommand::class] as $class) {
             $builder->autowire($class)
                 ->setPublic(true)
                 ->setAutoconfigured(true)
@@ -75,9 +79,9 @@ class SurvosMeiliAdminBundle extends AbstractBundle
                 ->info("a key when diverse types share an index, e.g. table or core")
             ->end()
             ->booleanNode('enabled')->defaultTrue()->end()
-            ->scalarNode('meiliHost')->defaultValue('%env(MEILI_SERVER)%')->end()
-            ->scalarNode('meiliKey')->defaultValue('%env(MEILI_API_KEY)%')->end()
-            ->scalarNode('meiliPrefix')->defaultValue('%env(MEILI_PREFIX)%')->end()
+            ->scalarNode('meiliHost')->defaultValue('%env(default::MEILI_SERVER)%')->end()
+            ->scalarNode('meiliKey')->defaultValue('%env(default::MEILI_API_KEY)%')->end()
+            ->scalarNode('meiliPrefix')->defaultValue('%env(default::MEILI_PREFIX)%')->end()
             ->booleanNode('passLocale')->defaultValue(false)->end()
             ->integerNode('maxValuesPerFacet')
             ->info('https://www.meilisearch.com/docs/reference/api/settings#faceting-object')

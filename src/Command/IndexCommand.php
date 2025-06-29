@@ -2,12 +2,6 @@
 
 namespace Survos\MeiliAdminBundle\Command;
 
-use Symfony\Component\Console\Attribute\Argument;
-use Symfony\Component\Console\Attribute\Option;
-use Symfony\Component\Console\Helper\TreeHelper;
-use Symfony\Component\Console\Helper\TreeNode;
-use Symfony\Component\Console\Style\SymfonyStyle;
-
 use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
 use ApiPlatform\Metadata\ApiFilter;
 use ApiPlatform\Metadata\ApiResource;
@@ -15,8 +9,13 @@ use Doctrine\ORM\EntityManagerInterface;
 use Meilisearch\Endpoints\Indexes;
 use Psr\Log\LoggerInterface;
 use Survos\ApiGrid\Api\Filter\MultiFieldSearchFilter;
+//use Survos\ApiGrid\Service\DatatableService;
+use Survos\CoreBundle\Service\SurvosUtils;
 use Survos\MeiliAdminBundle\Service\MeiliService;
+use Survos\MeiliAdminBundle\Service\SettingsService;
+use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Helper\ProgressBar;
 use Symfony\Component\Console\Helper\Table;
@@ -24,6 +23,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\Intl\Languages;
@@ -33,164 +33,66 @@ use Symfony\Component\Yaml\Yaml;
 use Zenstruck\Alias;
 
 #[AsCommand(
-    name: 'meili:create',
-    description: 'create and configure an index',
+    name: 'meili:index',
+    description: 'Index entities for use with meilisearch',
 )]
-class CreateCommand
+class IndexCommand extends Command
 {
+    private SymfonyStyle $io;
     public function __construct(
-        private MeiliService $meiliService,
-        protected ParameterBagInterface $bag,
-        private LoggerInterface $logger,
-        #[Autowire('%env(OPENAI_API_KEY)%')] private ?string $apiKey=null,
+        protected ParameterBagInterface                       $bag,
+        protected EntityManagerInterface                      $entityManager,
+        private LoggerInterface                               $logger,
+        private MeiliService                                  $meiliService,
+        private SettingsService                               $settingsService,
+        private NormalizerInterface                           $normalizer,
+        #[Autowire('%kernel.enabled_locales%')] private array $enabledLocales=[],
+
     )
     {
+        parent::__construct();
+    }
+
+    /**
+     * @param array $settings
+     * @return array
+     */
+    public function getFilterableAttributes(array $settings): array
+    {
+        return $this->settingsService->getFieldsWithAttribute($settings, 'browsable');
+    }
+
+    protected function xxconfigure(): void
+    {
+        $this
+            ->addArgument('class', InputArgument::OPTIONAL, 'Class to index', null)
+            ->addOption('reset', null, InputOption::VALUE_NONE, 'Reset the indexes')
+            ->addOption('batch-size', null, InputOption::VALUE_REQUIRED, 'Batch size to meili', 100)
+            ->addOption('limit', null, InputOption::VALUE_REQUIRED, 'limit', 0)
+            ->addOption('filter', null, InputOption::VALUE_REQUIRED, 'filter in yaml format')
+            ->addOption('dump', null, InputOption::VALUE_REQUIRED, 'dump the nth item', 0)
+        ;
     }
 
     public function __invoke(
         SymfonyStyle $io,
-        #[Argument()] string $indexName,
-        #[Option] ?string $host=null,
-        #[Option] ?string $apiKey=null,
-        #[Option] ?string $provider=null,
-        #[Option] string $embed='default',
-        #[Option] ?int $embedSize=null,
-        #[Option] bool $reset = false,
-    )
-    {
-        if ($reset) {
-            $this->meiliService->reset($indexName);
-        }
-        $index = $this->meiliService->getOrCreateIndex($indexName);
-        if (!$index) {
-            $io->error("Index '{$indexName}' was not created.");
-            return Command::FAILURE;
-        }
-        $info = $index->fetchRawInfo(); // NOT a task
-        $io->success("Index '{$info['uid']}' was created.");
-
-        if ($provider === 'openAi') {
-            $embedder = [
-                $embed => [
-                    'source' => 'userProvided', // openAi?
-                    'dimensions' => 1024, //
-//                    'model' => 'text-embedding-3-small',
-//                    'apiKey' => $this->apiKey,
-//                    'documentTemplate' => null, // $documentTemplate,
-                ]
-            ];
-            $task = $index->updateEmbedders(
-                $embedder,
-            );
-            $results = $this->meiliService->waitForTask($task['taskUid']);
-        }
-
-
-        $settings = $index->getSettings();
-        $embeddings = $index->getEmbedders();
-//        $io->writeln(json_encode($settings, JSON_PRETTY_PRINT));
-        $io->writeln(json_encode($embeddings, JSON_PRETTY_PRINT));
-
-return Command::SUCCESS;
-
-//        dd(json_encode($settings, JSON_PRETTY_PRINT), $settings, $embeddings);
-//        dd($index->getUid());
-//
-//        dd(show: $index->show());
-        $client = $this->meiliService->getMeiliClient($host, $apiKey);
-        $task = $client->createIndex($uId);
-        $results = $client->waitForTask($task['taskUid']);
-        dd($results);
-
-        if ($uId === null) {
-            // @todo: make this an "ask", but list size?
-            $io->title('List indexes');
-            /** @var Indexes $index */
-            foreach ($client->getIndexes() as $index) {
-                $io->writeln(sprintf('<info>%s</info>', $index->getUid()));
-            }
-            return;
-        }
-
-        dump($host, $apiKey);
-        $index = $client->index($uId);
-//        dd($index->getUid());
-        $results = $index->rawSearch('test');
-//        dd($results);
-        $settings = $index->getSettings();
-        dd($settings);
-
-        dd($index->fetchRawInfo());
-
-        $settings = $index->getSettings();
-        foreach ($settings as $var => $val) {
-            if (is_object($val)) {
-                $settings[$var] = (array)$val->jsonSerialize();
-            }
-            if ($val==null) {
-//                $settings[$var] = 'null';
-            }
-        }
-        $io->writeln(json_encode($settings, JSON_PRETTY_PRINT));
-//        dd($settings);
-
-//        $tree = TreeHelper::createTree($io, null, $settings);
-//        $tree->render();
-        dd();
-
-        $tree = TreeHelper::createTree($io, null, [
-            'src' =>  [
-                'Command',
-                'Controller' => [
-                    'DefaultController.php',
-                ],
-                'Kernel.php',
-            ],
-            'templates' => [
-                'base.html.twig',
-            ],
-        ]);
-
-        $tree->render();
-        dd();
-
-        if ($uId === null) {
-            // @todo: make this an "ask", but list size?
-            $io->title('List indexes');
-            $client = $this->meiliService->getMeiliClient();
-            /** @var Indexes $index */
-            foreach ($client->getIndexes() as $index) {
-                $io->writeln(sprintf('<info>%s</info>', $index->getUid()));
-            }
-        }
-        $index = $this->meiliService->getIndex($uId);
-//        $node = TreeNode::fromValues($index->getSettings());
-        $tree = TreeHelper::createTree($io, null, $index->getSettings());
-        $tree->render();
-    }
-
-//    protected function configure(): void
-//    {
-//        $this
-//            ->addArgument('class', InputArgument::OPTIONAL, 'Class to index', null)
-//            ->addOption('reset', null, InputOption::VALUE_NONE, 'Reset the indexes')
-//            ->addOption('batch-size', null, InputOption::VALUE_REQUIRED, 'Batch size to meili', 100)
-//            ->addOption('limit', null, InputOption::VALUE_REQUIRED, 'limit', 0)
-//            ->addOption('filter', null, InputOption::VALUE_REQUIRED, 'filter in yaml format')
-//            ->addOption('dump', null, InputOption::VALUE_REQUIRED, 'dump the nth item', 0)
-//        ;
-//    }
-
-    protected function XXexecute(InputInterface $input, OutputInterface $output): int
+        #[Argument("Class name")] ?string $class = null,
+        #[Option("limit")] ?int $limit = null,
+        #[Argument("filter class name")] string $filter='',
+        #[Option("pk")] ?string $pk = null,
+        #[Option("dump")] ?int $dump = null,
+        #[Option("reset the meili index")] ?bool $reset = null,
+        #[Option("batch-size for sending documents to meili", name: 'batch')] int $batchSize = 100,
+    ): int
     {
 
-        $filter = $input->getOption('filter');
         $filterArray = $filter ? Yaml::parse($filter) : null;
-        $class = $input->getArgument('class');
-        if (!class_exists($class)) {
-            if (class_exists(Alias::class)) {
-                $class = Alias::classFor('user');
-            }
+        if (!$class && !class_exists($class)) {
+            $class = "App\\Entity\\$class";
+            //
+//            if (class_exists(Alias::class)) {
+//                $class = Alias::classFor('user');
+//            }
         }
             $classes = [];
 
@@ -204,9 +106,9 @@ return Command::SUCCESS;
                 }
 
                 // skip if no groups defined
-                if (!$groups = $this->meiliService->getNormalizationGroups($meta->getName())) {
+                if (!$groups = $this->settingsService->getNormalizationGroups($meta->getName())) {
 //                    if ($input->ver) {
-                        $output->writeln("Skipping {$class}: no normalization groups for " . $meta->getName());
+                        $io->writeln("Skipping {$class}: no normalization groups for " . $meta->getName());
 //                    }
                     continue;
                 }
@@ -214,13 +116,12 @@ return Command::SUCCESS;
                 $classes[$meta->getName()] = $groups;
             }
 
-        $this->io = new SymfonyStyle($input, $output);
+        $this->io = $io;
 
         foreach ($classes as $class=>$groups) {
             $indexName = $this->meiliService->getPrefixedIndexName((new \ReflectionClass($class))->getShortName());
-
             $this->io->title($indexName);
-            if ($reset=$input->getOption('reset')) {
+            if ($reset) {
                 $this->meiliService->reset($indexName);
             }
 
@@ -229,13 +130,14 @@ return Command::SUCCESS;
 
             // pk of meili  index might be different than doctine pk, e.g. $imdbId
             $index = $this->configureIndex($class, $indexName);
-            $batchSize = $input->getOption('batch-size');
 
-            $stats = $this->indexClass($class, $index, batchSize: $batchSize, indexName: $indexName, groups: $groups,
-                limit: $input->getOption('limit'),
-                filter: $input->getOption('filter') ? $filterArray: null,
+            $stats = $this->indexClass($class, $index,
+                batchSize: $batchSize, indexName: $indexName, groups: $groups,
+                limit: $limit??0,
+                filter: $filter ? $filterArray: null,
                 primaryKey: $index->getPrimaryKey(),
-                dump: $input->getOption('dump'),
+                dump: $dump,
+                pk: $pk,
             );
 
             $this->io->success($indexName . ' Document count:' .$stats['numberOfDocuments']);
@@ -268,11 +170,9 @@ return Command::SUCCESS;
 //        $classAttributes = $reflection->getAttributes();
 //        $filterAttributes = [];
 //        $sortableAttributes = [];
-        $settings = $this->datatableService->getSettingsFromAttributes($class);
-        $idFields = $this->datatableService->getFieldsWithAttribute($settings, 'is_primary');
+        $settings = $this->settingsService->getSettingsFromAttributes($class);
+        $idFields = $this->settingsService->getFieldsWithAttribute($settings, 'is_primary');
         $primaryKey = count($idFields) ? $idFields[0] : 'id';
-//        dd($settings, $idFields, $primaryKey);
-
 
         $localizedAttributes = [];
         foreach ($this->enabledLocales as $locale) {
@@ -283,13 +183,13 @@ return Command::SUCCESS;
         $index = $this->meiliService->getIndex($indexName, $primaryKey);
 //        $index->updateSortableAttributes($this->datatableService->getFieldsWithAttribute($settings, 'sortable'));
 //        $index->updateSettings(); // could do this in one call
-
+        $filterable = $this->getFilterableAttributes($settings);
             $results = $index->updateSettings($debug = [
 //                'searchFacets' => false, // search _within_ facets
                 'localizedAttributes' => $localizedAttributes,
                 'displayedAttributes' => ['*'],
-                'filterableAttributes' => $this->datatableService->getFieldsWithAttribute($settings, 'browsable'),
-                'sortableAttributes' => $this->datatableService->getFieldsWithAttribute($settings, 'sortable'),
+                'filterableAttributes' => $filterable,
+                'sortableAttributes' => $this->settingsService->getFieldsWithAttribute($settings, 'sortable'),
                 "faceting" => [
                     "sortFacetValuesBy" => ["*" => "count"],
                     "maxValuesPerFacet" => $this->meiliService->getConfig()['maxValuesPerFacet']
@@ -306,9 +206,10 @@ return Command::SUCCESS;
                                 array $groups=[],
                                 int $limit=0,
                                 ?array $filter=[],
-                                int $dump=0,
+                                ?int $dump=null,
                                 ?string $primaryKey=null,
                                 ?string $subdomain=null,
+    ?string $pk = null
     ): array
     {
         $startingAt = 0;
@@ -356,6 +257,8 @@ return Command::SUCCESS;
         if ($subdomain) {
             assert($count == 1, "$count should be one for " . $subdomain);
         }
+
+        // where should we get the id from?  ApiProperty(identifier: true)?  #[ORM\Id()]?  $rp?
         foreach ($results as $idx => $r) {
             $count++;
             // @todo: pass in groups?  Or configure within the class itself?
@@ -365,14 +268,22 @@ return Command::SUCCESS;
             // for now, just match the groups in the normalization groups of the entity
 //            $groups = ['rp', 'searchable', 'marking', 'translation', sprintf("%s.read", strtolower($indexName))];
             $data = $this->normalizer->normalize($r, null, ['groups' => $groups]);
-            assert(array_key_exists('rp', $data), "missing rp in $class\n\n" . join("\n", array_keys($data)));
-            if (!array_key_exists($primaryKey, $data)) {
-                $this->logger->error($msg = "No primary key $primaryKey for " . $class);
-                SurvosUtils::assertKeyExists($primaryKey, $data);
-                assert(false, $msg . "\n" . join("\n", array_keys($data)));
-                return ['numberOfDocuments'=>0];
-                break;
+            $data = SurvosUtils::removeNullsAndEmptyArrays($data);
+            if ($pk) {
+                $primaryKey = $pk;
+                $data['id'] = $data[$pk];
             }
+            if (!array_key_exists('rp', $data)) {
+
+            }
+//            assert(array_key_exists('rp', $data), "missing rp in $class\n\n" . join("\n", array_keys($data)));
+//            if (!array_key_exists($primaryKey, $data)) {
+//                $this->logger->error($msg = "No primary key $primaryKey for " . $class);
+//                SurvosUtils::assertKeyExists($primaryKey, $data);
+//                assert(false, $msg . "\n" . join("\n", array_keys($data)));
+//                return ['numberOfDocuments'=>0];
+//                break;
+//            }
             $data['id'] = $data[$primaryKey]; // ??
             if (array_key_exists('keyedTranslations', $data)) {
                 $data['_translations'] = $data['keyedTranslations'];
@@ -389,7 +300,8 @@ return Command::SUCCESS;
 //                $data['language'] = $language;
 //            }
 
-            if ($dump === ($idx+1)) {
+            // @todo: use pk for dump
+            if ($dump && ($dump === ($idx+1))) {
                 dd($data);
             }
 //
@@ -479,6 +391,7 @@ return Command::SUCCESS;
                 // no settings if it doesn't exist
             }
             $table->render();;
+            $this->io->writeln($index->getUid());
         }
 
     }
