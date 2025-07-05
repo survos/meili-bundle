@@ -5,6 +5,7 @@ namespace Survos\MeiliAdminBundle;
 use Survos\MeiliAdminBundle\Command\CreateCommand;
 use Survos\MeiliAdminBundle\Command\IndexCommand;
 use Survos\MeiliAdminBundle\Command\ListCommand;
+use Survos\MeiliAdminBundle\Command\SettingsCommand;
 use Survos\MeiliAdminBundle\Controller\MeiliAdminController;
 use Survos\MeiliAdminBundle\Controller\MeiliController;
 use Survos\MeiliAdminBundle\Service\MeiliService;
@@ -53,7 +54,7 @@ class SurvosMeiliAdminBundle extends AbstractBundle
             ->setPublic(true)
         ;
 
-        foreach ([IndexCommand::class, ListCommand::class, CreateCommand::class] as $class) {
+        foreach ([IndexCommand::class, SettingsCommand::class, ListCommand::class, CreateCommand::class] as $class) {
             $builder->autowire($class)
                 ->setPublic(true)
                 ->setAutoconfigured(true)

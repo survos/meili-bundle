@@ -33,10 +33,10 @@ use Symfony\Component\Yaml\Yaml;
 use Zenstruck\Alias;
 
 #[AsCommand(
-    name: 'meili:index',
-    description: 'Index entities for use with meilisearch',
+    name: 'meili:settings',
+    description: 'view and set meilisearch settings',
 )]
-class IndexCommand extends Command
+class SettingsCommand extends Command
 {
     private SymfonyStyle $io;
     public function __construct(
@@ -47,6 +47,8 @@ class IndexCommand extends Command
         private SettingsService                               $settingsService,
         private NormalizerInterface                           $normalizer,
         #[Autowire('%kernel.enabled_locales%')] private array $enabledLocales=[],
+        #[Autowire('%env(OPENAI_API_KEY)%')] private string $openAiApiKey,
+
 
     )
     {
@@ -65,27 +67,66 @@ class IndexCommand extends Command
     public function __invoke(
         SymfonyStyle $io,
         #[Argument("Class name")] ?string $class = null,
-        #[Option("limit")] ?int $limit = null,
         #[Argument("filter class name")] string $filter='',
-        #[Option("pk")] ?string $pk = null,
-        #[Option("dump")] ?int $dump = null,
+        #[Option("pk")] string $pk = 'id',
         #[Option("reset the meili index")] ?bool $reset = null,
-        #[Option("batch-size for sending documents to meili", name: 'batch')] int $batchSize = 100,
     ): int
     {
+        // if !class, prompt for possible classes
 
-        $filterArray = $filter ? Yaml::parse($filter) : null;
         if ($class && !class_exists($class)) {
             $class = "App\\Entity\\$class";
-            //
-//            if (class_exists(Alias::class)) {
-//                $class = Alias::classFor('user');
-//            }
         }
-        $classes = [];
+
+        $indexName = $this->meiliService->getPrefixedIndexName((new \ReflectionClass($class))->getShortName());
+
+        $io->title($indexName);
+        if ($reset) {
+            $this->meiliService->reset($indexName);
+        }
+
+        // skip if no documents?  Obviously, docs could be added later, e.g. an Owner record after import
+//            $task = $this->waitForTask($this->getMeiliClient()->createIndex($indexName, ['primaryKey' => Instance::DB_CODE_FIELD]));
+
+        // pk of meili  index might be different than doctine pk, e.g. $imdbId
+        $index = $this->meiliService->getIndex($indexName, $pk);
+        $stats = $index->stats();
+
+        $documentTemplate = 'Instrument {{ doc.name }} is of type {{ doc.type }}. {{ doc.description }}.
+         {% assign genres = doc.genres|default: ""|split: "," %}
+         Genres: {% for genre in genres %} 
+         {{ genre }}{% if forloop.last %} and {% endif %}
+         {% endfor %}
+        ';
+        $embedders = $index->getEmbedders();
+        $embedder = [
+            'open_ai_small' => [
+                'source' => 'openAi',
+                'model' => 'text-embedding-3-small',
+                'apiKey' => $this->openAiApiKey,
+                'documentTemplate' => $documentTemplate,
+            ]
+        ];
+        $task = $index->updateEmbedders(
+            $embedder,
+        );
+        $results = $this->meiliService->waitForTask($task);
+
+        if ($results['status'] <> 'succeeded') {
+            dd($results);
+        }
 
 
-            // https://abendstille.at/blog/?p=163
+        $stats = $index->stats();
+        $io->title("$indexName stats");
+        $io->write(json_encode($stats, JSON_PRETTY_PRINT));
+
+        return Command::SUCCESS;
+        $index = $this->configureIndex($class, $indexName);
+
+
+
+        // https://abendstille.at/blog/?p=163
             $metas = $this->entityManager->getMetadataFactory()->getAllMetadata();
             foreach ($metas as $meta) {
                 // check argument
@@ -118,15 +159,6 @@ class IndexCommand extends Command
 
             // pk of meili  index might be different than doctine pk, e.g. $imdbId
             $index = $this->configureIndex($class, $indexName);
-
-            $stats = $this->indexClass($class, $index,
-                batchSize: $batchSize, indexName: $indexName, groups: $groups,
-                limit: $limit??0,
-                filter: $filter ? $filterArray: null,
-                primaryKey: $index->getPrimaryKey(),
-                dump: $dump,
-                pk: $pk,
-            );
 
             $this->io->success($indexName . ' Document count:' .$stats['numberOfDocuments']);
             $this->meiliService->waitUntilFinished($index);
@@ -185,7 +217,7 @@ class IndexCommand extends Command
                 ],
             ]);
             $stats = $this->meiliService->waitUntilFinished($index);
-//            dd($stats, $debug, $filterable, $index->getUid());
+            dump($stats, $debug, $filterable, $index->getUid());
         return $index;
     }
 

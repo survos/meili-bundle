@@ -13,6 +13,7 @@ use ApiPlatform\Doctrine\Orm\Filter\RangeFilter;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\Id;
+use Survos\InspectionBundle\Services\ResourceInspector;
 use Survos\MeiliAdminBundle\Api\Filter\FacetsFieldSearchFilter;
 use Survos\ApiGrid\Api\Filter\MultiFieldSearchFilter;
 use Survos\ApiGrid\Attribute\Facet;
@@ -27,7 +28,8 @@ use function Symfony\Component\String\u;
 class SettingsService
 {
     public function __construct(
-        private EntityManagerInterface $entityManager
+        private EntityManagerInterface $entityManager,
+        private ResourceInspector $resourceInspector,
     )
     {
     }
@@ -131,11 +133,20 @@ class SettingsService
     }
     public function getSettingsFromAttributes(string $class): array
     {
+        assert(class_exists($class), "Missing $class");
+//        $this->resourceInspector->inspect($class);
+
         assert(class_exists($class), $class);
         $reflectionClass = new \ReflectionClass($class);
         $settings = [];
+
+        // this is a hack, we should get it from ApiPlatform Meta
         // class attributes first.
         foreach ($reflectionClass->getAttributes() as $attribute) {
+
+//            if ($attribute->getName() === ApiProperty::class) {
+//                dd($attribute->getName(), $attribute->newInstance());
+//            }
 
             //
             if (!u($attribute->getName())->endsWith('ApiFilter')) {
@@ -193,7 +204,14 @@ class SettingsService
         // now go through each property, including getting the primary key
         foreach ($reflectionClass->getProperties() as $property) {
             $fieldname = $property->getName();
+
             foreach ($property->getAttributes() as $attribute) {
+
+//                if ($attribute->getName() === ApiProperty::class) {
+//                    dd($attribute->getName(), $attribute->newInstance());
+//                }
+
+
                 if (in_array($attribute->getName(), [MeiliId::class, Id::class])) {
                     $settings[$fieldname]['is_primary'] = true;
                 }
