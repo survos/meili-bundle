@@ -1,0 +1,41 @@
+{
+  "name": "@survos/meili-bundle",
+  "description": "integrate instant search",
+  "license": "MIT",
+  "version": "1.1",
+  "symfony": {
+    "controllers": {
+      "js_twig": {
+        "main": "src/controllers/js_twig_controller.js",
+        "webpackMode": "eager",
+        "fetch": "lazy",
+        "enabled": true,
+        "autoimport": {}
+      },
+      "insta": {
+        "main": "src/controllers/insta_controller.js",
+        "webpackMode": "eager",
+        "fetch": "lazy",
+        "enabled": true,
+        "autoimport": {
+          "flag-icons/css/flag-icons.min.css": true
+        }
+      }
+    },
+    "importmap": {
+      "twig": "^1.17.1",
+      "fos-routing": "^0.0.6",
+      "flag-icons": "^7.5",
+      "@meilisearch/instant-meilisearch": "^0.27"
+    }
+  },
+  "peerDependencies": {
+    "@hotwired/stimulus": "^3.2.2"
+  },
+  "devDependencies": {
+    "@hotwired/stimulus": "^3.2.2"
+  },
+  "dependencies": {
+    "twig": "^1.17.1"
+  }
+}
