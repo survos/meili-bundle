@@ -2,6 +2,10 @@
 
 namespace Survos\MeiliBundle;
 
+use Survos\CoreBundle\HasAssetMapperInterface;
+use Survos\CoreBundle\Traits\HasAssetMapperTrait;
+use Survos\InspectionBundle\Services\InspectionService;
+use Survos\MeiliBundle\Components\InstantSearch;
 use Survos\MeiliBundle\Command\CreateCommand;
 use Survos\MeiliBundle\Command\IndexCommand;
 use Survos\MeiliBundle\Command\ListCommand;
@@ -17,8 +21,10 @@ use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigura
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
 
-class SurvosMeiliBundle extends AbstractBundle
+class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterface
 {
+    use HasAssetMapperTrait;
+
     protected string $extensionAlias = 'survos_meili';
 
     public function loadExtension(array $config, ContainerConfigurator $container, ContainerBuilder $builder): void
@@ -26,22 +32,20 @@ class SurvosMeiliBundle extends AbstractBundle
 
         $id = 'meili_service_in_admin';
         $builder->autowire(SettingsService::class)
-            ->setPublic(true)
-            ;
+            ->setPublic(true);
         $builder->autowire(MeiliService::class)
 //            ->setArgument('$entityManager', new Reference('doctrine.orm.entity_manager'))
-            ->setArgument('$config',$config)
-            ->setArgument('$meiliHost',$config['meiliHost'])
-            ->setArgument('$meiliKey',$config['meiliKey'])
-            ->setArgument('$httpClient',new Reference('httplug.http_client', ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$config', $config)
+            ->setArgument('$meiliHost', $config['meiliHost'])
+            ->setArgument('$meiliKey', $config['meiliKey'])
+            ->setArgument('$httpClient', new Reference('httplug.http_client', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->setArgument('$logger', new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->setArgument('$bag', new Reference('parameter_bag'))
             ->setAutowired(true)
             ->setPublic(true)
-            ->setAutoconfigured(true)
-        ;
+            ->setAutoconfigured(true);
 //        dd($config);
-        $container->services()->alias($id, MeiliService::class,);
+        $container->services()->alias($id, MeiliService::class);
 
         // we don't need both controllers!  But we do anyway, a mess
         $builder->autowire(MeiliAdminController::class)
@@ -51,8 +55,7 @@ class SurvosMeiliBundle extends AbstractBundle
             ->setArgument('$meili', new Reference($id)) // @todo: move from api to meiliadmin
             ->setArgument('$chartBuilder', new Reference('chartjs.builder', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->setAutoconfigured(true)
-            ->setPublic(true)
-        ;
+            ->setPublic(true);
 
         foreach ([IndexCommand::class, SettingsCommand::class, ListCommand::class, CreateCommand::class] as $class) {
             $builder->autowire($class)
@@ -61,14 +64,39 @@ class SurvosMeiliBundle extends AbstractBundle
                 ->addTag('console.command');
         }
 
+        $builder->register($id = 'api_meili_service', MeiliService::class)
+            ->setArgument('$config', $config)
+            ->setArgument('$meiliHost', $config['meiliHost'])
+            ->setArgument('$meiliKey', $config['meiliKey'])
+            ->setArgument('$httpClient', new Reference('httplug.http_client', ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$logger', new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$bag', new Reference('parameter_bag'))
+            ->setAutowired(true)
+            ->setPublic(true)
+            ->setAutoconfigured(true)
+            ->setAutowired(true)
+            ->setPublic(true);
+
+
         $builder->autowire(MeiliController::class)
             ->addTag('container.service_subscriber')
             ->addTag('controller.service_arguments')
             ->setArgument('$meili', new Reference($id)) // @todo: move from api to meiliadmin
             ->setArgument('$chartBuilder', new Reference('chartjs.builder', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->setAutoconfigured(true)
+            ->setPublic(true);
+
+        $builder->register(InstantSearch::class)
             ->setPublic(true)
+            ->setAutowired(true)
+            ->setAutoconfigured(true)
+            ->setArgument('$twig', new Reference('twig'))
+            ->setArgument('$logger', new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE))
+//            ->setArgument('$datatableService', new Reference(DatatableService::class))
+            ->setArgument('$inspectionService', new Reference(InspectionService::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
+            ->setArgument('$meiliService', new Reference('api_meili_service'))//            ->setArgument('$stimulusController', $config['stimulus_controller']);
         ;
+
 
     }
 
@@ -77,7 +105,7 @@ class SurvosMeiliBundle extends AbstractBundle
         $definition->rootNode()
             ->children()
             ->scalarNode('core_name')->defaultValue('core')
-                ->info("a key when diverse types share an index, e.g. table or core")
+            ->info("a key when diverse types share an index, e.g. table or core")
             ->end()
             ->booleanNode('enabled')->defaultTrue()->end()
             ->scalarNode('meiliHost')->defaultValue('%env(default::MEILI_SERVER)%')->end()
@@ -90,5 +118,32 @@ class SurvosMeiliBundle extends AbstractBundle
             ->end()
             ->end();
     }
+
+    public function prependExtension(ContainerConfigurator $container, ContainerBuilder $builder): void
+    {
+        if (!$this->isAssetMapperAvailable($builder)) {
+            return;
+        }
+
+        $dir = realpath(__DIR__ . '/../assets/');
+        assert(file_exists($dir), $dir);
+
+        $builder->prependExtensionConfig('framework', [
+            'asset_mapper' => [
+                'paths' => [
+                    $dir => '@survos/meili',
+                ],
+            ],
+        ]);
+    }
+
+    public function getPaths(): array
+    {
+        $dir = realpath(__DIR__ . '/../assets/');
+        assert(file_exists($dir), $dir);
+        return [$dir => '@survos/meili'];
+
+    }
+
 
 }

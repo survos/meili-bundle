@@ -90,41 +90,16 @@ class SettingsCommand extends Command
 
         // pk of meili  index might be different than doctine pk, e.g. $imdbId
         $index = $this->meiliService->getIndex($indexName, $pk);
-        $stats = $index->stats();
-
-        $documentTemplate = 'Instrument {{ doc.name }} is of type {{ doc.type }}. {{ doc.description }}.
-         {% assign genres = doc.genres|default: ""|split: "," %}
-         Genres: {% for genre in genres %} 
-         {{ genre }}{% if forloop.last %} and {% endif %}
-         {% endfor %}
-        ';
-        $embedders = $index->getEmbedders();
-        $embedder = [
-            'open_ai_small' => [
-                'source' => 'openAi',
-                'model' => 'text-embedding-3-small',
-                'apiKey' => $this->openAiApiKey,
-                'documentTemplate' => $documentTemplate,
-            ]
-        ];
-        $task = $index->updateEmbedders(
-            $embedder,
-        );
-        $results = $this->meiliService->waitForTask($task);
-
-        if ($results['status'] <> 'succeeded') {
-            dd($results);
-        }
-
+        $index = $this->configureIndex($class, $indexName, $index);
 
         $stats = $index->stats();
+
+
+
         $io->title("$indexName stats");
         $io->write(json_encode($stats, JSON_PRETTY_PRINT));
 
         return Command::SUCCESS;
-        $index = $this->configureIndex($class, $indexName);
-
-
 
         // https://abendstille.at/blog/?p=163
             $metas = $this->entityManager->getMetadataFactory()->getAllMetadata();
@@ -183,7 +158,7 @@ class SettingsCommand extends Command
 
     }
 
-    private function configureIndex(string $class, string $indexName): Indexes
+    private function configureIndex(string $class, string $indexName, Indexes $index): Indexes
     {
 
 //        $reflection = new \ReflectionClass($class);
@@ -195,6 +170,33 @@ class SettingsCommand extends Command
         $idFields = $this->settingsService->getFieldsWithAttribute($settings, 'is_primary');
         $primaryKey = count($idFields) ? $idFields[0] : 'id';
 
+        if ($indexName === 'dtdemo_Instrument') {
+            $documentTemplate = 'Instrument {{ doc.name }} is of type {{ doc.type }}. {{ doc.description }}.
+        {% if doc.genres %}
+         {% assign genres = doc.genres|default: ""|split: "," %}
+         Genres: {% for genre in genres %} 
+         {{ genre }}{% if forloop.last %} and {% endif %}
+         {% endfor %}
+         {% endif %}
+        ';
+            $embedders = $index->getEmbedders();
+            $embedder = [
+                'open_ai_small' => [
+                    'source' => 'openAi',
+                    'model' => 'text-embedding-3-small',
+                    'apiKey' => $this->openAiApiKey,
+                    'documentTemplate' => $documentTemplate,
+                ]
+            ];
+            $task = $index->updateEmbedders(
+                $embedder,
+            );
+            $results = $this->meiliService->waitForTask($task);
+
+            if ($results['status'] <> 'succeeded') {
+                dd($results);
+            }
+        }
         $localizedAttributes = [];
         foreach ($this->enabledLocales as $locale) {
             $localizedAttributes[] = ['locales' => [$locale],
@@ -216,8 +218,9 @@ class SettingsCommand extends Command
                     "maxValuesPerFacet" => $this->meiliService->getConfig()['maxValuesPerFacet']
                 ],
             ]);
-            $stats = $this->meiliService->waitUntilFinished($index);
-            dump($stats, $debug, $filterable, $index->getUid());
+//            $stats = $this->meiliService->waitUntilFinished($index);
+//            dump($stats, $debug, $filterable, $index->getUid());
+        dump($index->getSettings(), $index->getEmbedders());
         return $index;
     }
 

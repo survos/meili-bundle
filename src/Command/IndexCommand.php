@@ -110,6 +110,7 @@ class IndexCommand extends Command
             $indexName = $this->meiliService->getPrefixedIndexName((new \ReflectionClass($class))->getShortName());
             $this->io->title($indexName);
             if ($reset) {
+                assert(false, 'reset moved to meili:settings');
                 $this->meiliService->reset($indexName);
             }
 
@@ -117,7 +118,8 @@ class IndexCommand extends Command
 //            $task = $this->waitForTask($this->getMeiliClient()->createIndex($indexName, ['primaryKey' => Instance::DB_CODE_FIELD]));
 
             // pk of meili  index might be different than doctine pk, e.g. $imdbId
-            $index = $this->configureIndex($class, $indexName);
+//            $index = $this->configureIndex($class, $indexName);
+            $index = $this->meiliService->getIndex($indexName, $pk);
 
             $stats = $this->indexClass($class, $index,
                 batchSize: $batchSize, indexName: $indexName, groups: $groups,

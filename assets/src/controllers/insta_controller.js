@@ -92,14 +92,17 @@ const tpl = Twig.twig({
 * See https://symfony.com/bundles/StimulusBundle/current/index.html#lazy-stimulus-controllers
 */
 
-/* stimulusFetch: 'lazy' */
+// /* stimulusFetch: 'lazy' */
 export default class extends Controller {
-    static targets = ['searchBox', 'hits',
+    static targets = [
+        'searchBox',
+        'hits',
         'template',
         'sort',
         'reset',
         'pagination',
-        'refinementList', 'marking']
+        'refinementList',
+        'marking']
     static values = {
         serverUrl: String,
         serverApiKey: String,
@@ -115,6 +118,7 @@ export default class extends Controller {
 
 
     initialize() {
+        console.log("Hello from " + this.identifier);
         // Called once when the controller is first instantiated (per element)
 
         // Here you can initialize variables, create scoped callables for event

@@ -1,0 +1,50 @@
+    {% set _sc = 'debug_dialog' %}
+{#    <div {{ stimulus_controller(_sc)}}#}
+{#        {{ stimulus_action(_sc, 'backdropClose') }}#}
+{#    >#}
+        <dialog {{ stimulus_target(_sc, 'dialog')}}>
+            <h2 {{ stimulus_target(_sc, 'title')}}>
+                fancy dialog title
+            </h2>
+            <div {{ stimulus_target(_sc, 'content')}}>
+{#                <h3>{{ _sc }}</h3>#}
+                <div>The modal content here</div>
+
+            </div>
+
+            <button type="button"
+                    {{ stimulus_action(_sc, 'close') }}
+                    autofocus>Cancel</button>
+        </dialog>
+
+{#    </div>#}
+
+{#<div#}
+{#    class="modal xfade"#}
+{#    tabindex="-1"#}
+{#    aria-hidden="true"#}
+{#>#}
+{#    <div class="modal-dialog">#}
+{#        <div class="modal-content">#}
+{#            <div class="modal-header">#}
+{#                <h5 class="modal-title" {{ stimulus_target(_sc_modal, 'title') }}>Modal title</h5>#}
+{#                <button type="button" class="btn-close"#}
+{#                        data-bs-dismiss="modal"#}
+{#                        aria-label="Close"></button>#}
+{#            </div>#}
+{#            <div class="modal-body"#}
+{#                {{ stimulus_target(_sc_modal, 'body') }}#}
+{#            >#}
+{#                {{ _sc_modal }} body here.#}
+{#            </div>#}
+{#            <div class="modal-footer">#}
+{#                <button type="button" class="btn btn-secondary"#}
+{#                        data-bs-dismiss="modal">Close#}
+{#                </button>#}
+{#                <button type="button" class="btn btn-primary">#}
+{#                    Understood#}
+{#                </button>#}
+{#            </div>#}
+{#        </div>#}
+{#    </div>#}
+{#</div>#}
