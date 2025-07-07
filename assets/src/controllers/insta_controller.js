@@ -19,7 +19,7 @@ import 'pretty-print-json/dist/css/pretty-print-json.min.css';
 // import '@meilisearch/instant-meilisearch/templates/basic_search.css';
 // @todo: custom css AFTER this.  Hack: move to app.css
 // import 'instantsearch.css/themes/algolia.min.css';
-import './../styles/hack.css';
+// import './../styles/hack.css';
 import 'flag-icons/css/flag-icons.min.css';
 
 Routing.setData(RoutingData);
@@ -133,7 +133,8 @@ export default class extends Controller {
         this.languageNames = new Intl.DisplayNames(
             [this.userLocaleValue], {type: 'language'}
         );
-        console.warn(this.embedderNameValue);
+        // console.warn(this.embedderNameValue);
+        console.error(this.templateUrlValue);
 
     }
 
@@ -141,6 +142,7 @@ export default class extends Controller {
         const self = this; // or use: const that = this;
         const ctrl = this;
         this._self = this;
+        console.error(this.templateUrlValue);
 
         // Called every time the controller is connected to the DOM
         // (on page load, when it's added to the DOM, moved in the DOM, etc.)
@@ -303,6 +305,7 @@ export default class extends Controller {
                         // this _does_ work, with includes!
                         // let x= tpl.render({hit: hit, title: 'const tpl'});
                         // return hit.title + '/'; // JSON.stringify(hit);
+                        console.log(this.template);
                         return this.template.render({
                             x: '', // x,
                             hit: hit,
@@ -490,6 +493,8 @@ export default class extends Controller {
      * @returns {Promise<void>}
      */
     async fetchFile() {
+        console.assert(this.templateUrlValue);
+        console.log('templateUrl' + this.templateUrlValue);
         try {
             const response = await fetch(this.templateUrlValue)
             if (!response.ok) {
@@ -506,6 +511,7 @@ export default class extends Controller {
             }
             // this is inline loading
             this.template = Twig.twig({data: data});
+            console.log(data);
             // this.template = tpl;
 
         } catch (error) {
