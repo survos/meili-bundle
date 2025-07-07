@@ -1,10 +1,10 @@
 <?php
 
-namespace Survos\MeiliAdminBundle\Controller;
+namespace Survos\MeiliBundle\Controller;
 
 use Adbar\Dot;
 use cebe\openapi\Reader;
-use Survos\MeiliAdminBundle\Service\MeiliService;
+use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Bridge\Twig\Attribute\Template;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;

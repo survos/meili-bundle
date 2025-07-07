@@ -1,6 +1,6 @@
 <?php
 
-namespace Survos\MeiliAdminBundle\Command;
+namespace Survos\MeiliBundle\Command;
 
 use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
 use ApiPlatform\Metadata\ApiFilter;
@@ -11,8 +11,8 @@ use Psr\Log\LoggerInterface;
 use Survos\ApiGrid\Api\Filter\MultiFieldSearchFilter;
 //use Survos\ApiGrid\Service\DatatableService;
 use Survos\CoreBundle\Service\SurvosUtils;
-use Survos\MeiliAdminBundle\Service\MeiliService;
-use Survos\MeiliAdminBundle\Service\SettingsService;
+use Survos\MeiliBundle\Service\MeiliService;
+use Survos\MeiliBundle\Service\SettingsService;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;

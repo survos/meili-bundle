@@ -2,5 +2,5 @@ survos_meili_admin:
   prefix: /meiliAdmin
   type: attribute
   resource:
-    path: '@SurvosMeiliAdminBundle/src/Controller/'
-    namespace: Survos\MeiliAdminBundle\Controller
+    path: '@SurvosMeiliBundle/src/Controller/'
+    namespace: Survos\MeiliBundle\Controller

@@ -1,6 +1,6 @@
 <?php
 
-namespace Survos\MeiliAdminBundle\Metadata;
+namespace Survos\MeiliBundle\Metadata;
 
 interface MeiliDocumentInterface
 {

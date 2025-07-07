@@ -1,15 +1,15 @@
 <?php
 
-namespace Survos\MeiliAdminBundle;
+namespace Survos\MeiliBundle;
 
-use Survos\MeiliAdminBundle\Command\CreateCommand;
-use Survos\MeiliAdminBundle\Command\IndexCommand;
-use Survos\MeiliAdminBundle\Command\ListCommand;
-use Survos\MeiliAdminBundle\Command\SettingsCommand;
-use Survos\MeiliAdminBundle\Controller\MeiliAdminController;
-use Survos\MeiliAdminBundle\Controller\MeiliController;
-use Survos\MeiliAdminBundle\Service\MeiliService;
-use Survos\MeiliAdminBundle\Service\SettingsService;
+use Survos\MeiliBundle\Command\CreateCommand;
+use Survos\MeiliBundle\Command\IndexCommand;
+use Survos\MeiliBundle\Command\ListCommand;
+use Survos\MeiliBundle\Command\SettingsCommand;
+use Survos\MeiliBundle\Controller\MeiliAdminController;
+use Survos\MeiliBundle\Controller\MeiliController;
+use Survos\MeiliBundle\Service\MeiliService;
+use Survos\MeiliBundle\Service\SettingsService;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -17,7 +17,7 @@ use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigura
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
 
-class SurvosMeiliAdminBundle extends AbstractBundle
+class SurvosMeiliBundle extends AbstractBundle
 {
     protected string $extensionAlias = 'survos_meili_admin';
 

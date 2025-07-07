@@ -1,6 +1,6 @@
 {
-    "name": "survos/meili-admin-bundle",
-    "description": "Utilies for managing a meilisearch server",
+    "name": "survos/meili-bundle",
+    "description": "Utilies for managing a meilisearch indexes",
     "keywords": [
         "symfony-ux"
     ],
@@ -35,7 +35,7 @@
     },
     "autoload": {
         "psr-4": {
-            "Survos\\MeiliAdminBundle\\": "src/"
+            "Survos\\MeiliBundle\\": "src/"
         }
     },
     "config": {

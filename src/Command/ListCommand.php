@@ -1,6 +1,6 @@
 <?php
 
-namespace Survos\MeiliAdminBundle\Command;
+namespace Survos\MeiliBundle\Command;
 
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\Option;
@@ -15,7 +15,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Meilisearch\Endpoints\Indexes;
 use Psr\Log\LoggerInterface;
 use Survos\ApiGrid\Api\Filter\MultiFieldSearchFilter;
-use Survos\MeiliAdminBundle\Service\MeiliService;
+use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Helper\ProgressBar;

@@ -1,8 +1,8 @@
 <?php
 
-namespace Survos\MeiliAdminBundle\Controller;
+namespace Survos\MeiliBundle\Controller;
 
-use Survos\MeiliAdminBundle\Service\MeiliService;
+use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Bridge\Twig\Attribute\Template;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpClient\HttpClient;

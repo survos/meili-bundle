@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Survos\MeiliAdminBundle\Service;
+namespace Survos\MeiliBundle\Service;
 
 use ApiPlatform\Metadata\ApiFilter;
 use ApiPlatform\Metadata\ApiProperty;
@@ -14,7 +14,7 @@ use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\Id;
 use Survos\InspectionBundle\Services\ResourceInspector;
-use Survos\MeiliAdminBundle\Api\Filter\FacetsFieldSearchFilter;
+use Survos\MeiliBundle\Api\Filter\FacetsFieldSearchFilter;
 use Survos\ApiGrid\Api\Filter\MultiFieldSearchFilter;
 use Survos\ApiGrid\Attribute\Facet;
 use Survos\ApiGrid\Attribute\MeiliId;

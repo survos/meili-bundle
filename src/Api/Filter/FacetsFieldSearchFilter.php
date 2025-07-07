@@ -2,7 +2,7 @@
 
 // properties tagged with this filter get added to the meili settings
 
-namespace Survos\MeiliAdminBundle\Api\Filter;
+namespace Survos\MeiliBundle\Api\Filter;
 
 use ApiPlatform\Metadata\FilterInterface;
 use ApiPlatform\Doctrine\Orm\Filter\AbstractFilter;

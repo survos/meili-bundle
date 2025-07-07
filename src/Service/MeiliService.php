@@ -1,8 +1,8 @@
 <?php
 
-// really this should extend, use or decorate MeiliService in MeiliAdminBundle
+// really this should extend, use or decorate MeiliService in MeiliBundle
 
-namespace Survos\MeiliAdminBundle\Service;
+namespace Survos\MeiliBundle\Service;
 
 use Meilisearch\Client;
 use Meilisearch\Contracts\DocumentsQuery;

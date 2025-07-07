@@ -1,6 +1,6 @@
 <?php
 
-namespace Survos\MeiliAdminBundle\Trait;
+namespace Survos\MeiliBundle\Trait;
 
 use Symfony\Component\PropertyAccess\PropertyAccessor;
 
