@@ -18,7 +18,7 @@ import 'pretty-print-json/dist/css/pretty-print-json.min.css';
 // this import makes the pretty-json really ugly
 // import '@meilisearch/instant-meilisearch/templates/basic_search.css';
 // @todo: custom css AFTER this.  Hack: move to app.css
-// import 'instantsearch.css/themes/algolia.min.css';
+import 'instantsearch.css/themes/algolia.min.css';
 // import './../styles/hack.css';
 import 'flag-icons/css/flag-icons.min.css';
 
@@ -305,10 +305,10 @@ export default class extends Controller {
                         // this _does_ work, with includes!
                         // let x= tpl.render({hit: hit, title: 'const tpl'});
                         // return hit.title + '/'; // JSON.stringify(hit);
-                        console.log(this.template);
                         return this.template.render({
                             x: '', // x,
                             hit: hit,
+                            templateUrl: this.templateUrlValue,
                             icons: this.icons,
                             globals: this.globals
                         });
@@ -511,7 +511,6 @@ export default class extends Controller {
             }
             // this is inline loading
             this.template = Twig.twig({data: data});
-            console.log(data);
             // this.template = tpl;
 
         } catch (error) {

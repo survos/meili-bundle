@@ -28,7 +28,7 @@ class MeiliController extends AbstractController
     }
 
     #[Route(path: '/realtime/abc/{indexName}.{_format}', name: 'survos_meili_realtime_stats', methods: ['GET'])]
-    #[Template('@SurvosApiGrid/_realtime.html.twig')]
+    #[Template('@SurvosMeili/_realtime.html.twig')]
     public function realtime_stats(
         string  $indexName,
         string $_format='html'
