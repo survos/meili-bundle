@@ -1,0 +1,11 @@
+{% extends "base.html.twig" %}
+
+{% block body %}
+<h1>{{ index.uid }}</h1>
+{{ stats.numberOfDocuments }} documents
+<hr />
+{{ stats.isIndexing ? 'Indexing' : 'indexing is finished' }}
+Time: {{ 'now'|format_time }}
+
+{{ dump(stats) }}
+{% endblock %}

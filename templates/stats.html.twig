@@ -1,0 +1,41 @@
+{% extends 'base.html.twig' %}
+
+{% block body %}
+    <h1>Index {{ indexName }} ({{ stats.numberOfDocuments }} objects)</h1>
+
+    <table class="table">
+        <thead>
+
+        <tr>
+            <th>Name</th>
+            <th>Settings</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for name, values in settings %}
+            {% if name matches('/Attributes$/') %}
+                <tr>
+                    <td>
+                        <a href="{{ path('survos_index_stats', {indexName: indexName}) }}">
+                            {{ name }}
+                        </a>
+                    </td>
+                    <td>
+                        {% if name matches('/filterableAttributes/') %}
+                            {% for fieldName in values %}
+                                <li>
+                                    <a href="{{ path('survos_facet_show', {indexName: indexName, fieldName: fieldName}) }}">
+                                        {{ fieldName }}
+                                    </a>
+                                </li>
+                            {% endfor %}
+                        {% else %}
+                        {{ values|json_encode }}
+                            {% endif %}
+                            </td>
+                </tr>
+            {% endif %}
+        {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

@@ -19,9 +19,9 @@ use Symfony\UX\Chartjs\Model\Chart;
 class MeiliAdminController extends AbstractController
 {
     public function __construct(
-        private MeiliService  $meili,
+        private MeiliService           $meiliService,
         private ?ChartBuilderInterface $chartBuilder = null,
-        private string $coreName='core'
+        private string                 $coreName='core'
     )
     {
 //        $this->helper = $helper;
@@ -50,7 +50,7 @@ class MeiliAdminController extends AbstractController
                           #[MapQueryParameter] ?string $tableName=null,
                           int $max = 25): Response
     {
-        $index = $this->meili->getIndex($indexName);
+        $index = $this->meiliService->getIndex($indexName);
 
         $params = ['limit' => 0,
             'facets' => [$fieldName]];
@@ -160,7 +160,7 @@ END
         string $_format='html'
     ): Response
     {
-        $index = $this->meili->getIndex($indexName);
+        $index = $this->meiliService->getIndex($indexName);
         $stats = $index->stats();
         // idea: meiliStats as a component?
         $data =  [

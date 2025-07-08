@@ -20,12 +20,13 @@ class MeiliService
 {
     public function __construct(
         protected ParameterBagInterface $bag,
-        private ?string $meiliHost='http://localhost:7700',
-        private ?string $meiliKey=null,
-        private array $config = [],
-        private array $groupsByClass = [],
-        private ?LoggerInterface $logger = null,
-        protected ?ClientInterface $httpClient = null,
+        private ?string                 $meiliHost='http://localhost:7700',
+        private ?string                 $adminKey=null,
+        private ?string                 $searchKey=null, // public!
+        private array                   $config = [],
+        private array                   $groupsByClass = [],
+        private ?LoggerInterface        $logger = null,
+        protected ?ClientInterface      $httpClient = null,
     ) {
 //        assert($this->meiliKey);
     }
@@ -38,6 +39,16 @@ class MeiliService
     public function setConfig(array $config): void
     {
         $this->config = $config;
+    }
+
+    public function getHost(): ?string
+    {
+        return $this->meiliHost;
+    }
+
+    public function getPublicApiKey(): ?string
+    {
+        return $this->searchKey; // @todo: 2 keys
     }
 
 
@@ -162,7 +173,7 @@ class MeiliService
         if (!$client)
         {
             $client = new Client(
-                $host??$this->meiliHost, $apiKey??$this->meiliKey,
+                $host??$this->meiliHost, $apiKey??$this->adminKey,
                 httpClient: $this->httpClient);
         }
         return $client;

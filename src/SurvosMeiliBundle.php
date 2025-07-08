@@ -5,13 +5,14 @@ namespace Survos\MeiliBundle;
 use Survos\CoreBundle\HasAssetMapperInterface;
 use Survos\CoreBundle\Traits\HasAssetMapperTrait;
 use Survos\InspectionBundle\Services\InspectionService;
-use Survos\MeiliBundle\Components\InstantSearch;
+use Survos\MeiliBundle\Components\InstantSearchComponent;
 use Survos\MeiliBundle\Command\CreateCommand;
 use Survos\MeiliBundle\Command\IndexCommand;
 use Survos\MeiliBundle\Command\ListCommand;
 use Survos\MeiliBundle\Command\SettingsCommand;
 use Survos\MeiliBundle\Controller\MeiliAdminController;
 use Survos\MeiliBundle\Controller\MeiliController;
+use Survos\MeiliBundle\Controller\SearchController;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\SettingsService;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
@@ -30,14 +31,15 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
     public function loadExtension(array $config, ContainerConfigurator $container, ContainerBuilder $builder): void
     {
 
-        $id = 'meili_service_in_admin';
+        $id = 'meili_service';
         $builder->autowire(SettingsService::class)
             ->setPublic(true);
         $builder->autowire(MeiliService::class)
 //            ->setArgument('$entityManager', new Reference('doctrine.orm.entity_manager'))
             ->setArgument('$config', $config)
-            ->setArgument('$meiliHost', $config['meiliHost'])
-            ->setArgument('$meiliKey', $config['meiliKey'])
+            ->setArgument('$meiliHost', $config['host'])
+            ->setArgument('$adminKey', $config['apiKey'])
+            ->setArgument('$searchKey', $config['searchKey'])
             ->setArgument('$httpClient', new Reference('httplug.http_client', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->setArgument('$logger', new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->setArgument('$bag', new Reference('parameter_bag'))
@@ -48,15 +50,15 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         $container->services()->alias($id, MeiliService::class);
 
         // we don't need both controllers!  But we do anyway, a mess
-        $builder->autowire(MeiliAdminController::class)
-            ->addTag('container.service_subscriber')
-            ->addTag('controller.service_arguments')
-            ->setArgument('$coreName', $config['core_name'])
-            ->setArgument('$meili', new Reference($id)) // @todo: move from api to meiliadmin
-            ->setArgument('$chartBuilder', new Reference('chartjs.builder', ContainerInterface::NULL_ON_INVALID_REFERENCE))
-            ->setAutoconfigured(true)
-            ->setPublic(true);
-
+//        $builder->autowire(MeiliAdminController::class)
+//            ->addTag('container.service_subscriber')
+//            ->addTag('controller.service_arguments')
+//            ->setArgument('$coreName', $config['core_name'])
+//            ->setArgument('$meiliService', new Reference($id)) // @todo: move from api to meiliadmin
+//            ->setArgument('$chartBuilder', new Reference('chartjs.builder', ContainerInterface::NULL_ON_INVALID_REFERENCE))
+//            ->setAutoconfigured(true)
+//            ->setPublic(true);
+//
         foreach ([IndexCommand::class, SettingsCommand::class, ListCommand::class, CreateCommand::class] as $class) {
             $builder->autowire($class)
                 ->setPublic(true)
@@ -64,29 +66,36 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                 ->addTag('console.command');
         }
 
-        $builder->register($id = 'api_meili_service', MeiliService::class)
-            ->setArgument('$config', $config)
-            ->setArgument('$meiliHost', $config['meiliHost'])
-            ->setArgument('$meiliKey', $config['meiliKey'])
-            ->setArgument('$httpClient', new Reference('httplug.http_client', ContainerInterface::NULL_ON_INVALID_REFERENCE))
-            ->setArgument('$logger', new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE))
-            ->setArgument('$bag', new Reference('parameter_bag'))
-            ->setAutowired(true)
-            ->setPublic(true)
-            ->setAutoconfigured(true)
-            ->setAutowired(true)
-            ->setPublic(true);
+//        $builder->register($id = 'api_meili_service', MeiliService::class)
+//            ->setArgument('$config', $config)
+//            // @todo: array of hosts?
+//            ->setArgument('$meiliHost', $config['host'])
+//            ->setArgument('$adminKey', $config['apiKey'])
+//            ->setArgument('$searchKey', $config['searchKey'])
+//            ->setArgument('$httpClient', new Reference('httplug.http_client', ContainerInterface::NULL_ON_INVALID_REFERENCE))
+//            ->setArgument('$logger', new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE))
+//            ->setArgument('$bag', new Reference('parameter_bag'))
+//            ->setAutoconfigured(true)
+//            ->setAutowired(true)
+//            ->setPublic(true);
 
 
         $builder->autowire(MeiliController::class)
             ->addTag('container.service_subscriber')
             ->addTag('controller.service_arguments')
-            ->setArgument('$meili', new Reference($id)) // @todo: move from api to meiliadmin
+//            ->setArgument('$meiliService', new Reference($id))
             ->setArgument('$chartBuilder', new Reference('chartjs.builder', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->setAutoconfigured(true)
             ->setPublic(true);
 
-        $builder->register(InstantSearch::class)
+        $builder->autowire(SearchController::class)
+            ->addTag('container.service_subscriber')
+            ->addTag('controller.service_arguments')
+            ->setArgument('$meiliService', new Reference($id))
+            ->setAutoconfigured(true)
+            ->setPublic(true);
+
+        $builder->register(InstantSearchComponent::class)
             ->setPublic(true)
             ->setAutowired(true)
             ->setAutoconfigured(true)
@@ -94,7 +103,8 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->setArgument('$logger', new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE))
 //            ->setArgument('$datatableService', new Reference(DatatableService::class))
             ->setArgument('$inspectionService', new Reference(InspectionService::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
-            ->setArgument('$meiliService', new Reference('api_meili_service'))//            ->setArgument('$stimulusController', $config['stimulus_controller']);
+            ->setArgument('$meiliService', new Reference($id))
+            //            ->setArgument('$stimulusController', $config['stimulus_controller']);
         ;
 
 
@@ -108,8 +118,9 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->info("a key when diverse types share an index, e.g. table or core")
             ->end()
             ->booleanNode('enabled')->defaultTrue()->end()
-            ->scalarNode('meiliHost')->defaultValue('%env(default::MEILI_SERVER)%')->end()
-            ->scalarNode('meiliKey')->defaultValue('%env(default::MEILI_API_KEY)%')->end()
+            ->scalarNode('host')->defaultValue('%env(default::MEILI_SERVER)%')->end()
+            ->scalarNode('apiKey')->defaultValue('%env(default::MEILI_ADMIN_KEY)%')->end()
+            ->scalarNode('searchKey')->defaultValue('%env(default::MEILI_SEARCH_KEY)%')->end()
             ->scalarNode('meiliPrefix')->defaultValue('%env(default::MEILI_PREFIX)%')->end()
             ->booleanNode('passLocale')->defaultValue(false)->end()
             ->integerNode('maxValuesPerFacet')

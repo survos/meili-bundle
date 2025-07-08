@@ -17,7 +17,7 @@ use Symfony\UX\TwigComponent\Attribute\PreMount;
 use Twig\Environment;
 
 #[AsTwigComponent('instant_search', template: '@SurvosMeili/components/instant_search.html.twig')]
-class InstantSearch // implements TwigBlocksInterface
+class InstantSearchComponent // implements TwigBlocksInterface
 {
 
     public function __construct(

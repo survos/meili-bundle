@@ -1,0 +1,139 @@
+{% extends "base.html.twig" %}
+{# {% extends "@SurvosBootstrap/tabler/base.html.twig" %} #}
+
+{# {% block javascripts %} #}
+{#    {% block importmap %}{{ importmap('app') }}{% endblock %} #}
+{# {% endblock %} #}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>
+        li .ais-Hits-item {
+            width: calc(33% - 1rem);
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 1rem;
+        }
+
+        aside {
+            min-height: 100vh;
+            justify-content: space-between;
+            flex-direction: column;
+        }
+    </style>
+{% endblock %}
+
+{% block body %}
+
+    <h1>{{ _self }}</h1>
+
+    {% set _sc = '@survos/meili-bundle/insta' %} {#  for loading hits #}
+    {% set _sc_modal = 'debug_dialog' %} {#  for the debugger #}
+    {#        {{ stimulus_controller(_sc_modal) }}#}
+    {% set globals = {
+        serverUrl: server,
+        serverApiKey: apiKey,
+        indexName: indexName,
+        _sc_modal: _sc_modal,
+        debug: app.request.get('debug', false)
+    } %}
+    {% set icons = {
+        json: ux_icon('si:json-duotone'),
+        bug: ux_icon('tabler:bug'),
+    } %}
+
+    {% set hitClass = app.request.get('class', 'grid-' ~ endpoint.columns|default(2)) %}
+    <div {{ stimulus_controller(_sc, {
+            serverUrl: server,
+            serverApiKey: apiKey,
+            indexName: indexName,
+            embedderName: embedder,
+            hitClass: hitClass,
+            sortingJson: sorting|json_encode,
+            globalsJson: globals|json_encode,
+            iconsJson: icons|json_encode,
+            templateUrl: path('meili_template', {indexName: indexName})
+        }) }}
+        class="container-fluid py-4"
+    >
+        {% set _sc_locale = 'display_locale' %}
+        <div class="w-100" {{ stimulus_controller(_sc_locale, {userLocale: app.request.locale}) }}>
+            <div class="row g-4">
+                <div class="col-lg-3">
+                    <div class="card insta-side-panel">
+                        <div class="p-3">
+
+                            <div class="d-flex align-items-center mb-4">
+                                <h4 class="card-title fs-5 flex-grow-1 fw-bold mb-0">Insta</h4>
+                                <div class="d-flex justify-content-end mb-3">
+                                    <div {{ stimulus_target(_sc, 'reset') }}></div>
+                                </div>
+                            </div>
+
+                            {% if embedder %}
+                            <div id="semantic-widget">{{ embedder }}</div>
+                            {% endif %}
+
+                            {# aside might not be the best element for this. #}
+                            <aside class="col-12 col-md-12 mb-4"
+                                {{ stimulus_target(_sc, 'refinementList') }}
+                            >
+                                {% for attr in facets %}
+                                    <div class="mb-4">
+                                        <h5 class="sub-title mb-2 fw-medium">{{ attr }}</h5>
+{#                                        {{ dump(related[attr]|default([])|json_encode) }}#}
+                                        <div
+                                            data-lookup="{{ related[attr]|default({})|json_encode }}"
+                                            data-attribute="{{ attr }}"
+                                        ></div>
+                                    </div>
+                                {% endfor %}
+                            </aside>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-9">
+                    <div class="insta-list">
+{#                        {{ server }}#}
+                        {# Sidebar: search + filters #}
+                        <div class="mb-3" {{ stimulus_target(_sc, 'searchBox') }}></div>
+
+                        {# the sorting dropdown #}
+                        <div class="mt-4" {{ stimulus_target(_sc, 'sort') }}></div>
+
+                        {# Main: hits + pagination #}
+                        <main
+                            {{ stimulus_controller(_sc_modal, {
+                                serverUrl: server,
+                                serverApiKey: apiKey,
+                                indexName: indexName,
+                                globalsJson: globals|json_encode,
+                            }) }}
+                        >
+
+                            <div {{ stimulus_target(_sc_modal, 'modal') }}
+                            >
+                                {# all them templates use this modal #}
+                                {{ include('@SurvosMeili/_modal.html.twig', {_sc_modal: _sc_modal}) }}
+                            </div>
+
+                            <div {{ stimulus_target(_sc, 'hits') }}>
+
+                            </div>
+                            <div class="mt-4" {{ stimulus_target(_sc, 'pagination') }}></div>
+
+                        </main>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    {{ settings|json_pretty }}
+
+{% endblock %}
+

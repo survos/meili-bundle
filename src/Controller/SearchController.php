@@ -6,6 +6,7 @@ use cebe\openapi\Reader;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Bridge\Twig\Attribute\Template;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -23,12 +24,13 @@ class SearchController extends AbstractController
     protected $helper;
 
     public function __construct(
-        private MeiliService  $meili,
+        #[Autowire('%kernel.project_dir%/templates/js/')] private string $jsTemplateDir,
+        private MeiliService  $meiliService,
     )
     {
 //        $this->helper = $helper;
     }
-    #[Route('/index/{indexName}', name: 'app_insta')]
+    #[Route('/index/{indexName}', name: 'meili_insta')]
     #[Template('@SurvosMeili/insta.html.twig')]
     public function index(
         string $indexName, //  = 'packagesPackage',
@@ -36,9 +38,6 @@ class SearchController extends AbstractController
         #[MapQueryParameter] bool $useProxy = false,
     ): Response|array
     {
-        $endpoint = $this->endpointRepository->findOneBy([
-                'name' => $indexName]
-        );
 
         if (0) {
             $dummyServer = 'https://dummy.survos.com/api/docs.jsonopenapi';
@@ -77,19 +76,32 @@ class SearchController extends AbstractController
                 $useProxy
                     ? $this->router->generate('meili_proxy', [],
                     UrlGeneratorInterface::ABSOLUTE_URL)
-                    : $this->meiliServer,
+                    : $this->meiliService->getHost(),
 
-            'apiKey' => $this->apiKey,
+            'apiKey' => $this->meiliService->getPublicApiKey(),
             'indexName' => $indexName,
             'facets' => $facets,
             'sorting' => $sorting,
             'settings' => $settings,
-            'endpoint' => $endpoint,
+            'endpoint' => null,
             'embedder' => $embedder,
             'related' => $related, // the facet lookups
         ];
         return $params;
     }
+
+    // hack function until we can figure out relative routing for jstwig
+    #[Route('/template/{indexName}', name: 'meili_template')]
+    public function jsTemplate(string $indexName): Response|array
+    {
+        $indexName = 'instrument';
+        $jsTwigTemplate = $this->jsTemplateDir . $indexName . '.html.twig';
+        assert(file_exists($jsTwigTemplate), "missing $jsTwigTemplate");
+        $template = file_get_contents($jsTwigTemplate);
+        return new Response($template);
+    }
+
+
 
 
 

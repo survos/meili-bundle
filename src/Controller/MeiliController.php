@@ -20,7 +20,7 @@ class MeiliController extends AbstractController
     protected $helper;
 
     public function __construct(
-        private MeiliService  $meili,
+        private MeiliService           $meiliService,
         private ?ChartBuilderInterface $chartBuilder = null,
     )
     {
@@ -34,9 +34,12 @@ class MeiliController extends AbstractController
         string $_format='html'
     ): array
     {
-        $index = $this->meili->getIndex($indexName);
+        $index = $this->meiliService->getIndex($indexName);
         $stats = $index->stats();
-        return $stats;
+        return [
+            'index' => $index,
+            'stats' => $stats,
+        ];
 
     }
 
@@ -48,7 +51,7 @@ class MeiliController extends AbstractController
         string $_format='html'
     ): Response
     {
-        $index = $this->meili->getIndex($indexName);
+        $index = $this->meiliService->getIndex($indexName);
         $stats = $index->stats();
         // idea: meiliStats as a component?
         $data =  [
@@ -91,7 +94,7 @@ class MeiliController extends AbstractController
     #[Route('/column/{indexName}/{fieldCode}', name: 'survos_grid_column')]
     public function column(Request $request, string $indexName, string $fieldCode)
     {
-        $index = $this->meili->getIndex($indexName);
+        $index = $this->meiliService->getIndex($indexName);
         $settings = $index->getSettings();
         $stats = $index->stats();
         // idea: meiliStats as a component?

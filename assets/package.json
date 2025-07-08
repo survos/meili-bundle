@@ -15,6 +15,14 @@
           "instantsearch.css/themes/algolia.min.css": true,
           "pretty-print-json/dist/css/pretty-print-json.min.css": true
         }
+      },
+      "debug": {
+        "main": "src/controllers/debug_meili_controller.js",
+        "webpackMode": "eager",
+        "fetch": "lazy",
+        "enabled": true,
+        "autoimport": {
+        }
       }
     },
     "importmap": {
@@ -25,6 +33,8 @@
       "instantsearch.js": "^4.79",
       "instantsearch.js/es/widgets": "^4.79",
       "@meilisearch/instant-meilisearch": "^0.27",
+      "@stimulus-components/dialog": "*",
+      "meilisearch": "*",
       "pretty-print-json": "^3.0.4"
     }
   },
