@@ -119,7 +119,10 @@ class IndexCommand extends Command
 
             // pk of meili  index might be different than doctine pk, e.g. $imdbId
 //            $index = $this->configureIndex($class, $indexName);
-            $index = $this->meiliService->getIndex($indexName, $pk);
+            $index = $this->meiliService->getOrCreateIndex($indexName, autoCreate: false);
+            if (!$index) {
+                $this->io->error("Index {$indexName} not found, run meili:settings to create");
+            }
 
             $stats = $this->indexClass($class, $index,
                 batchSize: $batchSize, indexName: $indexName, groups: $groups,

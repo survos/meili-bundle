@@ -94,7 +94,6 @@ class SearchController extends AbstractController
     #[Route('/template/{indexName}', name: 'meili_template')]
     public function jsTemplate(string $indexName): Response|array
     {
-        $indexName = 'instrument';
         $jsTwigTemplate = $this->jsTemplateDir . $indexName . '.html.twig';
         assert(file_exists($jsTwigTemplate), "missing $jsTwigTemplate");
         $template = file_get_contents($jsTwigTemplate);
