@@ -31,8 +31,8 @@
     <h1>{{ _self }}</h1>
 
     {% set _sc = '@survos/meili-bundle/insta' %} {#  for loading hits #}
-    {% set _sc_modal = '@survos/meili-bundle/debug_meili' %} {#  for debugging the json#}
-    {#        {{ stimulus_controller(_sc_modal) }}#}
+    {% set _sc_modal = '@survos/meili-bundle/json' %} {#  for debugging the json #}
+    {#        {{ stimulus_controller(_sc_modal) }} #}
     {% set globals = {
         serverUrl: server,
         serverApiKey: apiKey,
@@ -47,17 +47,17 @@
 
     {% set hitClass = app.request.get('class', 'grid-' ~ endpoint.columns|default(2)) %}
     <div {{ stimulus_controller(_sc, {
-            serverUrl: server,
-            serverApiKey: apiKey,
-            indexName: indexName,
-            embedderName: embedder,
-            hitClass: hitClass,
-            sortingJson: sorting|json_encode,
-            globalsJson: globals|json_encode,
-            iconsJson: icons|json_encode,
-            templateUrl: path('meili_template', {indexName: indexName})
-        }) }}
-        class="container-fluid py-4"
+        serverUrl: server,
+        serverApiKey: apiKey,
+        indexName: indexName,
+        embedderName: embedder,
+        hitClass: hitClass,
+        sortingJson: sorting|json_encode,
+        globalsJson: globals|json_encode,
+        iconsJson: icons|json_encode,
+        templateUrl: path('meili_template', {indexName: indexName})
+    }) }}
+            class="container-fluid py-4"
     >
         {% set _sc_locale = 'display_locale' %}
         <div class="w-100" {{ stimulus_controller(_sc_locale, {userLocale: app.request.locale}) }}>
@@ -74,20 +74,20 @@
                             </div>
 
                             {% if embedder %}
-                            <div id="semantic-widget">{{ embedder }}</div>
+                                <div id="semantic-widget">{{ embedder }}</div>
                             {% endif %}
 
                             {# aside might not be the best element for this. #}
                             <aside class="col-12 col-md-12 mb-4"
-                                {{ stimulus_target(_sc, 'refinementList') }}
+                                    {{ stimulus_target(_sc, 'refinementList') }}
                             >
                                 {% for attr in facets %}
                                     <div class="mb-4">
                                         <h5 class="sub-title mb-2 fw-medium">{{ attr }}</h5>
-{#                                        {{ dump(related[attr]|default([])|json_encode) }}#}
+                                        {#                                        {{ dump(related[attr]|default([])|json_encode) }} #}
                                         <div
-                                            data-lookup="{{ related[attr]|default({})|json_encode }}"
-                                            data-attribute="{{ attr }}"
+                                                data-lookup="{{ related[attr]|default({})|json_encode }}"
+                                                data-attribute="{{ attr }}"
                                         ></div>
                                     </div>
                                 {% endfor %}
@@ -97,7 +97,7 @@
                 </div>
                 <div class="col-lg-9">
                     <div class="insta-list">
-{#                        {{ server }}#}
+                        {#                        {{ server }} #}
                         {# Sidebar: search + filters #}
                         <div class="mb-3" {{ stimulus_target(_sc, 'searchBox') }}></div>
 
@@ -105,26 +105,33 @@
                         <div class="mt-4" {{ stimulus_target(_sc, 'sort') }}></div>
 
                         {# Main: hits + pagination #}
-                        <h3>{{ _sc_modal }} <i>_controller</i></h3>
                         <main
-                            {{ stimulus_controller(_sc_modal, {
-                                serverUrl: server,
-                                serverApiKey: apiKey,
-                                indexName: indexName,
-                                globalsJson: globals|json_encode,
-                            }) }}
+                                {{ stimulus_controller(_sc_modal, {
+                                    serverUrl: server,
+                                    serverApiKey: apiKey,
+                                    indexName: indexName,
+                                    globalsJson: globals|json_encode,
+                                }) }}
                         >
+                            {{ _sc_modal }} <i>_controller</i>
+                            <button
+                                    {{ stimulus_action(_sc_modal, 'modal') }}
+                                    data-hit-id="2"
+                                    class="float-end btn btn-sm btn-outline-primary">
+                                <span class="me-1 icon-wrapper">{{ icons.json|raw }}</span>
+                            </button>
 
-                            <h3>{{ _sc_modal }} <i>target</i></h3>
-                            <div {{ stimulus_target(_sc_modal, 'modal') }}
-                            >
+                            <div {{ stimulus_target(_sc_modal, 'modal') }}>
+                                <h3>{{ _sc_modal }} <i>target</i></h3>
                                 {# all them templates use this modal #}
                                 {{ include('@SurvosMeili/components/_modal.html.twig', {_sc_modal: _sc_modal}) }}
+
+                                <div {{ stimulus_target(_sc, 'hits') }}>
+
+                                </div>
                             </div>
 
-                            <div {{ stimulus_target(_sc, 'hits') }}>
 
-                            </div>
                             <div class="mt-4" {{ stimulus_target(_sc, 'pagination') }}></div>
 
                         </main>

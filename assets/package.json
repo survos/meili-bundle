@@ -16,8 +16,8 @@
           "pretty-print-json/dist/css/pretty-print-json.min.css": true
         }
       },
-      "debug": {
-        "main": "src/controllers/debug_meili_controller.js",
+      "json": {
+        "main": "src/controllers/json_controller.js",
         "webpackMode": "eager",
         "fetch": "lazy",
         "enabled": true,
@@ -36,6 +36,7 @@
       "@meilisearch/instant-meilisearch": "^0.27",
       "@stimulus-components/dialog": "*",
       "meilisearch": "*",
+      "@andypf/json-viewer": "^2.1",
       "pretty-print-json": "^3.0.4"
     }
   },

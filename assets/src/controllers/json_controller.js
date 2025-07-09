@@ -77,6 +77,7 @@ export default class extends Dialog {
 
     modal(e) {
         // we could move the index logic here, so we have have a title
+        console.log(e.currentTarget.dataset.hitId);
         this.hitId = e.currentTarget.dataset.hitId;
         this.open();
     }
@@ -124,6 +125,7 @@ export default class extends Dialog {
                 jsonViewer.expandIconType = "square"
                 jsonViewer.data = clean
 
+                console.log(jsonViewer, jsonViewer.data);
                 this.contentTarget.innerHTML = "";
                 this.contentTarget.appendChild(jsonViewer);
 

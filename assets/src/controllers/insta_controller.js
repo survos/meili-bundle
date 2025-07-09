@@ -275,7 +275,7 @@ export default class extends Controller {
             }),
             configure({
                 showRankingScore:       true,   // ← here, too
-                hitsPerPage: 20 }), // how many items per “page”, @todo: configurable
+                hitsPerPage: 2 }), // how many items per “page”, @todo: configurable
             // hits({
             infiniteHits({
                 container: this.hitsTarget,
@@ -308,6 +308,7 @@ export default class extends Controller {
                         return this.template.render({
                             x: '', // x,
                             hit: hit,
+                            _sc_modal: '@survos/meili-bundle/json',
                             templateUrl: this.templateUrlValue,
                             icons: this.icons,
                             globals: this.globals
