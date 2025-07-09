@@ -12,9 +12,13 @@ use Psr\Http\Client\ClientInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
+use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use Symfony\Component\HttpClient\Psr18Client as SymfonyPsr18Client;
 
 use function Symfony\Component\String\u;
+use Symfony\Component\HttpClient\Psr18Client;
+use Nyholm\Psr7\Factory\Psr17Factory;
 
 class MeiliService
 {
@@ -26,6 +30,7 @@ class MeiliService
         private array                   $config = [],
         private array                   $groupsByClass = [],
         private ?LoggerInterface        $logger = null,
+        private ?HttpClientInterface $symfonyHttpClient=null,
         protected ?ClientInterface      $httpClient = null,
     ) {
 //        assert($this->meiliKey);
@@ -169,14 +174,32 @@ class MeiliService
 
     public function getMeiliClient(?string $host=null, ?string $apiKey=null): Client
     {
-        static $client;
-        if (!$client)
-        {
+        // @handle multiple server/keys
+
+        static $clients=[];
+        $host ??= $this->meiliHost;
+        $apiKey ??= $this->adminKey; // in php, it's usually the admin key
+
+        if (!array_key_exists($key=$host.$apiKey, $clients)) {
+            // 1) take the original, immutable client and grab a new instance with gzip enabled
+            $symfonyWithGzip = $this->symfonyHttpClient->withOptions([
+//                'headers'   => ['Accept-Encoding' => 'gzip'],
+            ]);
+
+            // 2) wrap _that_ instance as PSR-18
+            $psr18  = new SymfonyPsr18Client($symfonyWithGzip);
+            $psr17Factory = new \Http\Discovery\Psr17Factory();
+
             $client = new Client(
-                $host??$this->meiliHost, $apiKey??$this->adminKey,
-                httpClient: $this->httpClient);
+                $host??$this->meiliHost,
+                    $apiKey??$this->adminKey,
+                $psr18,                   // PSR-18 client
+                $psr17Factory            // PSR-17 StreamFactoryInterface
+            );
+            $clients[$key] = $client;
+
         }
-        return $client;
+        return $clients[$key];
     }
 
     public function getIndex(string $indexName, string $key = 'id', bool $autoCreate = true): ?Indexes

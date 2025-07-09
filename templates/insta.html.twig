@@ -31,7 +31,7 @@
     <h1>{{ _self }}</h1>
 
     {% set _sc = '@survos/meili-bundle/insta' %} {#  for loading hits #}
-    {% set _sc_modal = 'debug_dialog' %} {#  for the debugger #}
+    {% set _sc_modal = '@survos/meili-bundle/debug_meili' %} {#  for debugging the json#}
     {#        {{ stimulus_controller(_sc_modal) }}#}
     {% set globals = {
         serverUrl: server,
@@ -105,6 +105,7 @@
                         <div class="mt-4" {{ stimulus_target(_sc, 'sort') }}></div>
 
                         {# Main: hits + pagination #}
+                        <h3>{{ _sc_modal }} <i>_controller</i></h3>
                         <main
                             {{ stimulus_controller(_sc_modal, {
                                 serverUrl: server,
@@ -114,10 +115,11 @@
                             }) }}
                         >
 
+                            <h3>{{ _sc_modal }} <i>target</i></h3>
                             <div {{ stimulus_target(_sc_modal, 'modal') }}
                             >
                                 {# all them templates use this modal #}
-                                {{ include('@SurvosMeili/_modal.html.twig', {_sc_modal: _sc_modal}) }}
+                                {{ include('@SurvosMeili/components/_modal.html.twig', {_sc_modal: _sc_modal}) }}
                             </div>
 
                             <div {{ stimulus_target(_sc, 'hits') }}>

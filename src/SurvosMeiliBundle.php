@@ -2,6 +2,7 @@
 
 namespace Survos\MeiliBundle;
 
+use Psr\Http\Client\ClientInterface;
 use Survos\CoreBundle\HasAssetMapperInterface;
 use Survos\CoreBundle\Traits\HasAssetMapperTrait;
 use Survos\InspectionBundle\Services\InspectionService;
@@ -20,7 +21,9 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Reference;
+use Symfony\Component\HttpClient\Psr18Client;
 use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterface
 {
@@ -107,6 +110,18 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             //            ->setArgument('$stimulusController', $config['stimulus_controller']);
         ;
 
+
+//// 1) register the adapter
+//        $builder->register('survos_meili.psr18_client', Psr18Client::class)
+//            ->addArgument(new Reference(HttpClientInterface::class))
+//            ->setPublic(false)
+//            ->setAutowired(true)
+//        ;
+//
+//// 2) alias the PSR-18 interface to your adapter
+//        $builder->setAlias(ClientInterface::class, 'survos_meili.psr18_client')
+//            ->setPublic(false)
+//        ;
 
     }
 

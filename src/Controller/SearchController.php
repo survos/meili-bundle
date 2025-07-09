@@ -98,6 +98,7 @@ class SearchController extends AbstractController
         $jsTwigTemplate = $this->jsTemplateDir . $indexName . '.html.twig';
         assert(file_exists($jsTwigTemplate), "missing $jsTwigTemplate");
         $template = file_get_contents($jsTwigTemplate);
+//        dd($template);
         return new Response($template);
     }
 

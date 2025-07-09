@@ -36,7 +36,7 @@ use Zenstruck\Alias;
     name: 'meili:settings',
     description: 'view and set meilisearch settings',
 )]
-class SettingsCommand extends Command
+class SettingsCommand # extends Command
 {
     private SymfonyStyle $io;
     public function __construct(
@@ -48,11 +48,9 @@ class SettingsCommand extends Command
         private NormalizerInterface                           $normalizer,
         #[Autowire('%kernel.enabled_locales%')] private array $enabledLocales=[],
         #[Autowire('%env(OPENAI_API_KEY)%')] private string $openAiApiKey,
-
-
     )
     {
-        parent::__construct();
+//        parent::__construct();
     }
 
     /**
@@ -70,6 +68,7 @@ class SettingsCommand extends Command
         #[Argument("filter class name")] string $filter='',
         #[Option("pk")] string $pk = 'id',
         #[Option("reset the meili index")] ?bool $reset = null,
+        #[Option("Don't actually update the settings")] ?bool $dry = null,
     ): int
     {
         // if !class, prompt for possible classes
@@ -82,15 +81,20 @@ class SettingsCommand extends Command
 
         $io->title($indexName);
         if ($reset) {
+            // this deletes the index!
+            if ($dry) {
+                $io->error("you cannot have both --reset and --dry");
+                return Command::FAILURE;
+            }
             $this->meiliService->reset($indexName);
         }
 
         // skip if no documents?  Obviously, docs could be added later, e.g. an Owner record after import
 //            $task = $this->waitForTask($this->getMeiliClient()->createIndex($indexName, ['primaryKey' => Instance::DB_CODE_FIELD]));
 
-        // pk of meili  index might be different than doctine pk, e.g. $imdbId
+        // pk of meili  index might be different than doctrine pk, e.g. $imdbId
         $index = $this->meiliService->getIndex($indexName, $pk);
-        $index = $this->configureIndex($class, $indexName, $index);
+        $index = $this->configureIndex($class, $indexName, $index, $dry);
 
         $stats = $index->stats();
 
@@ -158,7 +162,7 @@ class SettingsCommand extends Command
 
     }
 
-    private function configureIndex(string $class, string $indexName, Indexes $index): Indexes
+    private function configureIndex(string $class, string $indexName, Indexes $index, bool $dry): Indexes
     {
 
 //        $reflection = new \ReflectionClass($class);
@@ -207,7 +211,7 @@ class SettingsCommand extends Command
 //        $index->updateSortableAttributes($this->datatableService->getFieldsWithAttribute($settings, 'sortable'));
 //        $index->updateSettings(); // could do this in one call
         $filterable = $this->getFilterableAttributes($settings);
-            $results = $index->updateSettings($debug = [
+            $settingsConfig = [
 //                'searchFacets' => false, // search _within_ facets
                 'localizedAttributes' => $localizedAttributes,
                 'displayedAttributes' => ['*'],
@@ -217,10 +221,15 @@ class SettingsCommand extends Command
                     "sortFacetValuesBy" => ["*" => "count"],
                     "maxValuesPerFacet" => $this->meiliService->getConfig()['maxValuesPerFacet']
                 ],
-            ]);
+            ];
+            if (!$dry) {
+                $results = $index->updateSettings($settingsConfig);
 //            $stats = $this->meiliService->waitUntilFinished($index);
 //            dump($stats, $debug, $filterable, $index->getUid());
-        dump($index->getSettings(), $index->getEmbedders());
+//        dump($index->getSettings(), $index->getEmbedders());
+            } else {
+                dump($settingsConfig);
+            }
         return $index;
     }
 

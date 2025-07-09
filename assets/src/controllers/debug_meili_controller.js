@@ -5,7 +5,7 @@
 * The following line makes this controller "lazy": it won't be downloaded until needed
 * See https://symfony.com/bundles/StimulusBundle/current/index.html#lazy-stimulus-controllers
 */
-/* stimulusFetch: 'lazy' */
+// /* stimulusFetch: 'lazy' */
 import Dialog from "@stimulus-components/dialog"
 import {Meilisearch} from "meilisearch";
 
@@ -28,6 +28,7 @@ export default class extends Dialog {
         super.connect();
         this.index = false;
         console.log(this.serverUrlValue, this.serverApiKeyValue);
+        console.error("hello from " + this.identifier);
         // this.data = JSON.parse(this.dataValue);
         // console.log(this.data);
     }
@@ -51,6 +52,8 @@ export default class extends Dialog {
 
 
     initialize() {
+        console.log("initialize from " + this.identifier);
+
         super.initialize()
         // Called once when the controller is first instantiated (per element)
 

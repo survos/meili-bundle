@@ -1,4 +1,11 @@
-    {% set _sc = 'debug_dialog' %}
+
+    {% if _sc_modal is empty %}
+    <h1>Missing _sc_modal!!</h1>
+    {% endif %}
+    <h1>{{ _sc_modal }}</h1>
+{#    {% set _sc_modal = '@survos/meili-bundle/debug_meili' %} #}{#  for loading hits #}
+
+
 {#    <div {{ stimulus_controller(_sc)}}#}
 {#        {{ stimulus_action(_sc, 'backdropClose') }}#}
 {#    >#}
