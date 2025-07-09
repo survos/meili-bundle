@@ -275,7 +275,7 @@ export default class extends Controller {
             }),
             configure({
                 showRankingScore:       true,   // ← here, too
-                hitsPerPage: 2 }), // how many items per “page”, @todo: configurable
+                hitsPerPage: 20 }), // how many items per “page”, @todo: configurable
             // hits({
             infiniteHits({
                 container: this.hitsTarget,
