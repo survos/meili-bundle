@@ -113,7 +113,6 @@
                                     globalsJson: globals|json_encode,
                                 }) }}
                         >
-                            {{ _sc_modal }} <i>_controller</i>
                             <button
                                     {{ stimulus_action(_sc_modal, 'modal') }}
                                     data-hit-id="2"
@@ -122,7 +121,6 @@
                             </button>
 
                             <div {{ stimulus_target(_sc_modal, 'modal') }}>
-                                <h3>{{ _sc_modal }} <i>target</i></h3>
                                 {# all them templates use this modal #}
                                 {{ include('@SurvosMeili/components/_modal.html.twig', {_sc_modal: _sc_modal}) }}
 
@@ -142,7 +140,10 @@
 
     </div>
 
-    {{ settings|json_pretty }}
+    <details>
+        <summary>{{ indexName }} Settings</summary>
+        {{ settings|json_pretty }}
+    </details>
 
 {% endblock %}
 

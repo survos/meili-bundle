@@ -28,8 +28,7 @@ use function Symfony\Component\String\u;
 class SettingsService
 {
     public function __construct(
-        private EntityManagerInterface $entityManager,
-        private ResourceInspector $resourceInspector,
+        private EntityManagerInterface $entityManager
     )
     {
     }

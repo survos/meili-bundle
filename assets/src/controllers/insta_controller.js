@@ -21,6 +21,7 @@ import 'pretty-print-json/dist/css/pretty-print-json.min.css';
 import 'instantsearch.css/themes/algolia.min.css';
 // import './../styles/hack.css';
 import 'flag-icons/css/flag-icons.min.css';
+import "@andypf/json-viewer"
 
 Routing.setData(RoutingData);
 

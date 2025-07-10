@@ -162,7 +162,7 @@ class SettingsCommand # extends Command
 
     }
 
-    private function configureIndex(string $class, string $indexName, Indexes $index, bool $dry): Indexes
+    private function configureIndex(string $class, string $indexName, Indexes $index, ?bool $dry): Indexes
     {
 
 //        $reflection = new \ReflectionClass($class);
@@ -228,8 +228,9 @@ class SettingsCommand # extends Command
 //            dump($stats, $debug, $filterable, $index->getUid());
 //        dump($index->getSettings(), $index->getEmbedders());
             } else {
-                dump($settingsConfig);
+//                dump($settingsConfig);
             }
+        dump($settingsConfig);
         return $index;
     }
 
