@@ -18,8 +18,8 @@ import 'pretty-print-json/dist/css/pretty-print-json.min.css';
 // this import makes the pretty-json really ugly
 // import '@meilisearch/instant-meilisearch/templates/basic_search.css';
 // @todo: custom css AFTER this.  Hack: move to app.css
-import 'instantsearch.css/themes/algolia.min.css';
-// import './../styles/hack.css';
+// import 'instantsearch.css/themes/algolia.min.css';
+// import '../../styles/custom-grid.css';
 import 'flag-icons/css/flag-icons.min.css';
 import "@andypf/json-viewer"
 
@@ -186,6 +186,7 @@ export default class extends Controller {
         const search = instantsearch({
             indexName: this.indexNameValue, // 'dummy_products', //
             searchClient,
+            routing: true,
         });
 
         window.search = search;

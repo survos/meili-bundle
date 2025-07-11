@@ -122,6 +122,7 @@ class IndexCommand extends Command
             $index = $this->meiliService->getOrCreateIndex($indexName, autoCreate: false);
             if (!$index) {
                 $this->io->error("Index {$indexName} not found, run meili:settings to create");
+                return Command::FAILURE;
             }
 
             $stats = $this->indexClass($class, $index,
