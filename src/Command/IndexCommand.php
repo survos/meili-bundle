@@ -35,10 +35,15 @@ use Zenstruck\Alias;
 #[AsCommand(
     name: 'meili:index',
     description: 'Index entities for use with meilisearch',
+    help: <<< END
+
+meili:index App\\Entity\\Task read the tasks from the database and index
+meili:index App\\Dto\\Task data/tasks.json read the json file, map to task and index. 
+END
 )]
 class IndexCommand extends Command
 {
-    private SymfonyStyle $io;
+    private SymfonyStyle $io; // to make global
     public function __construct(
         protected ParameterBagInterface                       $bag,
         protected EntityManagerInterface                      $entityManager,
@@ -65,10 +70,14 @@ class IndexCommand extends Command
     public function __invoke(
         SymfonyStyle $io,
         #[Argument("Class name")] ?string $class = null,
-        #[Option("limit")] ?int $limit = null,
+        #[Argument("CSV/Json filename/url")] ?string $filename = null,
         #[Argument("filter class name")] string $filter='',
+        #[Option("limit")] ?int $limit = null,
+        #[Option("Don't actually update the settings")] ?bool $dry = null,
         #[Option("pk")] ?string $pk = null,
+        #[Option("index name, defaults to prefix + class shortname")] ?string $name = null,
         #[Option("dump")] ?int $dump = null,
+        #[Option("create/update settings ")] ?bool $updateSettings = null,
         #[Option("reset the meili index")] ?bool $reset = null,
         #[Option("batch-size for sending documents to meili", name: 'batch')] int $batchSize = 100,
     ): int
@@ -83,7 +92,6 @@ class IndexCommand extends Command
 //            }
         }
         $classes = [];
-
 
             // https://abendstille.at/blog/?p=163
             $metas = $this->entityManager->getMetadataFactory()->getAllMetadata();
@@ -110,8 +118,18 @@ class IndexCommand extends Command
             $indexName = $this->meiliService->getPrefixedIndexName((new \ReflectionClass($class))->getShortName());
             $this->io->title($indexName);
             if ($reset) {
-                assert(false, 'reset moved to meili:settings');
+                // this deletes the index!
+                if ($dry) {
+                    $io->error("you cannot have both --reset and --dry");
+                    return Command::FAILURE;
+                }
                 $this->meiliService->reset($indexName);
+            }
+
+            if ($updateSettings) {
+                // pk of meili  index might be different than doctrine pk, e.g. $imdbId
+                $index = $this->meiliService->getIndex($indexName, $pk);
+                $index = $this->configureIndex($class, $indexName, $index, $dry);
             }
 
             // skip if no documents?  Obviously, docs could be added later, e.g. an Owner record after import
