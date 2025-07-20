@@ -38,7 +38,7 @@ use Zenstruck\Alias;
     help: <<< END
 
 meili:index App\\Entity\\Task read the tasks from the database and index
-meili:index App\\Dto\\Task data/tasks.json read the json file, map to task and index. 
+meili:index App\\Dto\\Task data/tasks.json read the json file, map to task and index.
 END
 )]
 class IndexCommand extends Command
@@ -74,7 +74,7 @@ class IndexCommand extends Command
         #[Argument("filter class name")] string $filter='',
         #[Option("limit")] ?int $limit = null,
         #[Option("Don't actually update the settings")] ?bool $dry = null,
-        #[Option("pk")] ?string $pk = null,
+        #[Option("pk")] string $pk = 'id',
         #[Option("index name, defaults to prefix + class shortname")] ?string $name = null,
         #[Option("dump")] ?int $dump = null,
         #[Option("create/update settings ")] ?bool $updateSettings = null,
@@ -316,7 +316,7 @@ class IndexCommand extends Command
 
             // @todo: use pk for dump
             if ($dump && ($dump === ($idx+1))) {
-                dd($data);
+                dd(data:    $data, raw: $r);
             }
 //
             $records[] = $data;
