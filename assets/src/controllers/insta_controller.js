@@ -75,13 +75,13 @@ const defaults = {
 };
 
 // 2) Load a template file via AJAX
-const tpl = Twig.twig({
-    ...defaults,
-    // base: '/templatesXX',
-    href: '/index/detail.twig',  // ← path relative to `base`
-    load: true,                 // ← fetch it via XHR
-    async: false                // ← block until loaded
-});
+// const tpl = Twig.twig({
+//     ...defaults,
+//     // base: '/templatesXX',
+//     href: '/index/detail.twig',  // ← path relative to `base`
+//     load: true,                 // ← fetch it via XHR
+//     async: false                // ← block until loaded
+// });
 
 // 3) Render it immediately
 // const html = tpl.render({ title: 'Loaded via Twig.js!' });
