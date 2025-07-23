@@ -28,10 +28,9 @@
 
 {% block body %}
 
-    <h1>{{ _self }}</h1>
-
     {% set _sc = '@survos/meili-bundle/insta' %} {#  for loading hits #}
     {% set _sc_modal = '@survos/meili-bundle/json' %} {#  for debugging the json #}
+
     {#        {{ stimulus_controller(_sc_modal) }} #}
     {% set globals = {
         serverUrl: server,
@@ -98,7 +97,13 @@
                 </div>
                 <div class="col-lg-9">
                     <div class="insta-list">
-                        {#                        {{ server }} #}
+
+                        {# @todo: move this to a dropdown somewhere.  Or maybe where the json test was? #}
+                            <details>
+                                <summary>{{ indexName }} Settings</summary>
+                                {{ settings|json_pretty }}
+                            </details>
+
                         {# Sidebar: search + filters #}
                         <div class="mb-3" {{ stimulus_target(_sc, 'searchBox') }}></div>
 
@@ -114,15 +119,9 @@
                                     globalsJson: globals|json_encode,
                                 }) }}
                         >
-                            <button
-                                    {{ stimulus_action(_sc_modal, 'modal') }}
-                                    data-hit-id="2"
-                                    class="float-end btn btn-sm btn-outline-primary">
-                                <span class="me-1 icon-wrapper">{{ icons.json|raw }}</span>
-                            </button>
 
                             <div {{ stimulus_target(_sc_modal, 'modal') }}>
-                                {# all them templates use this modal #}
+                                {# all them templates use this modal, so it's _outside_ of the individual hit template #}
                                 {{ include('@SurvosMeili/components/_modal.html.twig', {_sc_modal: _sc_modal}) }}
 
                                 <div {{ stimulus_target(_sc, 'hits') }}>
@@ -141,10 +140,6 @@
 
     </div>
 
-    <details>
-        <summary>{{ indexName }} Settings</summary>
-        {{ settings|json_pretty }}
-    </details>
 
 {% endblock %}
 

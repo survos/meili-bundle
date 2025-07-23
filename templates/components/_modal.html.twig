@@ -2,25 +2,23 @@
     {% if _sc_modal is empty %}
     <h1>Missing _sc_modal!!</h1>
     {% endif %}
-    <h1>{{ _sc_modal }}</h1>
-    {% set _sc = _sc_modal %}
 
 
 {#    <div {{ stimulus_controller(_sc)}}#}
 {#        {{ stimulus_action(_sc, 'backdropClose') }}#}
 {#    >#}
-        <dialog {{ stimulus_target(_sc, 'dialog')}}>
-            <h2 {{ stimulus_target(_sc, 'title')}}>
+        <dialog {{ stimulus_target(_sc_modal, 'dialog')}}>
+            <h2 {{ stimulus_target(_sc_modal, 'title')}}>
                 fancy dialog title
             </h2>
-            <div {{ stimulus_target(_sc, 'content')}}>
+            <div {{ stimulus_target(_sc_modal, 'content')}}>
 {#                <h3>{{ _sc }}</h3>#}
                 <div>The modal content here</div>
 
             </div>
 
             <button type="button"
-                    {{ stimulus_action(_sc, 'close') }}
+                    {{ stimulus_action(_sc_modal, 'close') }}
                     autofocus>Cancel</button>
         </dialog>
 

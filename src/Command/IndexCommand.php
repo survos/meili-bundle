@@ -285,6 +285,7 @@ class IndexCommand extends Command
             $data = SurvosUtils::removeNullsAndEmptyArrays($data);
             if ($pk) {
                 $primaryKey = $pk;
+                SurvosUtils::assertKeyExists($pk, $data);
                 $data['id'] = $data[$pk];
             }
             if (!array_key_exists('rp', $data)) {
