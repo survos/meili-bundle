@@ -118,7 +118,7 @@ class DoctrineEventListener
             return;
         }
         $task = $this->getMeiliIndex($args->getObject()::class)->deleteDocument($object->getId());
-        $this->meiliService->waitForTask($task);
+//        $this->meiliService->waitForTask($task);
     }
 
 }
