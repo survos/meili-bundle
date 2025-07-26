@@ -16,6 +16,7 @@ use Meilisearch\Endpoints\Indexes;
 use Psr\Log\LoggerInterface;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\SettingsService;
+use Symfony\Component\PropertyAccess\PropertyAccessorInterface;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 
 //https://symfony.com/doc/current/doctrine/events.html#doctrine-lifecycle-listeners
@@ -29,6 +30,7 @@ class DoctrineEventListener
     public function __construct(
         private MeiliService                 $meiliService,
         private SettingsService $settingsService,
+        private PropertyAccessorInterface $propertyAccessor,
         private readonly NormalizerInterface $normalizer,
         private readonly ?LoggerInterface    $logger = null,
         private array                        $objectsByClass = [],
@@ -85,11 +87,9 @@ class DoctrineEventListener
 //        // get the groups during the compiler pass
 //        $prefix = strtolower((new \ReflectionClass($object))->getShortName());
 //        $groups = ['rp','read','search','object.rp', 'marking', 'search', 'rp', 'article.story', "browse",  "$prefix.read", "$prefix.search"];
-        // @todo: pk, propertyaccessor
-        if (!$object->getId()) {
-            dd($object);
-        }
-        assert($object->getId());
+        // @todo: pk in Meili
+        $id = $this->propertyAccessor->getValue($object, 'id');
+        assert($id);
 
 
         $data = $this->normalizer->normalize($object, 'array', ['groups' => $groups]);
