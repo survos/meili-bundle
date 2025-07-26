@@ -62,11 +62,12 @@ class MeiliService
     {
         $client = $this->getMeiliClient();
         try {
-            $index = $client->getIndex($indexName);
-            $response = $client->deleteIndex($indexName);
-            $task = $this->waitForTask($response['taskUid'], $index);
+            $index = $client->index($indexName);
+//            dd($index);
+            $task = $client->deleteIndex($indexName);
+            $this->waitForTask($task, $index);
 //            $this->io()->info("Deletion Task is at " . $task['status']);
-            $this->logger->info("Index " . $indexName . " has been deleted.");
+            $this->logger->warning("Index " . $indexName . " has been deleted.");
         } catch (ApiException $exception) {
             if ($exception->errorCode == 'index_not_found') {
                 try {

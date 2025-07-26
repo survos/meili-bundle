@@ -136,7 +136,7 @@ class IndexCommand extends Command
             if ($updateSettings) {
                 // pk of meili  index might be different than doctrine pk, e.g. $imdbId
                 $index = $this->meiliService->getIndex($indexName, $pk);
-                $index = $this->configureIndex($class, $indexName, $index, $dry);
+                $this->configureIndex($class, $indexName, $index, $dry);
             }
 
             // skip if no documents?  Obviously, docs could be added later, e.g. an Owner record after import
@@ -182,7 +182,7 @@ class IndexCommand extends Command
 
     }
 
-    private function configureIndex(string $class, string $indexName): Indexes
+    private function configureIndex(string $class, string $indexName, Indexes $index): Indexes
     {
 
 //        $reflection = new \ReflectionClass($class);
@@ -200,7 +200,7 @@ class IndexCommand extends Command
                 'attributePatterns' => [sprintf('_translations.%s.*',$locale)]];
         }
 
-        $index = $this->meiliService->getIndex($indexName, $primaryKey);
+//        $index = $this->meiliService->getIndex($indexName, $primaryKey);
 //        $index->updateSortableAttributes($this->datatableService->getFieldsWithAttribute($settings, 'sortable'));
 //        $index->updateSettings(); // could do this in one call
         $filterable = $this->getFilterableAttributes($settings);
