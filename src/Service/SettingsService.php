@@ -324,8 +324,9 @@ class SettingsService
 
     public function getNormalizationGroups(string $class): ?array
     {
-        if ($this->groupsByClass[$class] ?? null) {
-            return $this->groupsByClass[$class];
+        static $groupsByClass = [];
+        if ($groupsByClass[$class] ?? null) {
+            return $groupsByClass[$class];
         }
         $groups = null;
         $meta = $this->entityManager->getMetadataFactory()->getMetadataFor($class);
@@ -344,7 +345,7 @@ class SettingsService
                 }
             }
         }
-        $this->groupsByClass[$class]=$groups;
+        $groupsByClass[$class]=$groups;
 
         return $groups;
 

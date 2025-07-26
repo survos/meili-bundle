@@ -269,7 +269,7 @@ export default class extends Controller {
         search.addWidgets([
             searchBox({
                 container: this.searchBoxTarget,
-                placeholder: 'Search ' + this.serverUrlValue + '/' + this.indexNameValue + '...',
+                placeholder:  this.indexNameValue + ' on ' + this.serverUrlValue.replace(/(^\w+:|^)\/\//, '')
             }),
             sortBy({
                 container: this.sortTarget,

@@ -34,7 +34,8 @@
         "symfony/http-client": "^7.2",
         "api-platform/doctrine-orm": "^4.1",
         "symfony/intl": "^7.3",
-        "symfony/ux-twig-component": "^2.27"
+        "symfony/ux-twig-component": "^2.27",
+        "doctrine/doctrine-bundle": "^2.15"
     },
     "autoload": {
         "psr-4": {

@@ -32,6 +32,7 @@ class MeiliService
         private ?LoggerInterface        $logger = null,
         private ?HttpClientInterface $symfonyHttpClient=null,
         protected ?ClientInterface      $httpClient = null,
+        private(set) readonly array $indexedEntities = []
     ) {
 //        assert($this->meiliKey);
     }
