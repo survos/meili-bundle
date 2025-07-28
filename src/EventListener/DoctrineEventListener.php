@@ -83,10 +83,6 @@ class DoctrineEventListener
         }
 
         //        // we used to use this:
-//        //   $headline = (new ArticleDataTransformer())->transform($object, Headline::class, []);
-//        // get the groups during the compiler pass
-//        $prefix = strtolower((new \ReflectionClass($object))->getShortName());
-//        $groups = ['rp','read','search','object.rp', 'marking', 'search', 'rp', 'article.story', "browse",  "$prefix.read", "$prefix.search"];
         // @todo: pk in Meili
         $id = $this->propertyAccessor->getValue($object, 'id');
         assert($id);
@@ -94,12 +90,6 @@ class DoctrineEventListener
 
         $data = $this->normalizer->normalize($object, 'array', ['groups' => $groups]);
         $this->objectsByClass[$object::class][] = $data;
-//        dd($data, $object->getId());
-//        $this->meiliService->waitUntilFinished($meiliIndex);
-//        $this->meiliService->waitForTask($task, stopOnError: true);
-
-        // although we could do this, it's only one document, and meili has it's own queuing system.  But we could dispatch after the request is closed.
-//        $this->bus->dispatch(new IndexHeadlineMessage($object->getId()));
 
     }
 
@@ -114,9 +104,6 @@ class DoctrineEventListener
     {
         // won't work with domain!  We probably need a unique meilil key in the object, then we'll have an interface, etc.
         $object = $args->getObject();
-        if (!in_array($object::class, array_keys($this->appService->getSystemClasses()))) {
-            return;
-        }
         $task = $this->getMeiliIndex($args->getObject()::class)->deleteDocument($object->getId());
 //        $this->meiliService->waitForTask($task);
     }

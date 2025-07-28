@@ -317,7 +317,7 @@ class IndexCommand extends Command
             }
             // @todo: use pk for dump index of index
             if ($dump && ($dump === ($idx+1))) {
-                dd(data:    $data, raw: $r);
+                dd(data:    $data);
             }
 //
             $records[] = $data;
