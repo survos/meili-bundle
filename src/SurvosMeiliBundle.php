@@ -151,8 +151,8 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         // use             $metas = $this->entityManager->getMetadataFactory()->getAllMetadata(); to get the doctrine-managed classes?
         $entityDir = $container->getParameter('kernel.project_dir') . '/src/Entity';
         $indexedClasses = [];
-
         foreach ($this->getClassesInDirectory($entityDir) as $class) {
+            assert(class_exists($class), "Missing $class in $entityDir");
             $ref = new ReflectionClass($class);
             if ($ref->getAttributes($attributeClass)) {
                 $indexedClasses[] = $class;
@@ -177,6 +177,9 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                 continue;
             }
 
+            if (str_ends_with($file->getBasename('.' . $file->getExtension()), 'Interface')) {
+                continue;
+            }
             $contents = file_get_contents($file->getRealPath());
             if (preg_match('/namespace\s+([^;]+);/i', $contents, $nsMatch)
                 && preg_match('/class\s+([^\s]+)/i', $contents, $classMatch)) {

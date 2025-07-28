@@ -80,10 +80,13 @@ class IndexCommand extends Command
         #[Option("dump")] ?int $dump = null,
         #[Option("create/update settings ")] ?bool $updateSettings = null,
         #[Option("reset the meili index")] ?bool $reset = null,
+        #[Option("fetch and index the documents")] ?bool $fetch = null,
+        #[Option("wait until index is finished before exiting")] ?bool $wait = null,
         #[Option("batch-size for sending documents to meili", name: 'batch')] int $batchSize = 100,
     ): int
     {
 
+        $fetch ??= true; // use no-fetch to simply update the settings.
         $filterArray = $filter ? Yaml::parse($filter) : null;
         if ($class && !class_exists($class)) {
             $class = "App\\Entity\\$class";
@@ -150,17 +153,21 @@ class IndexCommand extends Command
                 return Command::FAILURE;
             }
 
-            $stats = $this->indexClass($class, $index,
-                batchSize: $batchSize, indexName: $indexName, groups: $groups,
-                limit: $limit??0,
-                filter: $filter ? $filterArray: null,
-                primaryKey: $index->getPrimaryKey(),
-                dump: $dump,
-                pk: $pk,
-            );
+            if ($fetch) {
+                // this needs to be dispatched so we can index large collections.
+                $stats = $this->indexClass($class, $index,
+                    batchSize: $batchSize, indexName: $indexName, groups: $groups,
+                    limit: $limit??0,
+                    filter: $filter ? $filterArray: null,
+                    primaryKey: $index->getPrimaryKey(),
+                    dump: $dump,
+                    pk: $pk,
+                );
 
-            $this->io->success($indexName . ' Document count:' .$stats['numberOfDocuments']);
-            $this->meiliService->waitUntilFinished($index);
+                $this->io->success($indexName . ' Document count:' .$stats['numberOfDocuments']);
+                $this->meiliService->waitUntilFinished($index);
+            }
+
 
             if ($this->io->isVeryVerbose()) {
                 $stats = $index->stats();

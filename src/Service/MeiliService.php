@@ -10,9 +10,12 @@ use Meilisearch\Endpoints\Indexes;
 use Meilisearch\Exceptions\ApiException;
 use Psr\Http\Client\ClientInterface;
 use Psr\Log\LoggerInterface;
+use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
+use Survos\MeiliBundle\Message\BatchRemoveEntitiesMessage;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\HttpClient\HttpClient;
+use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Component\HttpClient\Psr18Client as SymfonyPsr18Client;
 
@@ -279,5 +282,82 @@ class MeiliService
             $currentPosition++;
         }
 //        $progressBar->finish();
+    }
+
+    #[AsMessageHandler]
+    public function batchRemoveEntities(BatchRemoveEntitiesMessage $message): void
+    {
+        try {
+            $meiliIndex = $this->getMeiliIndex($message->entityClass);
+
+            $this->logger?->info(sprintf(
+                "Batch removing %d entities of class %s from MeiliSearch",
+                count($message->entityIds),
+                $message->entityClass
+            ));
+
+            $task = $meiliIndex->deleteDocuments($message->entityIds);
+
+            $this->logger?->debug(sprintf(
+                "MeiliSearch batch delete task %s created for %d %s entities",
+                $task['taskUid'] ?? 'unknown',
+                count($message->entityIds),
+                $message->entityClass
+            ));
+
+        } catch (\Exception $e) {
+            $this->logger?->error(sprintf(
+                "Failed to batch remove %d entities of class %s: %s",
+                count($message->entityIds),
+                $message->entityClass,
+                $e->getMessage()
+            ));
+
+            throw $e;
+        }
+    }
+
+
+    private function getMeiliIndex(string $class): Indexes
+    {
+        $indexName = $this->getPrefixedIndexName(
+            (new \ReflectionClass($class))->getShortName()
+        );
+        return $this->getIndex($indexName);
+    }
+
+    #[AsMessageHandler]
+    public function batchIndexEntities(BatchIndexEntitiesMessage $message): void
+    {
+
+            $meiliIndex = $this->getMeiliIndex($message->entityClass);
+
+            $this->logger?->info(sprintf(
+                "Batch indexing %d entities of class %s in MeiliSearch",
+                count($message->entitiesData),
+                $message->entityClass
+            ));
+
+            $task = $meiliIndex->addDocuments($message->entitiesData);
+//            $this->waitForTask($task);
+
+            $this->logger?->debug(sprintf(
+                "MeiliSearch batch index task %s created for %d %s entities",
+                $task['taskUid'] ?? 'unknown',
+                count($message->entitiesData),
+                $message->entityClass
+            ));
+
+        try {
+        } catch (\Exception $e) {
+            $this->logger?->error(sprintf(
+                "Failed to batch index %d entities of class %s: %s",
+                count($message->entitiesData),
+                $message->entityClass,
+                $e->getMessage()
+            ));
+
+            throw $e;
+        }
     }
 }
