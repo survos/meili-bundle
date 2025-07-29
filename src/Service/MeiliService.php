@@ -20,6 +20,7 @@ use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Component\HttpClient\Psr18Client as SymfonyPsr18Client;
 
+use Zenstruck\Bytes;
 use function Symfony\Component\String\u;
 use Symfony\Component\HttpClient\Psr18Client;
 use Nyholm\Psr7\Factory\Psr17Factory;
@@ -306,42 +307,78 @@ class MeiliService
     {
         $repo = $this->entityManager->getRepository($message->entityClass);
         $metadata = $this->entityManager->getClassMetadata($message->entityClass);
-        $identifierField = $metadata->getSingleIdentifierFieldName(); // primary key field name
+        $identifierField = $metadata->getSingleIdentifierFieldName();
 
         $groups = $this->settingsService->getNormalizationGroups($message->entityClass);
-        $objects = $repo->findBy([$identifierField => $message->entitiesData]);
-        $data = $this->normalizer->normalize($objects, 'array', ['groups' => $groups]);
-        $data = SurvosUtils::removeNullsAndEmptyArrays($data);
-
         $meiliIndex = $this->getMeiliIndex($message->entityClass);
-//        assert($identifierField == $meiliIndex->getPrimaryKey(), "Pk mismatch  $identifierField");
         $meiliPk = $meiliIndex->getPrimaryKey();
-            $this->logger?->warning(sprintf(
-                "Batch indexing %d entities of class %s in MeiliSearch",
-                count($message->entitiesData),
-                $message->entityClass
-            ));
 
-            $task = $meiliIndex->addDocuments($data);
-//            $this->logger?->warning(sprintf("Task %s has been dispatched", $task['taskUid']));
-//            $this->waitForTask($task);
+        $payloadThreshold = 50_000_000; // ~1MB payload before flushing
+        $documents = [];
+        $payloadSize = 0;
+        $count = 0;
 
-            $this->logger?->debug(sprintf(
-                "MeiliSearch batch index task %s created for %d %s entities",
-                $task['taskUid'] ?? 'unknown',
-                count($message->entitiesData),
-                $message->entityClass
-            ));
+        $this->logger?->warning(sprintf(
+            "Streaming %d entities of class %s to MeiliSearch (threshold: %s)",
+            count($message->entitiesData),
+            $message->entityClass,
+            Bytes::parse($payloadThreshold)
+        ));
 
+        foreach ($message->entitiesData as $id) {
+            $entity = $repo->find($id);
+            if (!$entity) {
+                continue; // entity not found
+            }
+
+            $normalized = $this->normalizer->normalize($entity, 'array', ['groups' => $groups]);
+            $normalized = SurvosUtils::removeNullsAndEmptyArrays($normalized);
+
+            // Estimate payload size
+            $json = json_encode($normalized);
+            $size = $json ? strlen($json) : 0;
+
+            $documents[] = $normalized;
+            $payloadSize += $size;
+            $count++;
+
+            if ($payloadSize >= $payloadThreshold) {
+                $this->flushToMeili($meiliIndex, $documents, $count);
+
+                // Reset for next batch
+                $documents = [];
+                $payloadSize = 0;
+                $count = 0;
+
+                // Free Doctrine memory
+                $this->entityManager->clear();
+                gc_collect_cycles();
+            }
+        }
+
+        // Flush any remaining documents
+        if (!empty($documents)) {
+            $this->flushToMeili($meiliIndex, $documents, $count);
+            $this->entityManager->clear();
+            gc_collect_cycles();
+        }
+    }
+
+    private function flushToMeili($meiliIndex, array $documents, int $count): void
+    {
         try {
+            $task = $meiliIndex->addDocuments($documents);
+            $this->logger?->debug(sprintf(
+                "MeiliSearch task %s created for %d documents",
+                $task['taskUid'] ?? 'unknown',
+                $count
+            ));
         } catch (\Exception $e) {
             $this->logger?->error(sprintf(
-                "Failed to batch index %d entities of class %s: %s",
-                count($message->entitiesData),
-                $message->entityClass,
+                "Failed to index %d documents: %s",
+                $count,
                 $e->getMessage()
             ));
-
             throw $e;
         }
     }

@@ -21,7 +21,8 @@
         "cebe/php-openapi": "^1.8",
         "survos/core-bundle": "^1.5",
         "survos/inspection-bundle": "^1.5",
-        "nyholm/psr7": "^1.8"
+        "nyholm/psr7": "^1.8",
+        "zenstruck/bytes": "^1.0"
     },
     "require-dev": {
         "phpstan/phpstan": "^2.0",
