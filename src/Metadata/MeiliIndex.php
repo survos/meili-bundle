@@ -32,6 +32,7 @@ final class MeiliIndex
         public ?string $indexName=null,
         public ?string $id = null,
         public ?string $alias = null,
+        public ?string $pk = null,
     ) {
 //        if (!is_a($this->filterClass, FilterInterface::class, true)) {
 //            throw new InvalidArgumentException(\sprintf('The filter class "%s" does not implement "%s". Did you forget a use statement?', $this->filterClass, FilterInterface::class));

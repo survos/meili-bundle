@@ -19,6 +19,7 @@ use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\SettingsService;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\TransportNamesStamp;
+use Symfony\Component\Messenger\TraceableMessageBus;
 use Symfony\Component\PropertyAccess\PropertyAccessorInterface;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 use Zenstruck\Messenger\Monitor\Stamp\TagStamp;
@@ -32,6 +33,8 @@ class DoctrineEventListener
 {
     private array $pendingIndexOperations = [];
     private array $pendingRemoveOperations = [];
+
+    private static bool $dispatching = false;
 
     public function __construct(
         private readonly MeiliService              $meiliService,
@@ -50,9 +53,28 @@ class DoctrineEventListener
 
     public function postFlush(PostFlushEventArgs $args): void
     {
+        if (self::$dispatching || !$this->messageBus) {
+            return;
+        }
+
+        self::$dispatching = true;
+        try {
+            $this->dispatchPendingMessages();
+        } finally {
+            self::$dispatching = false;
+        }
+    }
+
+    private function dispatchPendingMessages(): void
+    {
+
         // Batch index operations by entity class
         foreach ($this->pendingIndexOperations as $entityClass => $entityIds) {
-//            $entitiesData = array_column($operations, 'data');
+            // this isn't necessary, because they won't be added if not indexed. Debugging when messages were in doctrine too
+//            if (!in_array($entityClass, $this->meiliService->indexedEntities)) {
+//                $this->logger?->warning(sprintf("Skipping entity class %s (not indexed)", $entityClass));
+//                continue;
+//            }
 
             $this->logger?->info(sprintf(
                 "Dispatching batch index message for %d %s entities",
@@ -119,9 +141,6 @@ class DoctrineEventListener
             ));
             return;
         }
-
-
-
         $this->pendingIndexOperations[$object::class][] = $id;
     }
 
@@ -147,4 +166,5 @@ class DoctrineEventListener
             'id' => $id,
         ];
     }
+
 }

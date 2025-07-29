@@ -314,8 +314,8 @@ class MeiliService
         $data = SurvosUtils::removeNullsAndEmptyArrays($data);
 
         $meiliIndex = $this->getMeiliIndex($message->entityClass);
-        assert($identifierField == $meiliIndex->getPrimaryKey(), "Pk mismatch  $identifierField");
-
+//        assert($identifierField == $meiliIndex->getPrimaryKey(), "Pk mismatch  $identifierField");
+        $meiliPk = $meiliIndex->getPrimaryKey();
             $this->logger?->warning(sprintf(
                 "Batch indexing %d entities of class %s in MeiliSearch",
                 count($message->entitiesData),
@@ -323,6 +323,7 @@ class MeiliService
             ));
 
             $task = $meiliIndex->addDocuments($data);
+//            $this->logger?->warning(sprintf("Task %s has been dispatched", $task['taskUid']));
 //            $this->waitForTask($task);
 
             $this->logger?->debug(sprintf(
