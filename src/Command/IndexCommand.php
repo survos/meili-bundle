@@ -11,7 +11,9 @@ use Psr\Log\LoggerInterface;
 use Survos\ApiGrid\Api\Filter\MultiFieldSearchFilter;
 //use Survos\ApiGrid\Service\DatatableService;
 use Survos\CoreBundle\Service\SurvosUtils;
+use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
 use Survos\MeiliBundle\Metadata\MeiliIndex;
+use Survos\MeiliBundle\Service\DoctrinePrimaryKeyStreamer;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\SettingsService;
 use Symfony\Component\Console\Attribute\Argument;
@@ -28,6 +30,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\Intl\Languages;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Yaml\Yaml;
@@ -48,6 +51,7 @@ class IndexCommand extends Command
     public function __construct(
         protected ParameterBagInterface                       $bag,
         protected EntityManagerInterface                      $entityManager,
+        private MessageBusInterface $messageBus,
         private LoggerInterface                               $logger,
         private MeiliService                                  $meiliService,
         private SettingsService                               $settingsService,
@@ -96,6 +100,8 @@ class IndexCommand extends Command
 //            }
         }
         $classes = [];
+
+        // @todo: just the the meili managed indexes from meiliservice
 
             // https://abendstille.at/blog/?p=163
             $metas = $this->entityManager->getMetadataFactory()->getAllMetadata();
@@ -161,6 +167,7 @@ class IndexCommand extends Command
                     filter: $filter ? $filterArray: null,
                     primaryKey: $index->getPrimaryKey(),
                     dump: $dump,
+                    max: $limit,
                     pk: $pk,
                 );
 
@@ -236,6 +243,7 @@ class IndexCommand extends Command
                                 ?array $filter=[],
                                 ?int $dump=null,
                                 ?string $primaryKey=null,
+                                ?int $max = null,
                                 ?string $subdomain=null,
     ?string $pk = null
     ): array
@@ -244,7 +252,54 @@ class IndexCommand extends Command
         $records = [];
         $primaryKey ??= $index->getPrimaryKey();
         $count = 0;
+        $streamer = new DoctrinePrimaryKeyStreamer($this->entityManager, $class);
+        $generator = $streamer->stream($batchSize);
+
+
+        $stamps = [];
+
+//        $connection = $this->entityManager->getConnection();
+//        $sql = "SELECT $primaryKey FROM " . $this->entityManager->getClassMetadata($class)->getTableName();
+//        if ($max) {
+//            $sql .= " LIMIT $max";
+//        }
+//        $ids = $connection->fetchFirstColumn($sql);
+        $approx = $this->meiliService->getApproxCount($class);
+        $progressBar = new ProgressBar($this->io, $approx);
+        $progressBar->start();
+        $this->io->title($class);
+        foreach ($generator as $chunk) {
+            $progressBar->advance(count($chunk));
+
+            $envelope = $this->messageBus->dispatch(
+                new BatchIndexEntitiesMessage($class, $chunk , $primaryKey)
+            );
+            if ($max && ($progressBar->getProgress() >= $max)) {
+                break;
+            }
+            // $batch is like [1, 2, 54, ...]
+            // Process these IDs
+        }
+        $progressBar->finish();
+        return [
+            'numberOfDocuments' => $progressBar->getProgress()
+        ];
+        $this->showIndexSettings($index);
+        // much less relevant, since the ids have been dispatched but not run.  We can show the difference though.
+        return $this->meiliService->waitUntilFinished($index);
+
+        $ids = $this->em->createQueryBuilder()
+            ->select('e.' . $primaryKey)
+            ->from($class, 'e')
+            ->getQuery()
+            ->getScalarResult(); // Returns [['id' => 1], ['id' => 2], ['id' => 54]]
+
+        $ids = array_column($ids, 'id'); // Convert to [1, 2, 54]
+        dd($ids, $approx);
+
         $qb = $this->entityManager->getRepository($class)->createQueryBuilder('e');
+        $qb->select('e.' . $primaryKey . " as id");
+
         if ($filter) {
             foreach ($filter as $var => $val) {
                 $qb->andWhere('e.' . $var . "= :$var")
@@ -272,6 +327,7 @@ class IndexCommand extends Command
                 ->setMaxResults($batchSize);
 //            $this->io->writeln("Fetching $startingAt ($batchSize)");
         }
+        dd($query->getResult());
         $results = $query->toIterable();
 //        if (is_null($count)) {
 //            // slow if not filtered!
@@ -369,7 +425,6 @@ class IndexCommand extends Command
 
 
         $this->showIndexSettings($index);
-
         return $this->meiliService->waitUntilFinished($index);
 
     }

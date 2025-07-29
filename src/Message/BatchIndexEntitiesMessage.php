@@ -17,6 +17,7 @@ class BatchIndexEntitiesMessage
     public function __construct(
         public readonly string $entityClass,
         public readonly array $entitiesData,
+        public readonly string $primaryKeyName, // for the database and meili.  But now can be different
     ) {
     }
 }

@@ -8,6 +8,7 @@
     "type": "symfony-bundle",
     "require": {
         "php": "^8.4",
+        "ext-pdo": "*",
         "symfony/console": "^7.3",
         "symfony/config": "^7.3",
         "symfony/dependency-injection": "^7.3",

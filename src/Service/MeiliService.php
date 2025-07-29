@@ -128,7 +128,9 @@ class MeiliService
                 if (isset($this->logger)) {
 //                    $this->logger->info(sprintf("Task %s is at %s", $taskId, $status));
                 }
-                usleep(50_000);
+//                $this->logg('sleeping');
+                sleep(1);
+//                usleep(50_000);
             };
             if ($status == 'failed') {
                 if ($stopOnError) {
@@ -164,8 +166,9 @@ class MeiliService
     {
         do {
             $index->fetchInfo();
-            $info = $index->fetchInfo();
+//            $info = $index->fetchInfo();
             $stats = $index->stats();
+            dump($stats);
             $isIndexing = $stats['isIndexing'];
             $indexName = $index->getUid();
             if ($this->logger) {
@@ -288,6 +291,108 @@ class MeiliService
 //        $progressBar->finish();
     }
 
+
+
+    private function getMeiliIndex(string $class): Indexes
+    {
+        $indexName = $this->getPrefixedIndexName(
+            (new \ReflectionClass($class))->getShortName()
+        );
+        return $this->getIndex($indexName);
+    }
+
+    #[AsMessageHandler]
+    public function batchIndexEntities(BatchIndexEntitiesMessage $message): void
+    {
+        $repo = $this->entityManager->getRepository($message->entityClass);
+        $metadata = $this->entityManager->getClassMetadata($message->entityClass);
+        $identifierField = $metadata->getSingleIdentifierFieldName(); // primary key field name
+
+        $groups = $this->settingsService->getNormalizationGroups($message->entityClass);
+        $objects = $repo->findBy([$identifierField => $message->entitiesData]);
+        $data = $this->normalizer->normalize($objects, 'array', ['groups' => $groups]);
+        $data = SurvosUtils::removeNullsAndEmptyArrays($data);
+
+        $meiliIndex = $this->getMeiliIndex($message->entityClass);
+        assert($identifierField == $meiliIndex->getPrimaryKey(), "Pk mismatch  $identifierField");
+
+            $this->logger?->warning(sprintf(
+                "Batch indexing %d entities of class %s in MeiliSearch",
+                count($message->entitiesData),
+                $message->entityClass
+            ));
+
+            $task = $meiliIndex->addDocuments($data);
+//            $this->waitForTask($task);
+
+            $this->logger?->debug(sprintf(
+                "MeiliSearch batch index task %s created for %d %s entities",
+                $task['taskUid'] ?? 'unknown',
+                count($message->entitiesData),
+                $message->entityClass
+            ));
+
+        try {
+        } catch (\Exception $e) {
+            $this->logger?->error(sprintf(
+                "Failed to batch index %d entities of class %s: %s",
+                count($message->entitiesData),
+                $message->entityClass,
+                $e->getMessage()
+            ));
+
+            throw $e;
+        }
+    }
+
+    /** Duplicated from WorkflowHelperService!  Maybe need a doctrine helper?  Or extensions? */
+    public function getApproxCount(string $class): ?int
+    {
+        static $counts = null;
+        $repo = $this->entityManager->getRepository($class);
+
+        try {
+            if (is_null($counts)) {
+                $rows = $this->entityManager->getConnection()->fetchAllAssociative(
+                    "SELECT n.nspname AS schema_name,
+       c.relname AS table_name,
+       c.reltuples AS estimated_rows
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relkind = 'r'
+  AND n.nspname NOT IN ('pg_catalog', 'information_schema')  -- exclude system schemas
+ORDER BY n.nspname, c.relname;");
+
+                $counts = array_combine(
+                    array_map(fn($r) => "{$r['table_name']}", $rows),
+                    array_map(fn($r) => (int)$r['estimated_rows'], $rows)
+                );
+            }
+            $count = $counts[$repo->getClassMetadata()->getTableName()] ?? -1;
+
+//            // might be sqlite
+//            $count =  (int) $this->getEntityManager()->getConnection()->fetchOne(
+//                'SELECT reltuples::BIGINT FROM pg_class WHERE relname = :table',
+//                ['table' => $this->getClassMetadata()->getTableName()]
+//            );
+        } catch (\Exception $e) {
+            $count = -1;
+        }
+
+        // if no analysis
+        // Fallback to exact count
+        if ($count < 0) {
+            $count = $repo->count();
+//            // or $repo->count[]
+//            $count = (int)$repo->createQueryBuilder('e')
+//                ->select('COUNT(e)')
+//                ->getQuery()
+//                ->getSingleScalarResult();
+        }
+
+        return $count;
+    }
+
     #[AsMessageHandler]
     public function batchRemoveEntities(BatchRemoveEntitiesMessage $message): void
     {
@@ -321,56 +426,4 @@ class MeiliService
         }
     }
 
-
-    private function getMeiliIndex(string $class): Indexes
-    {
-        $indexName = $this->getPrefixedIndexName(
-            (new \ReflectionClass($class))->getShortName()
-        );
-        return $this->getIndex($indexName);
-    }
-
-    #[AsMessageHandler]
-    public function batchIndexEntities(BatchIndexEntitiesMessage $message): void
-    {
-        $repo = $this->entityManager->getRepository($message->entityClass);
-        $metadata = $this->entityManager->getClassMetadata($message->entityClass);
-        $identifierField = $metadata->getSingleIdentifierFieldName(); // primary key field name
-
-        $groups = $this->settingsService->getNormalizationGroups($message->entityClass);
-        $objects = $repo->findBy([$identifierField => $message->entitiesData]);
-        $data = $this->normalizer->normalize($objects, 'array', ['groups' => $groups]);
-        $data = SurvosUtils::removeNullsAndEmptyArrays($data);
-
-        $meiliIndex = $this->getMeiliIndex($message->entityClass);
-        assert($identifierField == $meiliIndex->getPrimaryKey(), "Pk mismatch  $identifierField");
-
-            $this->logger?->info(sprintf(
-                "Batch indexing %d entities of class %s in MeiliSearch",
-                count($message->entitiesData),
-                $message->entityClass
-            ));
-
-            $task = $meiliIndex->addDocuments($data);
-            $this->waitForTask($task);
-
-            $this->logger?->debug(sprintf(
-                "MeiliSearch batch index task %s created for %d %s entities",
-                $task['taskUid'] ?? 'unknown',
-                count($message->entitiesData),
-                $message->entityClass
-            ));
-
-        try {
-        } catch (\Exception $e) {
-            $this->logger?->error(sprintf(
-                "Failed to batch index %d entities of class %s: %s",
-                count($message->entitiesData),
-                $message->entityClass,
-                $e->getMessage()
-            ));
-
-            throw $e;
-        }
-    }
 }
