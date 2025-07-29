@@ -67,7 +67,7 @@ class DoctrineEventListener
             }
             $this->messageBus->dispatch(new BatchIndexEntitiesMessage(
                 $entityClass,
-                $entityIds
+                $entityIds,
             ), $stamps);
         }
 
