@@ -18,8 +18,10 @@ use Survos\MeiliBundle\Message\BatchRemoveEntitiesMessage;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\SettingsService;
 use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Messenger\Stamp\TransportNamesStamp;
 use Symfony\Component\PropertyAccess\PropertyAccessorInterface;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
+use Zenstruck\Messenger\Monitor\Stamp\TagStamp;
 
 #[AsDoctrineListener(Events::postUpdate)]
 #[AsDoctrineListener(Events::preRemove)]
@@ -49,19 +51,24 @@ class DoctrineEventListener
     public function postFlush(PostFlushEventArgs $args): void
     {
         // Batch index operations by entity class
-        foreach ($this->pendingIndexOperations as $entityClass => $operations) {
-            $entitiesData = array_column($operations, 'data');
+        foreach ($this->pendingIndexOperations as $entityClass => $entityIds) {
+//            $entitiesData = array_column($operations, 'data');
 
             $this->logger?->info(sprintf(
                 "Dispatching batch index message for %d %s entities",
-                count($entitiesData),
+                count($entityIds),
                 $entityClass
             ));
 
+            $stamps = [];
+//            $stamps[] = new TransportNamesStamp('meili');
+            if (class_exists(TagStamp::class)) {
+                $stamps[] = new TagStamp(new \ReflectionClass($entityClass)->getShortName());
+            }
             $this->messageBus->dispatch(new BatchIndexEntitiesMessage(
                 $entityClass,
-                $entitiesData
-            ));
+                $entityIds
+            ), $stamps);
         }
 
         // Batch remove operations by entity class
@@ -103,8 +110,6 @@ class DoctrineEventListener
         }
 
         // normalization may be slow, so move this to the message handler
-
-        $groups = $this->settingsService->getNormalizationGroups($object::class);
         $id = $this->propertyAccessor->getValue($object, 'id');
 
         if (!$id) {
@@ -115,14 +120,9 @@ class DoctrineEventListener
             return;
         }
 
-        $data = $this->normalizer->normalize($object, 'array', ['groups' => $groups]);
-        $data = SurvosUtils::removeNullsAndEmptyArrays($data);
 
 
-        $this->pendingIndexOperations[$object::class][] = [
-            'id' => $id,
-            'data' => $data,
-        ];
+        $this->pendingIndexOperations[$object::class][] = $id;
     }
 
     public function preRemove(PreRemoveEventArgs $args): void

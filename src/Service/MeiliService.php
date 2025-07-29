@@ -1,21 +1,22 @@
 <?php
 
-// really this should extend, use or decorate MeiliService in MeiliBundle
-
 namespace Survos\MeiliBundle\Service;
 
+use Doctrine\ORM\EntityManagerInterface;
 use Meilisearch\Client;
 use Meilisearch\Contracts\DocumentsQuery;
 use Meilisearch\Endpoints\Indexes;
 use Meilisearch\Exceptions\ApiException;
 use Psr\Http\Client\ClientInterface;
 use Psr\Log\LoggerInterface;
+use Survos\CoreBundle\Service\SurvosUtils;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
 use Survos\MeiliBundle\Message\BatchRemoveEntitiesMessage;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
+use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Component\HttpClient\Psr18Client as SymfonyPsr18Client;
 
@@ -27,13 +28,16 @@ class MeiliService
 {
     public function __construct(
         protected ParameterBagInterface $bag,
+        private SettingsService $settingsService,
+        private EntityManagerInterface $entityManager,
+        private NormalizerInterface $normalizer,
         private ?string                 $meiliHost='http://localhost:7700',
         private ?string                 $adminKey=null,
         private ?string                 $searchKey=null, // public!
         private array                   $config = [],
         private array                   $groupsByClass = [],
         private ?LoggerInterface        $logger = null,
-        private ?HttpClientInterface $symfonyHttpClient=null,
+                private ?HttpClientInterface $symfonyHttpClient=null,
         protected ?ClientInterface      $httpClient = null,
         private(set) readonly array $indexedEntities = []
     ) {
@@ -329,8 +333,17 @@ class MeiliService
     #[AsMessageHandler]
     public function batchIndexEntities(BatchIndexEntitiesMessage $message): void
     {
+        $repo = $this->entityManager->getRepository($message->entityClass);
+        $metadata = $this->entityManager->getClassMetadata($message->entityClass);
+        $identifierField = $metadata->getSingleIdentifierFieldName(); // primary key field name
 
-            $meiliIndex = $this->getMeiliIndex($message->entityClass);
+        $groups = $this->settingsService->getNormalizationGroups($message->entityClass);
+        $objects = $repo->findBy([$identifierField => $message->entitiesData]);
+        $data = $this->normalizer->normalize($objects, 'array', ['groups' => $groups]);
+        $data = SurvosUtils::removeNullsAndEmptyArrays($data);
+
+        $meiliIndex = $this->getMeiliIndex($message->entityClass);
+        assert($identifierField == $meiliIndex->getPrimaryKey(), "Pk mismatch  $identifierField");
 
             $this->logger?->info(sprintf(
                 "Batch indexing %d entities of class %s in MeiliSearch",
@@ -338,8 +351,8 @@ class MeiliService
                 $message->entityClass
             ));
 
-            $task = $meiliIndex->addDocuments($message->entitiesData);
-//            $this->waitForTask($task);
+            $task = $meiliIndex->addDocuments($data);
+            $this->waitForTask($task);
 
             $this->logger?->debug(sprintf(
                 "MeiliSearch batch index task %s created for %d %s entities",
