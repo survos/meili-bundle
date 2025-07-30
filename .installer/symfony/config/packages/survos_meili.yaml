@@ -1,4 +1,5 @@
 survos_meili:
-#  host: https://127.0.0.1:7700
+  host: '%env(MEILI_SERVER)%'
+  apiKey: '%env(default::MEILI_API_KEY)%'
 
 
