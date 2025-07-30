@@ -16,6 +16,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
+use Symfony\Component\PropertyAccess\PropertyAccessorInterface;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Component\HttpClient\Psr18Client as SymfonyPsr18Client;
@@ -39,6 +40,7 @@ class MeiliService
         private array                   $groupsByClass = [],
         private ?LoggerInterface        $logger = null,
                 private ?HttpClientInterface $symfonyHttpClient=null,
+        private ?PropertyAccessorInterface $propertyAccessor=null,
         protected ?ClientInterface      $httpClient = null,
         private(set) readonly array $indexedEntities = []
     ) {
@@ -305,78 +307,109 @@ class MeiliService
     #[AsMessageHandler]
     public function batchIndexEntities(BatchIndexEntitiesMessage $message): void
     {
-        $repo = $this->entityManager->getRepository($message->entityClass);
         $metadata = $this->entityManager->getClassMetadata($message->entityClass);
         $identifierField = $metadata->getSingleIdentifierFieldName();
 
         $groups = $this->settingsService->getNormalizationGroups($message->entityClass);
         $meiliIndex = $this->getMeiliIndex($message->entityClass);
-        $meiliPk = $meiliIndex->getPrimaryKey();
+        $payloadThreshold = 1_000_000; // 1MB
+        $chunkSize = $message->chunkSize ?? 1000;
 
-        $payloadThreshold = 50_000_000; // ~1MB payload before flushing
         $documents = [];
         $payloadSize = 0;
-        $count = 0;
+        $processed = 0;
+        $buffer = [];
 
-        $this->logger?->warning(sprintf(
-            "Streaming %d entities of class %s to MeiliSearch (threshold: %s)",
-            count($message->entitiesData),
-            $message->entityClass,
-            Bytes::parse($payloadThreshold)
-        ));
+        $qb = $this->entityManager->createQueryBuilder()
+            ->select('e')
+            ->from($message->entityClass, 'e')
+            ->where("e.$identifierField IN (:ids)")
+            ->setParameter('ids', $message->entitiesData);
 
-        foreach ($message->entitiesData as $id) {
-            $entity = $repo->find($id);
-            if (!$entity) {
-                continue; // entity not found
+        $iterableResult = $qb->getQuery()->toIterable([], \Doctrine\ORM\Query::HYDRATE_OBJECT);
+
+        foreach ($iterableResult as $idx => $entity) {
+            $buffer[] = $entity;
+
+            if (count($buffer) >= $chunkSize) {
+                $this->processChunk($buffer, $identifierField, $groups, $documents, $payloadSize, $processed, $payloadThreshold, $meiliIndex, $message, $idx);
+                $buffer = [];
             }
+        }
 
-            $normalized = $this->normalizer->normalize($entity, 'array', ['groups' => $groups]);
+        if (!empty($buffer)) {
+            $this->processChunk($buffer, $identifierField, $groups, $documents, $payloadSize, $processed, $payloadThreshold, $meiliIndex, $message, count($message->entitiesData));
+        }
+
+        // Final flush
+        if (!empty($documents)) {
+            $this->flushToMeili($meiliIndex, $documents);
+        }
+
+        $this->entityManager->clear();
+        gc_collect_cycles();
+
+        $this->logger?->info(sprintf(
+            "Completed streaming of %d entities of class %s",
+            $processed,
+            $message->entityClass
+        ));
+    }
+
+    private function processChunk(
+        array $entities,
+        string $identifierField,
+        array $groups,
+        array &$documents,
+        int &$payloadSize,
+        int &$processed,
+        int $payloadThreshold,
+        $meiliIndex,
+        BatchIndexEntitiesMessage $message,
+        int $idx
+    ): void {
+        $this->logger->warning(sprintf("chunk size " . count($entities) .
+            " of %s entities of class %s", $identifierField, $message->entityClass));
+        $normalizedList = $this->normalizer->normalize($entities, 'array', ['groups' => $groups]);
+
+        foreach ($normalizedList as $i => $normalized) {
             $normalized = SurvosUtils::removeNullsAndEmptyArrays($normalized);
 
-            // Estimate payload size
-            $json = json_encode($normalized);
-            $size = $json ? strlen($json) : 0;
-
+            $size = strlen(serialize($normalized)); // fast estimation
             $documents[] = $normalized;
             $payloadSize += $size;
-            $count++;
+            $processed++;
+
+            $id = $this->propertyAccessor->getValue($entities[$i], $identifierField);
+            $this->logger->info((string)$entities[$i] . ': ' . $size . ' ' . $id);
 
             if ($payloadSize >= $payloadThreshold) {
-                $this->flushToMeili($meiliIndex, $documents, $count);
+                $this->logger->warning(sprintf('%d/ (%d/%d) items, size: %s',
+                    count($documents), $idx, count($message->entitiesData), Bytes::parse($payloadSize)));
 
-                // Reset for next batch
+                $this->flushToMeili($meiliIndex, $documents);
                 $documents = [];
                 $payloadSize = 0;
-                $count = 0;
 
-                // Free Doctrine memory
-                $this->entityManager->clear();
+                $this->entityManager->clear(); // free memory
                 gc_collect_cycles();
             }
         }
-
-        // Flush any remaining documents
-        if (!empty($documents)) {
-            $this->flushToMeili($meiliIndex, $documents, $count);
-            $this->entityManager->clear();
-            gc_collect_cycles();
-        }
     }
 
-    private function flushToMeili($meiliIndex, array $documents, int $count): void
+    private function flushToMeili($meiliIndex, array $documents): void
     {
         try {
             $task = $meiliIndex->addDocuments($documents);
-            $this->logger?->debug(sprintf(
+            $this->logger?->warning(sprintf(
                 "MeiliSearch task %s created for %d documents",
                 $task['taskUid'] ?? 'unknown',
-                $count
+                count($documents)
             ));
         } catch (\Exception $e) {
             $this->logger?->error(sprintf(
                 "Failed to index %d documents: %s",
-                $count,
+                count($documents),
                 $e->getMessage()
             ));
             throw $e;
