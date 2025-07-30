@@ -346,7 +346,7 @@ class MeiliService
                 ->getRepository($message->entityClass)
                 ->findBy([$identifierField => $message->entityData]);
             $event = $stopwatch->stop('findBy');
-            $this->logger->warning(sprintf(
+            $this->logger->info(sprintf(
                 'findBy: %d ms (%d entities)',
                 $event->getDuration(),
                 count($entities)
@@ -354,6 +354,7 @@ class MeiliService
 
 // Time the normalization
             $stopwatch->start('normalize');
+            // https://chatgpt.com/share/6889f424-29a4-8010-93b9-6cfba7356bf0
             $normalized = $this->normalizer->normalize($entities, 'array', $context);
             $event = $stopwatch->stop('normalize');
             $this->logger->warning(sprintf(
@@ -366,10 +367,10 @@ class MeiliService
             $stopwatch->start('removeNulls');
             $documents = SurvosUtils::removeNullsAndEmptyArrays($normalized);
             $event = $stopwatch->stop('removeNulls');
-            $this->logger->warning(sprintf(
-                'removeNullsAndEmptyArrays: %d ms',
-                $event->getDuration()
-            ));
+//            $this->logger->warning(sprintf(
+//                'removeNullsAndEmptyArrays: %d ms',
+//                $event->getDuration()
+//            ));
 
         } else {
             $documents = $message->entityData;
