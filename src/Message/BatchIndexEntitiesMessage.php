@@ -16,7 +16,8 @@ class BatchIndexEntitiesMessage
      */
     public function __construct(
         public readonly string $entityClass,
-        public readonly array $entitiesData,
+        public readonly array $entityData, // normalized data OR list of ids
+        public readonly ?bool $reload=null, // data is actually just a list of ids
         public readonly ?string $primaryKeyName=null, // for the database and meili.  But now can be different
     ) {
     }

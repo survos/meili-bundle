@@ -270,9 +270,11 @@ class IndexCommand extends Command
         $this->io->title($class);
         foreach ($generator as $chunk) {
             $progressBar->advance(count($chunk));
-
             $envelope = $this->messageBus->dispatch(
-                new BatchIndexEntitiesMessage($class, $chunk , $primaryKey)
+                new BatchIndexEntitiesMessage($class,
+                    entityData: $chunk,
+                    reload: true,
+                    primaryKeyName: $primaryKey)
             );
             if ($max && ($progressBar->getProgress() >= $max)) {
                 break;

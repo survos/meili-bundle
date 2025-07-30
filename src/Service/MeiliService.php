@@ -17,7 +17,9 @@ use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\PropertyAccess\PropertyAccessorInterface;
+use Symfony\Component\Serializer\Normalizer\AbstractObjectNormalizer;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
+use Symfony\Component\Stopwatch\Stopwatch;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Component\HttpClient\Psr18Client as SymfonyPsr18Client;
 
@@ -315,11 +317,80 @@ class MeiliService
         $payloadThreshold = 1_000_000; // 1MB
         $chunkSize = $message->chunkSize ?? 1000;
 
+        // if we have the entity data, we've done the normalization on the server,
+        // e.g. during DoctrineEventListener, when we have everything.
+
         $documents = [];
         $payloadSize = 0;
         $processed = 0;
         $buffer = [];
+        if ($message->reload) {
+            // we need to make sure the batch size is reasonable!
+            // Treat entitiesData as IDs
+//            $entities = $this->entityManager->getRepository($message->entityClass)->findBy([$identifierField => $message->entityData]);
+//            $normalized = $this->normalizer->normalize($entities, 'array', ['groups' => $groups]);
+//            $documents = SurvosUtils::removeNullsAndEmptyArrays($normalized);
 
+// Inject or create a Stopwatch instance
+            $stopwatch = new Stopwatch();
+
+            $context = [
+                'groups' => $groups,
+//                AbstractObjectNormalizer::ENABLE_MAX_DEPTH => true,
+//                AbstractObjectNormalizer::CIRCULAR_REFERENCE_HANDLER => fn ($obj) => $obj->getId(),
+            ];
+
+// Time the database fetch
+            $stopwatch->start('findBy');
+            $entities = $this->entityManager
+                ->getRepository($message->entityClass)
+                ->findBy([$identifierField => $message->entityData]);
+            $event = $stopwatch->stop('findBy');
+            $this->logger->warning(sprintf(
+                'findBy: %d ms (%d entities)',
+                $event->getDuration(),
+                count($entities)
+            ));
+
+// Time the normalization
+            $stopwatch->start('normalize');
+            $normalized = $this->normalizer->normalize($entities, 'array', $context);
+            $event = $stopwatch->stop('normalize');
+            $this->logger->warning(sprintf(
+                'normalize: %d ms (%d items)',
+                $event->getDuration(),
+                is_countable($normalized) ? count($normalized) : 0
+            ));
+
+// Time the null-removal
+            $stopwatch->start('removeNulls');
+            $documents = SurvosUtils::removeNullsAndEmptyArrays($normalized);
+            $event = $stopwatch->stop('removeNulls');
+            $this->logger->warning(sprintf(
+                'removeNullsAndEmptyArrays: %d ms',
+                $event->getDuration()
+            ));
+
+        } else {
+            $documents = $message->entityData;
+        }
+        $this->logger->warning(sprintf("Dispatching %d docs (%s) to meili",
+        count($documents),
+        Bytes::parse(strlen(serialize($documents)))));
+        try {
+            // max of 100MB
+            $meiliIndex->addDocuments($documents);
+        } catch (ApiException $exception) {
+            dump($exception);
+            dd($documents);
+        }
+        // this should be in the middleware.
+        $this->entityManager->clear();
+        gc_collect_cycles();
+
+        return;
+
+        // all this optimization work!  Sigh.
         $qb = $this->entityManager->createQueryBuilder()
             ->select('e')
             ->from($message->entityClass, 'e')
@@ -385,7 +456,7 @@ class MeiliService
 
             if ($payloadSize >= $payloadThreshold) {
                 $this->logger->warning(sprintf('%d/ (%d/%d) items, size: %s',
-                    count($documents), $idx, count($message->entitiesData), Bytes::parse($payloadSize)));
+                    count($documents), $idx, count($message->entityIds), Bytes::parse($payloadSize)));
 
                 $this->flushToMeili($meiliIndex, $documents);
                 $documents = [];
