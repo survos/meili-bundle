@@ -46,8 +46,8 @@ class SettingsCommand # extends Command
         private MeiliService                                  $meiliService,
         private SettingsService                               $settingsService,
         private NormalizerInterface                           $normalizer,
+        #[Autowire('%env(OPENAI_API_KEY)%')] private ?string $openAiApiKey=null,
         #[Autowire('%kernel.enabled_locales%')] private array $enabledLocales=[],
-        #[Autowire('%env(OPENAI_API_KEY)%')] private string $openAiApiKey,
     )
     {
 //        parent::__construct();
