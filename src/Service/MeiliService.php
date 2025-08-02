@@ -315,33 +315,16 @@ class MeiliService
         $documents = [];
         $payloadSize = 0;
 
-        $batchSize = 500;
-        foreach (array_chunk($message->entitiesData, $batchSize) as $chunk) {
-            $entities = $repo->findBy([$identifierField => $chunk]);
-
-            foreach ($entities as $entity) {
-                $normalized = $this->normalizer->normalize($entity, 'array', ['groups' => $groups]);
-                $normalized = SurvosUtils::removeNullsAndEmptyArrays($normalized);
-
-                $json = json_encode($normalized);
-                $size = $json ? strlen($json) : 0;
-                $payloadSize += $size;
-                $documents[] = $normalized;
-
-                if ($payloadSize >= $payloadThreshold) {
-                    $this->flushToMeili($meiliIndex, $documents, count($documents));
-                    $documents = [];
-                    $payloadSize = 0;
-                    $this->entityManager->clear();
-                    gc_collect_cycles();
-                }
-            }
-            $this->entityManager->clear(); // clear batch
-        }
-
-        if (!empty($documents)) {
+        // argh, lost this in the merge!
+        if ($message->reload) {
+//            $data  = $this->loadAndFlush($message);
+            $this->loadAndFlush($message, $repo, $identifierField, $groups, $payloadSize, $documents, $payloadThreshold, $meiliIndex);
+        } else {
+            $documents = $message->entityData;
             $this->flushToMeili($meiliIndex, $documents, count($documents));
+
         }
+
     }
 
     private function flushToMeili($meiliIndex, array $documents, int $count): void
@@ -441,6 +424,49 @@ ORDER BY n.nspname, c.relname;");
             ));
 
             throw $e;
+        }
+    }
+
+    /**
+     * @param BatchIndexEntitiesMessage $message
+     * @param \Doctrine\ORM\EntityRepository $repo
+     * @param string $identifierField
+     * @param array|null $groups
+     * @param int $payloadSize
+     * @param array $documents
+     * @param int $payloadThreshold
+     * @param Indexes $meiliIndex
+     * @return void
+     * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
+     */
+    public function loadAndFlush(BatchIndexEntitiesMessage $message, \Doctrine\ORM\EntityRepository $repo, string $identifierField, ?array $groups, int $payloadSize, array $documents, int $payloadThreshold, Indexes $meiliIndex): void
+    {
+        $batchSize = 500;
+        foreach (array_chunk($message->entityData, $batchSize) as $chunk) {
+            $entities = $repo->findBy([$identifierField => $chunk]);
+
+            foreach ($entities as $entity) {
+                $normalized = $this->normalizer->normalize($entity, 'array', ['groups' => $groups]);
+                $normalized = SurvosUtils::removeNullsAndEmptyArrays($normalized);
+
+                $json = json_encode($normalized);
+                $size = $json ? strlen($json) : 0;
+                $payloadSize += $size;
+                $documents[] = $normalized;
+
+                if ($payloadSize >= $payloadThreshold) {
+                    $this->flushToMeili($meiliIndex, $documents, count($documents));
+                    $documents = [];
+                    $payloadSize = 0;
+                    $this->entityManager->clear();
+                    gc_collect_cycles();
+                }
+            }
+            $this->entityManager->clear(); // clear batch
+        }
+
+        if (!empty($documents)) {
+            $this->flushToMeili($meiliIndex, $documents, count($documents));
         }
     }
 

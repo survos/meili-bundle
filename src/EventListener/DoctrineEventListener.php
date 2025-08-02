@@ -93,11 +93,16 @@ class DoctrineEventListener
                 $stamps[] = new TagStamp(new \ReflectionClass($entityClass)->getShortName());
             }
 
-            $this->messageBus->dispatch(new BatchIndexEntitiesMessage(
-                $entityClass,
-                $normalized,
-                reload: false
-            ), $stamps);
+            try {
+                $this->messageBus->dispatch(new BatchIndexEntitiesMessage(
+                    $entityClass,
+                    $normalized,
+                    reload: false
+                ), $stamps);
+            } catch (\Exception $e) {
+                dd($entityClass, $normalized, $e);
+
+            }
         }
 
         // Batch remove operations by entity class
