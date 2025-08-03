@@ -169,7 +169,6 @@ class MeiliService
             $index->fetchInfo();
 //            $info = $index->fetchInfo();
             $stats = $index->stats();
-            dump($stats);
             $isIndexing = $stats['isIndexing'];
             $indexName = $index->getUid();
             if ($this->logger) {

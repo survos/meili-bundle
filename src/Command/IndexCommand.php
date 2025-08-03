@@ -101,31 +101,24 @@ class IndexCommand extends Command
         }
         $classes = [];
 
-        // @todo: just the the meili managed indexes from meiliservice
-
+        // just the the meili managed indexes from meiliservice
+        foreach ($this->meiliService->indexedEntities as $entityClass) {
+            $this->logger->warning($entityClass);
             // https://abendstille.at/blog/?p=163
-            $metas = $this->entityManager->getMetadataFactory()->getAllMetadata();
-            foreach ($metas as $meta) {
-                // check argument
-                if (!$meta->getReflectionClass()->getAttributes(MeiliIndex::class)) {
-                    continue;
-                }
-
-                if ($class && ($meta->getName() <> $class)) {
-                    continue;
-                }
-
-                // skip if no groups defined
-                if (!$groups = $this->settingsService->getNormalizationGroups($meta->getName())) {
-//                    if ($input->ver) {
-                        $io->error("ERROR {$class}: no normalization groups for " . $meta->getName());
-                        return Command::FAILURE;
-//                    }
-                    continue;
-                }
-
-                $classes[$meta->getName()] = $groups;
+            if ($class && ($entityClass <> $class)) {
+                continue;
             }
+
+            // skip if no groups defined
+            if (!$groups = $this->settingsService->getNormalizationGroups($entityClass)) {
+//                    if ($input->ver) {
+                $io->error("ERROR {$class}: no normalization groups for " . $entityClass);
+                return Command::FAILURE;
+//                    }
+
+            }
+            $classes[$entityClass] = $groups;
+        }
 
         $this->io = $io;
 
@@ -288,7 +281,9 @@ class IndexCommand extends Command
         ];
         $this->showIndexSettings($index);
         // much less relevant, since the ids have been dispatched but not run.  We can show the difference though.
-        return $this->meiliService->waitUntilFinished($index);
+        if ($wait) {
+            $this->meiliService->waitUntilFinished($index);
+        }
 
         $ids = $this->em->createQueryBuilder()
             ->select('e.' . $primaryKey)

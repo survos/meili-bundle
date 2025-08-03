@@ -427,9 +427,6 @@ return Command::SUCCESS;
             $this->meiliService->waitForTask($task);
         if (count($records)) {
         }
-
-
-
         $this->showIndexSettings($index);
 
         return $this->meiliService->waitUntilFinished($index);
