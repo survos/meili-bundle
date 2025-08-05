@@ -52,6 +52,10 @@ class SearchController extends AbstractController
 
 //        dd($openapi);
 
+        if (class_exists($indexName)) {
+            $indexName = $this->meiliService->getPrefixedIndexName($indexName);
+        }
+
         $locale = 'en'; // @todo
         $index = $this->meiliService->getIndexEndpoint($indexName);
         $settings = $index->getSettings();
