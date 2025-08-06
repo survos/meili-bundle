@@ -11,6 +11,7 @@ use Doctrine\ORM\Event\PostUpdateEventArgs;
 use Doctrine\ORM\Event\PrePersistEventArgs;
 use Doctrine\ORM\Event\PreRemoveEventArgs;
 use Doctrine\ORM\Events;
+use Jwage\PhpAmqpLibMessengerBundle\Transport\AmqpStamp;
 use Psr\Log\LoggerInterface;
 use Survos\CoreBundle\Service\SurvosUtils;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
@@ -92,6 +93,12 @@ class DoctrineEventListener
             if (class_exists(TagStamp::class)) {
                 $stamps[] = new TagStamp(new \ReflectionClass($entityClass)->getShortName());
             }
+            $stamps = [
+                //new TransportNamesStamp('meili')
+                //use jwage/amqp-transport
+                new AmqpStamp('meili'),
+            ];
+
 
             try {
                 $this->messageBus->dispatch(new BatchIndexEntitiesMessage(
