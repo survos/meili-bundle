@@ -307,7 +307,7 @@ class MeiliService
         $repo = $this->entityManager->getRepository($message->entityClass);
         $metadata = $this->entityManager->getClassMetadata($message->entityClass);
         $identifierField = $metadata->getSingleIdentifierFieldName();
-
+        dd($message);
         $groups = $this->settingsService->getNormalizationGroups($message->entityClass);
         $meiliIndex = $this->getMeiliIndex($message->entityClass);
         $payloadThreshold = 50_000_000; // ~1MB

@@ -31,6 +31,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\Intl\Languages;
 use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Messenger\Stamp\TransportNamesStamp;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Yaml\Yaml;
@@ -241,6 +242,10 @@ class IndexCommand extends Command
     ?string $pk = null
     ): array
     {
+        // not great, but okay for now.  hard-code to dedicated meili queue
+        $stamps = [
+            new TransportNamesStamp('meili')
+        ];
         $startingAt = 0;
         $records = [];
         $primaryKey ??= $index->getPrimaryKey();
@@ -267,8 +272,10 @@ class IndexCommand extends Command
                 new BatchIndexEntitiesMessage($class,
                     entityData: $chunk,
                     reload: true,
-                    primaryKeyName: $primaryKey)
+                    primaryKeyName: $primaryKey),
+                $stamps
             );
+            dump($envelope);
             if ($max && ($progressBar->getProgress() >= $max)) {
                 break;
             }
