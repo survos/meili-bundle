@@ -36,6 +36,9 @@ use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Yaml\Yaml;
 use Zenstruck\Alias;
+//add AmqpTransport from Jwage
+use Jwage\PhpAmqpLibMessengerBundle\Transport\AmqpStamp;
+
 
 #[AsCommand(
     name: 'meili:index',
@@ -244,7 +247,9 @@ class IndexCommand extends Command
     {
         // not great, but okay for now.  hard-code to dedicated meili queue
         $stamps = [
-            new TransportNamesStamp('meili')
+            //new TransportNamesStamp('meili')
+            //use jwage/amqp-transport
+            new AmqpStamp('meili'),
         ];
         $startingAt = 0;
         $records = [];
@@ -254,7 +259,7 @@ class IndexCommand extends Command
         $generator = $streamer->stream($batchSize);
 
 
-        $stamps = [];
+        //$stamps = [];
 
 //        $connection = $this->entityManager->getConnection();
 //        $sql = "SELECT $primaryKey FROM " . $this->entityManager->getClassMetadata($class)->getTableName();
