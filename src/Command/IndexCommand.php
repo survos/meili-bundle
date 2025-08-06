@@ -280,7 +280,7 @@ class IndexCommand extends Command
                     primaryKeyName: $primaryKey),
                 $stamps
             );
-            dump($envelope);
+            //dump($envelope);
             if ($max && ($progressBar->getProgress() >= $max)) {
                 break;
             }
@@ -304,7 +304,7 @@ class IndexCommand extends Command
             ->getScalarResult(); // Returns [['id' => 1], ['id' => 2], ['id' => 54]]
 
         $ids = array_column($ids, 'id'); // Convert to [1, 2, 54]
-        dd($ids, $approx);
+        //dd($ids, $approx);
 
         $qb = $this->entityManager->getRepository($class)->createQueryBuilder('e');
         $qb->select('e.' . $primaryKey . " as id");
@@ -336,7 +336,7 @@ class IndexCommand extends Command
                 ->setMaxResults($batchSize);
 //            $this->io->writeln("Fetching $startingAt ($batchSize)");
         }
-        dd($query->getResult());
+        //dd($query->getResult());
         $results = $query->toIterable();
 //        if (is_null($count)) {
 //            // slow if not filtered!

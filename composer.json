@@ -39,7 +39,8 @@
         "symfony/intl": "^7.3",
         "symfony/ux-twig-component": "^2.27",
         "doctrine/doctrine-bundle": "^2.15",
-        "symfony/messenger": "^7.3"
+        "symfony/messenger": "^7.3",
+        "jwage/phpamqplib-messenger": "^0.8.5"
     },
     "autoload": {
         "psr-4": {
