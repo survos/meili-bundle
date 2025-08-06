@@ -42,6 +42,8 @@
     {% set icons = {
         json: ux_icon('si:json-duotone'),
         bug: ux_icon('tabler:bug'),
+        wikidata: ux_icon('openmoji:wikidata'),
+        website: ux_icon('fluent-mdl2:website')
     } %}
 
     {% set hitClass = app.request.get('class', 'grid-' ~ app.request.get('grid')|default(2)) %}
