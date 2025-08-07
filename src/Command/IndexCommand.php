@@ -38,8 +38,6 @@ use Symfony\Component\Yaml\Yaml;
 use Zenstruck\Alias;
 //add AmqpTransport from Jwage
 use Jwage\PhpAmqpLibMessengerBundle\Transport\AmqpStamp;
-
-
 #[AsCommand(
     name: 'meili:index',
     description: 'Index entities for use with meilisearch',
@@ -86,6 +84,7 @@ class IndexCommand extends Command
         #[Option("pk")] string $pk = 'id',
         #[Option("index name, defaults to prefix + class shortname")] ?string $name = null,
         #[Option("dump")] ?int $dump = null,
+        #[Option("explicitly set all if no class")] ?int $all = null,
         #[Option("create/update settings ")] ?bool $updateSettings = null,
         #[Option("reset the meili index")] ?bool $reset = null,
         #[Option("fetch and index the documents")] ?bool $fetch = null,
@@ -104,6 +103,10 @@ class IndexCommand extends Command
 //            }
         }
         $classes = [];
+        if (!$class && !$all) {
+            $io->error("Either a class or filter or --all");
+            return Command::FAILURE;
+        }
 
         // just the the meili managed indexes from meiliservice
         foreach ($this->meiliService->indexedEntities as $entityClass) {

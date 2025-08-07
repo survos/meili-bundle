@@ -51,6 +51,9 @@ class SearchController extends AbstractController
 
 
 //        dd($openapi);
+        if (!class_exists($indexName) && class_exists($appEntityClass = 'App\\Entity\\'. $indexName)) {
+            $indexName = $appEntityClass;
+        }
 
         if (class_exists($indexName)) {
             $indexName = $this->meiliService->getPrefixedIndexName($indexName);
