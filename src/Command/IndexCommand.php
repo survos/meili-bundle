@@ -89,6 +89,7 @@ class IndexCommand extends Command
         #[Option("reset the meili index")] ?bool $reset = null,
         #[Option("fetch and index the documents")] ?bool $fetch = null,
         #[Option("wait until index is finished before exiting")] ?bool $wait = null,
+        #[Option()] ?string $transport=null,
         #[Option("batch-size for sending documents to meili", name: 'batch')] int $batchSize = 100,
     ): int
     {
@@ -168,6 +169,7 @@ class IndexCommand extends Command
                     primaryKey: $index->getPrimaryKey(),
                     dump: $dump,
                     max: $limit,
+                    transport: $transport,
                     pk: $pk,
                 );
 
@@ -244,16 +246,18 @@ class IndexCommand extends Command
                                 ?int $dump=null,
                                 ?string $primaryKey=null,
                                 ?int $max = null,
+                                ?string $transport=null,
                                 ?string $subdomain=null,
     ?string $pk = null
     ): array
     {
         // not great, but okay for now.  hard-code to dedicated meili queue
-        $stamps = [
-            //new TransportNamesStamp('meili')
-            //use jwage/amqp-transport
-            new AmqpStamp('meili'),
-        ];
+        $stamps = [];
+        if ($transport) {
+            $stamps[] = new TransportNamesStamp($transport);
+        } else {
+            $stamps[] = new AmqpStamp('meili');
+        }
         $startingAt = 0;
         $records = [];
         $primaryKey ??= $index->getPrimaryKey();
@@ -271,6 +275,9 @@ class IndexCommand extends Command
 //        }
 //        $ids = $connection->fetchFirstColumn($sql);
         $approx = $this->meiliService->getApproxCount($class);
+        if (!$approx) {
+            $approx = $this->entityManager->getRepository($class)->count();
+        }
         $progressBar = new ProgressBar($this->io, $approx);
         $progressBar->start();
         $this->io->title($class);
@@ -280,10 +287,10 @@ class IndexCommand extends Command
                 new BatchIndexEntitiesMessage($class,
                     entityData: $chunk,
                     reload: true,
+                    transport: $transport,
                     primaryKeyName: $primaryKey),
                 $stamps
             );
-            //dump($envelope);
             if ($max && ($progressBar->getProgress() >= $max)) {
                 break;
             }

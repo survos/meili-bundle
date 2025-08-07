@@ -325,8 +325,9 @@ class MeiliService
 
     }
 
-    private function flushToMeili($meiliIndex, array $documents, int $count): void
+    private function flushToMeili($meiliIndex, array $documents): void
     {
+        $count = count($documents);
         try {
             $task = $meiliIndex->addDocuments($documents);
             $this->logger?->debug(sprintf(
@@ -440,6 +441,7 @@ ORDER BY n.nspname, c.relname;");
     public function loadAndFlush(BatchIndexEntitiesMessage $message, \Doctrine\ORM\EntityRepository $repo, string $identifierField, ?array $groups, int $payloadSize, array $documents, int $payloadThreshold, Indexes $meiliIndex): void
     {
         $batchSize = 500;
+
         foreach (array_chunk($message->entityData, $batchSize) as $chunk) {
             $entities = $repo->findBy([$identifierField => $chunk]);
 
