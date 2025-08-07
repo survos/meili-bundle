@@ -29,3 +29,7 @@
 /*.grid-1 {*/
 /*    width: calc(100% - 1rem);*/
 /*}*/
+
+mark {
+    padding: 0;
+}

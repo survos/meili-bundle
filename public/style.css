@@ -2,6 +2,10 @@
 /*    width: calc(33% - 1rem);*/
 /*}*/
 
+mark {
+    padding: 0 !important;
+}
+
 .grid-5 {
     width: calc(20% - 1rem) !important;
 }

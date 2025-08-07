@@ -401,7 +401,7 @@ export default class extends Controller {
                                     });
 
                                 }
-                                if (['country','countries', 'countryCode'].includes(attribute)) {
+                                if (['countries', 'countryCode'].includes(attribute)) {
                                     return items.map(item => {
                                         // item.label = 'XX' + lookup[item.value] || item.value;
                                         // item.value = lookup[item.value];
