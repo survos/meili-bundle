@@ -37,7 +37,7 @@
         serverApiKey: apiKey,
         indexName: indexName,
         _sc_modal: _sc_modal,
-        debug: app.request.get('debug', false)
+        debug: app.request.get('debug', false) ? true : false
     } %}
     {% set icons = {
         json: ux_icon('si:json-duotone'),
