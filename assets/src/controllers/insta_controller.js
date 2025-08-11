@@ -385,7 +385,7 @@ export default class extends Controller {
                             limit: 5,
                             showMoreLimit: 10,
                             showMore: true,
-                            searchable: !['gender','house','currentParty','marking','countries','locale'    ].includes(attribute),
+                            searchable: !['gender','house','currentParty','marking','countries','locale'].includes(attribute),
                             attribute: attribute,
                             // escapeHTML: false,
                             transformItems: (items, { results }) => {

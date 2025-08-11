@@ -1,6 +1,41 @@
 /*.ais-Hits-item {*/
 /*    width: calc(33% - 1rem);*/
 /*}*/
+.thumb-120{ width:120px; height:auto; }
+/* put once, e.g. app.css */
+.meta-grid{
+    display:grid;
+    grid-template-columns:auto 1fr; /* label then elastic value */
+    gap:.35rem .75rem;
+    min-width:0; /* allow children to shrink */
+}
+.meta-key{ white-space:nowrap; }
+.meta-val{
+    min-width:0;
+    overflow-wrap:anywhere;   /* breaks long tokens/URLs */
+    word-break:break-word;    /* legacy support */
+}
+
+.description-clamp{
+    display:-webkit-box;            /* required */
+    -webkit-box-orient:vertical;    /* required */
+    -webkit-line-clamp:4;           /* number of lines */
+    overflow:hidden;                /* required */
+    max-width:100%;                 /* ensure it can shrink */
+    word-break:break-word;          /* help with long tokens */
+}
+
+/* If your snippet contains block tags, make them inline so clamp works */
+.description-clamp > p,
+.description-clamp > div,
+.description-clamp > ul,
+.description-clamp > ol{
+    display:inline;
+    margin:0;
+    padding:0;
+}
+.description-clamp br{ display:none; } /* optional */
+
 
 mark {
     padding: 0 !important;
