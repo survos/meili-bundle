@@ -43,11 +43,11 @@
         json: ux_icon('si:json-duotone'),
         bug: ux_icon('tabler:bug'),
         wikidata: ux_icon('openmoji:wikidata'),
-        website: ux_icon('fluent-mdl2:website')
+        website: ux_icon('fluent-mdl2:website'),
+        facebook: ux_icon('facebook'),
     } %}
 
     {% set hitClass = app.request.get('class', 'grid-' ~ app.request.get('grid')|default(2)) %}
-    <h1>{{ hitClass }}</h1>
     <div {{ stimulus_controller(_sc, {
         serverUrl: server,
         serverApiKey: apiKey,

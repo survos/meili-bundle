@@ -140,7 +140,6 @@ class DoctrineEventListener
 
     public function postUpdate(PostUpdateEventArgs $args): void
     {
-        $this->logger?->info(__METHOD__);
         $this->scheduleForIndexing($args->getObject());
     }
 
