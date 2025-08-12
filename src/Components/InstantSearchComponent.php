@@ -6,7 +6,6 @@ use ApiPlatform\Metadata\IriConverterInterface;
 use ApiPlatform\Doctrine\Orm\State\CollectionProvider;
 use ApiPlatform\Metadata\GetCollection;
 use Psr\Log\LoggerInterface;
-use Survos\ApiGrid\Components\Common\TwigBlocksInterface;
 use Survos\InspectionBundle\Services\InspectionService;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Component\DomCrawler\Crawler;
@@ -16,10 +15,13 @@ use Symfony\UX\TwigComponent\Attribute\AsTwigComponent;
 use Symfony\UX\TwigComponent\Attribute\PreMount;
 use Twig\Environment;
 
+use Survos\JsTwigBundle\TwigBlocksTrait;
+
 #[AsTwigComponent('instant_search', template: '@SurvosMeili/components/instant_search.html.twig')]
 class InstantSearchComponent // implements TwigBlocksInterface
 {
 
+    use TwigBlocksTrait;
     public function __construct(
         private Environment $twig,
         private LoggerInterface $logger,
@@ -104,92 +106,12 @@ class InstantSearchComponent // implements TwigBlocksInterface
         return $this->requestStack->getParentRequest()->getLocale();
     }
 
-    public function getDefaultColumns(): array
-    {
-        if ($this->class) {
-            $settings = $this->datatableService->getSettingsFromAttributes($this->class);
-        } else {
-            $settings = []; // really settings should probably be passed in via a json schema or something like that.
-        }
-        return $settings;
-    }
-
-    /**
-     * @param string $columnType
-     * @return Column[]
-     */
-    public function getNormalizedColumns(string $columnType='columns'): iterable
-    {
-        if ($this->class) {
-            if (!$this->index) {
-                $this->index =  $this->meiliService->getPrefixedIndexName(MeiliSearchStateProvider::getSearchIndexObject($this->class));
-            }
-        }
-        // really we're getting the schema from the PHP Attributes here.
-
-        $settings = $this->getDefaultColumns();
-        $value= match($columnType) {
-            'columns' => $this->datatableService->normalizedColumns($settings, $this->columns, $this->getTwigBlocks()),
-            'facet_columns' => $this->datatableService->normalizedColumns($settings, $this->facet_columns, $this->getTwigBlocks())
-        };
-        return $value;
-    }
-
-    public function getSearchBuilderColumns(): array
-    {
-        $searchBuilderColumns = [];
-        foreach ($this->getNormalizedColumns() as $idx => $column) {
-            if ($column->browsable) {
-                $searchBuilderColumns[] = $idx+1;
-            }
-        }
-        return $searchBuilderColumns;
-
-    }
-
     public function getModalTemplate(): ?string
     {
         return $this->getTwigBlocks()['_modal']??null;
 
     }
 
-    public function searchPanesColumns(): int
-    {
-        $count = 0;
-        // count the number, if > 6 we could figured out the best layout
-        foreach ($this->normalizedColumns() as $column) {
-//            dd($column);
-            if ($column->inSearchPane) {
-                $count++;
-            }
-        }
-        $count = min($count, 6);
-        return $count;
-    }
-
-    /**
-     * @return array<string, Column>
-     */
-    public function GridNormalizedColumns(): iterable
-    {
-        $normalizedColumns = [];
-        foreach ($this->columns as $c) {
-            if (empty($c)) {
-                continue;
-            }
-            if (is_string($c)) {
-                $c = [
-                    'name' => $c,
-                ];
-            }
-            assert(is_array($c));
-            $column = new Column(...$c);
-            if ($column->condition) {
-                $normalizedColumns[$column->name] = $column;
-            }
-        }
-        return $normalizedColumns;
-    }
 
     public function mount(string $class,
 //                          array $columns=[],
@@ -218,56 +140,6 @@ class InstantSearchComponent // implements TwigBlocksInterface
 //                context: $context ?? []);
 
         return;
-
-        $routes = $this->inspectionService->getAllUrlsForResource($class);
-        // the problem with this is that it always gets the _first_ one.
-        if ($apiRoute) {
-//            $apiGetCollectionUrl = $this->iriConverter->getIriFromResource($class,  operation: new GetCollection());
-//        } else {
-            // to get the params
-            $urls = $this->inspectionService->getAllUrlsForResource($class);
-            $routeKey = $apiRoute ?: array_key_first($urls);
-            // the real route is the opname
-            assert(array_key_exists($routeKey, $routes), "Missing route $routeKey in " . join(',', array_keys($routes)));
-            $route = $routes[$routeKey]['opName'];
-            $apiGetCollectionUrl =  $this->urlGenerator->generate($route, $params??[]);
-//            dd($this->apiGetCollectionUrl);
-        }
-        $this->apiGetCollectionUrl = $apiGetCollectionUrl;
-//        try {
-//        } catch (InvalidArgumentException $exception) {
-//            $urls = $this->inspectionService->getAllUrlsForResource($class);
-//            dd($urls, $exception);
-//        }
-//        dd($apiGetCollectionUrl);
-//        if (!$apiGetCollectionUrl) {
-//            $route = array_key_first($urls);
-////            $route = $urls[$meili ? MeiliSearchStateProvider::class : CollectionProvider::class];
-//            if ($meili) {
-//                $indexName = (new \ReflectionClass($class))->getShortName();
-//                $params = ['indexName' => $indexName];
-//                if (!$this->apiGetCollectionUrl) {
-//                    $this->apiGetCollectionUrl =  $this->urlGenerator->generate($route, $params??[]);
-//                }
-//            }
-//            $this->collectionRoutes = $this->inspectionService->getAllUrlsForResource($class);
-//        }
-//        dd($this->collectionRoutes, $apiGetCollectionUrl, $this->apiGetCollectionUrl);
-        return;
-
-        dd($urls, $class, $meili, $route->getPath());
-        return;
-        dd(func_get_args());;
-        dd($this->apiUrl);
     }
-
-    public function facetColumns(): iterable
-    {
-        return array_values(array_filter($this->getNormalizedColumns(), function ($column) {
-            return $column->inSearchPane || $column->browsable;
-        }));
-
-    }
-
 
 }

@@ -14,6 +14,7 @@ use Symfony\Component\HttpKernel\Attribute\MapQueryParameter;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use Symfony\Component\Routing\RouterInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Symfony\UX\Chartjs\Builder\ChartBuilderInterface;
 use Symfony\UX\Chartjs\Model\Chart;
@@ -24,18 +25,21 @@ class SearchController extends AbstractController
     protected $helper;
 
     public function __construct(
-        #[Autowire('%kernel.project_dir%/templates/js/')] private string $jsTemplateDir,
-        private MeiliService  $meiliService,
+        #[Autowire('%kernel.project_dir%/templates/js/')]
+        private string                   $jsTemplateDir,
+        private readonly MeiliService    $meiliService,
+        private readonly RouterInterface $router,
     )
     {
 //        $this->helper = $helper;
     }
+
     #[Route('/index/{indexName}', name: 'meili_insta')]
     #[Template('@SurvosMeili/insta.html.twig')]
     public function index(
-        string $indexName, //  = 'packagesPackage',
+        string                       $indexName, //  = 'packagesPackage',
         #[MapQueryParameter] ?string $embedder = null,
-        #[MapQueryParameter] bool $useProxy = false,
+        #[MapQueryParameter] bool    $useProxy = false,
     ): Response|array
     {
 
@@ -51,7 +55,7 @@ class SearchController extends AbstractController
 
 
 //        dd($openapi);
-        if (!class_exists($indexName) && class_exists($appEntityClass = 'App\\Entity\\'. $indexName)) {
+        if (!class_exists($indexName) && class_exists($appEntityClass = 'App\\Entity\\' . $indexName)) {
             $indexName = $appEntityClass;
         }
 
@@ -64,7 +68,7 @@ class SearchController extends AbstractController
         $settings = $index->getSettings();
         $sorting[] = ['value' => $indexName, 'label' => 'relevancy'];
         foreach ($settings['sortableAttributes'] as $sortableAttribute) {
-            foreach (['asc','desc'] as $direction) {
+            foreach (['asc', 'desc'] as $direction) {
                 $sorting[] = [
                     'label' => sprintf("%s %s", $sortableAttribute, $direction),
                     'value' => sprintf("%s:%s:%s", $indexName, $sortableAttribute, $direction)
@@ -107,11 +111,6 @@ class SearchController extends AbstractController
 //        dd($template);
         return new Response($template);
     }
-
-
-
-
-
 
 
 }

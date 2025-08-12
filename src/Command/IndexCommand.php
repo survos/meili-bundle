@@ -57,7 +57,7 @@ class IndexCommand extends Command
         private LoggerInterface                               $logger,
         private MeiliService                                  $meiliService,
         private SettingsService                               $settingsService,
-        private NormalizerInterface                           $normalizer,
+//        private NormalizerInterface                           $normalizer,
         #[Autowire('%kernel.enabled_locales%')] private array $enabledLocales=[],
 
     )
@@ -84,13 +84,13 @@ class IndexCommand extends Command
         #[Option("pk")] string $pk = 'id',
         #[Option("index name, defaults to prefix + class shortname")] ?string $name = null,
         #[Option("dump")] ?int $dump = null,
-        #[Option("explicitly set all if no class")] ?int $all = null,
+        #[Option("explicitly set all if no class")] ?bool $all = null,
         #[Option("create/update settings ")] ?bool $updateSettings = null,
         #[Option("reset the meili index")] ?bool $reset = null,
         #[Option("fetch and index the documents")] ?bool $fetch = null,
         #[Option("wait until index is finished before exiting")] ?bool $wait = null,
-        #[Option()] ?string $transport=null,
-        #[Option("batch-size for sending documents to meili", name: 'batch')] int $batchSize = 100,
+        #[Option(shortcut: 'p')] ?string $transport=null,
+        #[Option("batch-size for sending documents to meili", name: 'batch')] int $batchSize = 1000,
     ): int
     {
 
@@ -141,12 +141,18 @@ class IndexCommand extends Command
                 }
                 $this->meiliService->reset($indexName);
                 $updateSettings = true;
+//                if (is_null($fetch)) {
+//                    $fetch = false; // don't fetch unless the indexed was mark
+//                }
             }
 
             if ($updateSettings) {
                 // pk of meili  index might be different than doctrine pk, e.g. $imdbId
                 $index = $this->meiliService->getIndex($indexName, $pk);
                 $this->configureIndex($class, $indexName, $index, $dry);
+                if (!$reset && is_null($fetch)) {
+                    $fetch = false; // ?
+                }
             }
 
             // skip if no documents?  Obviously, docs could be added later, e.g. an Owner record after import
@@ -163,7 +169,8 @@ class IndexCommand extends Command
             if ($fetch) {
                 // this needs to be dispatched so we can index large collections.
                 $stats = $this->indexClass($class, $index,
-                    batchSize: $batchSize, indexName: $indexName, groups: $groups,
+                    batchSize: $batchSize,
+                    indexName: $indexName, groups: $groups,
                     limit: $limit??0,
                     filter: $filter ? $filterArray: null,
                     primaryKey: $index->getPrimaryKey(),
@@ -231,7 +238,8 @@ class IndexCommand extends Command
                     "maxValuesPerFacet" => $this->meiliService->getConfig()['maxValuesPerFacet']
                 ],
             ]);
-            $stats = $this->meiliService->waitUntilFinished($index);
+            // potentiall problematic.
+//            $stats = $this->meiliService->waitUntilFinished($index);
 //            dd($stats, $debug, $filterable, $index->getUid());
         return $index;
     }
@@ -448,18 +456,18 @@ class IndexCommand extends Command
 
     }
 
-    private function getTranslationArray($entity, $accessor) {
-        $rows = [];
-        $updatedRow = [Instance::DB_CODE_FIELD => $entity->getCode()];
-        foreach ($entity->getTranslations() as $translation) {
-            foreach (Instance::TRANSLATABLE_FIELDS as $fieldName) {
-                $translatedValue = $accessor->getValue($translation, $fieldName);
-                $updatedRow['_translations'][$translation->getLocale()][$fieldName] = $translatedValue;
-            }
-        }
-
-        return $updatedRow;
-    }
+//    private function getTranslationArray($entity, $accessor) {
+//        $rows = [];
+//        $updatedRow = [Instance::DB_CODE_FIELD => $entity->getCode()];
+//        foreach ($entity->getTranslations() as $translation) {
+//            foreach (Instance::TRANSLATABLE_FIELDS as $fieldName) {
+//                $translatedValue = $accessor->getValue($translation, $fieldName);
+//                $updatedRow['_translations'][$translation->getLocale()][$fieldName] = $translatedValue;
+//            }
+//        }
+//
+//        return $updatedRow;
+//    }
 
     public function getProcessBar(int $total=0): ProgressBar
     {

@@ -15,15 +15,10 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\Id;
 use Survos\InspectionBundle\Services\ResourceInspector;
 use Survos\MeiliBundle\Api\Filter\FacetsFieldSearchFilter;
-use Survos\ApiGrid\Api\Filter\MultiFieldSearchFilter;
-use Survos\ApiGrid\Attribute\Facet;
-use Survos\ApiGrid\Attribute\MeiliId;
-use Survos\ApiGrid\Filter\MeiliSearch\SortFilter;
-
-use Survos\ApiGrid\Model\Column;
-use Symfony\Component\OptionsResolver\OptionsResolver;
+use Survos\MeiliBundle\Metadata\MeiliId;
 use Symfony\Component\Serializer\Attribute\Groups;
 use function Symfony\Component\String\u;
+use Survos\MeiliBundle\Metadata\Facet;
 
 class SettingsService
 {
@@ -33,94 +28,7 @@ class SettingsService
     {
     }
 
-    /**
-     * @param array $columns
-     * @return array<int, Column>
-     */
-    public function normalizedColumns(array $settings, array $columns, array $customColumnTemplates): iterable
-    {
-        //        $normalizedColumns = parent::normalizedColumns();
-
-        //        dd($customColumnTemplates);
-        //        dd($template->getBlockNames());
-        //        dd($template->getSourceContext());
-        //        dd($template->getBlockNames());
-        $normalizedColumns = [];
-
-//        $sortableFields = $this->sortableFields($class);
-//        $searchableFields = $this->searchableFields($class);
-
-
-        foreach ($columns as $idx => $c) {
-            if (empty($c)) {
-                continue;
-            }
-            // if
-
-            if (is_string($c)) {
-                $c = [
-                    'order' => ($idx+1) * 10,
-                    'name' => $c,
-                ];
-            }
-            if (is_object($c)) {
-                assert($c::class == Column::class);
-                $column = $c;
-                $columnName = $column->name;
-                // ugh, duplicated.  need to separate and have application-specific templates
-                if (array_key_exists($columnName, $customColumnTemplates)) {
-                    $c->twigTemplate = $customColumnTemplates[$columnName];
-                }
-            } else {
-                if (!array_key_exists('name', $c)) {
-                    continue;
-                    dd("mssing name in " . join('|', array_keys($c)), $columns, $idx, $c);
-                }
-                assert(array_key_exists('name', $c), json_encode($c));
-                $columnName = $c['name'];
-                if (!$block = $c['block'] ?? false) {
-                    $block = $columnName;
-                }
-//                if ($columnName <> $block) { dd($block, $columnName); }
-                $fixDotColumnName = str_replace('.', '_', $block);
-                if (array_key_exists($fixDotColumnName, $customColumnTemplates)) {
-                    $c['twigTemplate'] = $customColumnTemplates[$fixDotColumnName];
-                }
-                assert(is_array($c));
-                unset($c['propertyConfig']);
-//            dd($c);
-
-                $column = new Column(...$c);
-
-            }
-            $existingSettings = $settings[$columnName]??null;
-            if ($existingSettings) {
-                $options = (new OptionsResolver())
-                    ->setDefaults([
-                        'name' => null,
-                        'searchable' => false,
-                        'order' => 100,
-                        'sortable' => false,
-                        'is_primary' => false,
-                        'browsable' => false
-                    ])->resolve($existingSettings);
-                $column->searchable = $options['searchable'];
-                $column->sortable = $options['sortable'];
-                $column->browsable = $options['browsable'];
-            }
-            if ($column->condition) {
-                $normalizedColumns[] = $column;
-            }
-//                            if ($c['name'] == 'image_count') dd($c, $column);
-
-
-            //            $normalizedColumns[$column->name] = $column;
-        }
-//        dd($normalizedColumns, $settings);
-        return $normalizedColumns;
-    }
-
-    public function getFieldsWithAttribute(array $settings, string $internalAttribute)
+    public function getFieldsWithAttribute(array $settings, string $internalAttribute): array
     {
         $fields = [];
         foreach ($settings as $fieldName => $attributes) {
@@ -184,16 +92,16 @@ class SettingsService
                     case FacetsFieldSearchFilter::class:
                         $settings[$property]['browsable'] = true;
                         break;
-                    case SortFilter::class:
-                        assert(false, "why not OrderFilter?");
+//                    case SortFilter::class:
+//                        assert(false, "why not OrderFilter?");
                     case OrderFilter::class:
                         $settings[$property]['sortable'] = true;
                         break;
 
                     case SearchFilter::class:
-                    case MeiliMultiFieldSearchFilter::class:
+//                    case MeiliMultiFieldSearchFilter::class:
+//                    case MultiFieldSearchFilter::class:
                     case RangeFilter::class:
-                    case MultiFieldSearchFilter::class:
                         $settings[$property]['searchable'] = true;
                         break;
                 }
@@ -202,7 +110,7 @@ class SettingsService
 
         // now go through each property, including getting the primary key
         foreach ($reflectionClass->getProperties() as $property) {
-            $fieldname = $property->getName();
+            $fieldName = $property->getName();
 
             foreach ($property->getAttributes() as $attribute) {
 
@@ -212,25 +120,25 @@ class SettingsService
 
 
                 if (in_array($attribute->getName(), [MeiliId::class, Id::class])) {
-                    $settings[$fieldname]['is_primary'] = true;
+                    $settings[$fieldName]['is_primary'] = true;
                 }
                 if ($attribute->getName() == ApiProperty::class) {
                     if ($attribute->getArguments()['identifier']??false) {
-                        $settings[$fieldname]['is_primary'] = true;
+                        $settings[$fieldName]['is_primary'] = true;
                     }
                 }
                 if ($attribute->getName() == Facet::class) {
-                    $settings[$fieldname]['browsable'] = true;
+                    $settings[$fieldName]['browsable'] = true;
                 }
 
                 if ($attribute->getName() == ApiFilter::class) {
                     $attrInstance = $attribute->newInstance();
                     switch ($filterClass = $attrInstance->filterClass) {
                         case OrderFilter::class:
-                            $settings[$fieldname]['sortable'] = true;
+                            $settings[$fieldName]['sortable'] = true;
                             break;
                         case SearchFilter::class:
-                            $settings[$fieldname]['searchable'] = true;
+                            $settings[$fieldName]['searchable'] = true;
                             break;
                         default:
                             dd("@todo: handle " . $filterClass);
@@ -242,12 +150,12 @@ class SettingsService
         // now go through each property, including getting the primary key
         // something's still not right here!  Like setting browsable on getRp.
         foreach ($reflectionClass->getMethods() as $method) {
-            $fieldname = $method->getName();
+            $fieldName = $method->getName();
             foreach ($method->getAttributes() as $attribute) {
                 if ($attribute->getName() == Facet::class) {
 //                if ($attribute->getName() == Groups::class) {
-//                    dump($settings, $fieldname, $attribute);
-                    $settings[$fieldname]['browsable'] = true;
+//                    dump($settings, $fieldName, $attribute);
+                    $settings[$fieldName]['browsable'] = true;
                 }
             }
         }
@@ -288,7 +196,9 @@ class SettingsService
 //                $fields = $attribute->getArguments()['properties'];
 //                $searchableFields = array_merge($searchableFields,$fields );
 //            }
-            if (in_array($filter, [RangeFilter::class, SearchFilter::class, MultiFieldSearchFilter::class])) {
+            if (in_array($filter, [RangeFilter::class, SearchFilter::class,
+//                MultiFieldSearchFilter::class // @todo: figure this out with meili
+            ])) {
                 $fields = $attrInstance->properties;
                 $searchableFields = array_merge($searchableFields, $fields);
             }

@@ -3,6 +3,8 @@ parameters:
     inferPrivatePropertyTypeFromConstructor: true
     paths:
         - ./src/
+#        - ./src/Service
+#        - ./src/Metadata
 
     excludePaths:
 #      - 'src/Resources/skeleton'
