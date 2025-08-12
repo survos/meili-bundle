@@ -21,7 +21,7 @@ use Survos\JsTwigBundle\TwigBlocksTrait;
 class InstantSearchComponent // implements TwigBlocksInterface
 {
 
-    use TwigBlocksTrait;
+//    use TwigBlocksTrait;
     public function __construct(
         private Environment $twig,
         private LoggerInterface $logger,
