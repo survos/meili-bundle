@@ -1,6 +1,6 @@
 <?php
 
-namespace Survos\ApiGrid\Api\Filter;
+namespace Survos\MeiliBundle\Api\Filter;
 
 use ApiPlatform\Metadata\FilterInterface;
 use ApiPlatform\Doctrine\Orm\Filter\AbstractFilter;
