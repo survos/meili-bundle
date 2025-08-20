@@ -36,7 +36,6 @@ Twig.extend(function (Twig) {
     })
 
     Twig._function.extend("path", (route, routeParams = {}) => {
-        // console.error(routeParams);
         if ("_keys" in routeParams) {
             // if(routeParams.hasOwnProperty('_keys')){
             delete routeParams._keys; // seems to be added by twigjs
@@ -85,7 +84,6 @@ const defaults = {
 
 // 3) Render it immediately
 // const html = tpl.render({ title: 'Loaded via Twig.js!' });
-// console.error(html);
 // document.body.innerHTML = html;
 
 /*
@@ -135,7 +133,6 @@ export default class extends Controller {
             [this.userLocaleValue], {type: 'language'}
         );
         // console.warn(this.embedderNameValue);
-        console.error(this.templateUrlValue);
 
     }
 
@@ -143,7 +140,6 @@ export default class extends Controller {
         const self = this; // or use: const that = this;
         const ctrl = this;
         this._self = this;
-        console.error(this.templateUrlValue);
 
         // Called every time the controller is connected to the DOM
         // (on page load, when it's added to the DOM, moved in the DOM, etc.)

@@ -14,6 +14,7 @@ use Survos\MeiliBundle\Command\SettingsCommand;
 use Survos\MeiliBundle\Controller\MeiliController;
 use Survos\MeiliBundle\Controller\SearchController;
 use Survos\MeiliBundle\EventListener\DoctrineEventListener;
+use Survos\MeiliBundle\Filter\MeiliSearch\AbstractSearchFilter;
 use Survos\MeiliBundle\Metadata\MeiliIndex;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\SettingsService;
@@ -46,8 +47,10 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->tag('doctrine.event_listener', ['event' => 'prePersist'])
             ->tag('doctrine.event_listener', ['event' => 'postPersist']);
 
-        $builder->autowire(SettingsService::class)
-            ->setPublic(true);
+        foreach ([SettingsService::class, AbstractSearchFilter::class] as $class) {
+            $builder->autowire($class)
+                ->setPublic(true);
+        }
 
         $builder->autowire(MeiliService::class)
             ->setArgument('$config', $config)
