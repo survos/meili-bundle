@@ -6,6 +6,7 @@ use ReflectionClass;
 use Survos\CoreBundle\HasAssetMapperInterface;
 use Survos\CoreBundle\Traits\HasAssetMapperTrait;
 use Survos\InspectionBundle\Services\InspectionService;
+use Survos\MeiliBundle\Command\SyncIndexesCommand;
 use Survos\MeiliBundle\Components\InstantSearchComponent;
 use Survos\MeiliBundle\Command\CreateCommand;
 use Survos\MeiliBundle\Command\IndexCommand;
@@ -16,6 +17,8 @@ use Survos\MeiliBundle\Controller\SearchController;
 use Survos\MeiliBundle\EventListener\DoctrineEventListener;
 use Survos\MeiliBundle\Filter\MeiliSearch\AbstractSearchFilter;
 use Survos\MeiliBundle\Metadata\MeiliIndex;
+use Survos\MeiliBundle\Repository\IndexInfoRepository;
+use Survos\MeiliBundle\Service\IndexSyncService;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\SettingsService;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
@@ -67,11 +70,24 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
 
         $container->services()->alias('meili_service', MeiliService::class);
 
-        foreach ([IndexCommand::class, SettingsCommand::class, ListCommand::class, CreateCommand::class] as $class) {
+        foreach ([IndexCommand::class, SettingsCommand::class, SyncIndexesCommand::class, ListCommand::class, CreateCommand::class] as $class) {
             $builder->autowire($class)
                 ->setPublic(true)
                 ->setAutoconfigured(true)
                 ->addTag('console.command');
+        }
+
+        foreach ([IndexSyncService::class] as $class) {
+            $builder->autowire($class)
+                ->setPublic(true)
+                ->setAutoconfigured(true);
+        }
+
+        foreach ([IndexInfoRepository::class] as $class) {
+            $builder->autowire($class)
+                ->setPublic(true)
+                ->addTag('doctrine.repository_service')
+                ->setAutoconfigured(true);
         }
 
         $builder->autowire(MeiliController::class)
