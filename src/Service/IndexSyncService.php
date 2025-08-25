@@ -7,7 +7,9 @@ use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Survos\MeiliBundle\Entity\IndexInfo;
+use Survos\MeiliBundle\Message\UpdateIndexInfoMessage;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
+use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\ObjectMapper\ObjectMapperInterface;
 
 final class IndexSyncService
@@ -113,5 +115,14 @@ final class IndexSyncService
             'pruned' => $pruned,
             'total' => count($rows),
         ];
+    }
+
+    #[AsMessageHandler()]
+    public function handleIndexSyncMessage(UpdateIndexInfoMessage $message): void
+    {
+        $info = $this->meili->getMeiliClient()->stats($message->uid);
+        dd($info);
+        dd($message);
+
     }
 }

@@ -5,13 +5,16 @@ namespace Survos\MeiliBundle\Service;
 use Doctrine\ORM\EntityManagerInterface;
 use Meilisearch\Client;
 use Meilisearch\Contracts\DocumentsQuery;
+use Meilisearch\Contracts\IndexesQuery;
 use Meilisearch\Endpoints\Indexes;
 use Meilisearch\Exceptions\ApiException;
+use Meilisearch\Exceptions\JsonDecodingException;
 use Psr\Http\Client\ClientInterface;
 use Psr\Log\LoggerInterface;
 use Survos\CoreBundle\Service\SurvosUtils;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
 use Survos\MeiliBundle\Message\BatchRemoveEntitiesMessage;
+use Survos\MeiliBundle\Metadata\MeiliIndex;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\HttpClient\HttpClient;
@@ -229,6 +232,62 @@ class MeiliService
             }
         }
         return $index;
+    }
+
+    /**
+     * Ultra-fast list using raw HTTP GET {host}/indexes.
+     * Returns lightweight info (uid, primaryKey, createdAt, updatedAt).
+     * No pagination: Meilisearch returns all indexes on this endpoint.
+     *
+     * @return array<int,array{
+     *   uid:string,
+     *   primaryKey:?string,
+     *   createdAt:?string,
+     *   updatedAt:?string
+     * }>
+     */
+    public function listIndexesFast(): array
+    {
+        $url = rtrim((string) $this->meiliHost, '/') . '/indexes';
+
+        $headers = [];
+        if ($this->adminKey) {
+            // Meilisearch accepts Authorization: Bearer <key>
+            $headers['Authorization'] = 'Bearer ' . $this->adminKey;
+        }
+//        dd($this->getMeiliClient()->getIndexes());
+//
+////        $x = $this->getMeiliClient()->http->get($url, $headers);
+//        try {
+//            $response = $this->getMeiliClient()->http->get($url, [
+//                'headers' => $headers,
+//                'timeout' => 10,
+//            ]);
+//        } catch (ApiException $e) {
+//
+//        } catch (JsonDecodingException $e) {
+//
+//        }
+//        dd($response);
+//
+        // Expect an array of index rows; keep only the fields we need
+//        dd($this->getMeiliClient()->getIndexes());
+
+        $rows = [];
+        /** @var Indexes $row */
+        foreach ($this->getMeiliClient()->getIndexes(new IndexesQuery()->setLimit(10000)) as $uid=> $row) {
+//            dd($row->getUid(), $row, $row::class, get_class_methods($row));
+            $uid = $row->getUid();
+            $rows[$uid] = $row;
+//            [
+//                'uid'        => (string)($row['uid'] ?? ''),
+//                'primaryKey' => $row['primaryKey'] ?? null,
+//                'createdAt'  => $row['createdAt'] ?? null, // ISO 8601 string (server time)
+//                'updatedAt'  => $row['updatedAt'] ?? null, // ISO 8601 string (server time)
+//            ];
+        }
+
+        return $rows;
     }
 
     public function getIndexEndpoint(string $indexName): Indexes

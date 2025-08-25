@@ -19,6 +19,8 @@ use Survos\MeiliBundle\Metadata\MeiliIndex;
 #[MeiliIndex('meili_index_catalog', pk: 'uid')]
 class IndexInfo
 {
+    #[ORM\Column(type: Types::BOOLEAN, nullable: true)]
+    public ?bool $needsUpdate = true;
 
     /** Primary key configured on the remote index (if any) */
     #[ORM\Column(type: Types::STRING, length: 190, nullable: true)]
