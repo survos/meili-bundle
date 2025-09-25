@@ -138,6 +138,7 @@ class IndexCommand extends Command
         $classes = [];
         foreach ($this->meiliService->indexedEntities as $entityClass) {
             if ($class && ($entityClass !== $class)) {
+                $this->logger->info("Skipping $entityClass, does not match $class");
                 continue;
             }
             if (!$groups = $this->settingsService->getNormalizationGroups($entityClass)) {
