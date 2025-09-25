@@ -34,15 +34,18 @@ class SearchController extends AbstractController
 //        $this->helper = $helper;
     }
 
-    #[Route('/index/{indexName}', name: 'meili_insta')]
+    #[Route('/index/{indexName}', name: 'meili_insta', options: ['expose' => true])]
     #[Template('@SurvosMeili/insta.html.twig')]
     public function index(
+        Request $request, // for the locale, but we will need a better way!
         string                       $indexName, //  = 'packagesPackage',
         #[MapQueryParameter] ?string $embedder = null,
         #[MapQueryParameter] bool    $useProxy = false,
     ): Response|array
     {
-
+        $locale = $request->getLocale();
+        $template = $indexName . '.html.twig';
+        $indexName .= "_$locale";
         if (0) {
             $dummyServer = 'https://dummy.survos.com/api/docs.jsonopenapi';
 // realpath is needed for resolving references with relative Paths or URLs
@@ -79,7 +82,7 @@ class SearchController extends AbstractController
 
         $facets = $settings['filterableAttributes'];
 
-        // this is specific to our way of handling related, translated messages
+        // this is specific to our way of handling related, translated messages, soon to be removed.
         $related = $this->meiliService->getRelated($facets, $indexName, $locale);
         // use proxy for translations or hidden
         $params = [
@@ -105,6 +108,9 @@ class SearchController extends AbstractController
     #[Route('/template/{indexName}', name: 'meili_template')]
     public function jsTemplate(string $indexName): Response|array
     {
+        // remove the locale, ugh.
+        $indexName = preg_replace('/_..$/', '', $indexName);
+//        dd($indexName);
         $jsTwigTemplate = $this->jsTemplateDir . $indexName . '.html.twig';
         assert(file_exists($jsTwigTemplate), "missing $jsTwigTemplate");
         $template = file_get_contents($jsTwigTemplate);

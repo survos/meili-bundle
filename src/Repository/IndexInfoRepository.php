@@ -3,11 +3,13 @@ declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Repository;
 
+use Survos\MeiliBundle\Entity\IndexInfo;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
-use Survos\MeiliBundle\Entity\IndexInfo;
 
-/** @extends ServiceEntityRepository<IndexInfo> */
+/**
+ * @extends ServiceEntityRepository<IndexInfo>
+ */
 class IndexInfoRepository extends ServiceEntityRepository
 {
     public function __construct(ManagerRegistry $registry)
@@ -15,11 +17,48 @@ class IndexInfoRepository extends ServiceEntityRepository
         parent::__construct($registry, IndexInfo::class);
     }
 
-    /** @return IndexInfo[] */
-    public function findByUids(array $uids): array
+    /**
+     * @return IndexInfo[]
+     */
+    public function findByPixieCode(string $pixieCode): array
     {
-        return $this->createQueryBuilder('i')
-            ->andWhere('i.uid IN (:uids)')->setParameter('uids', $uids)
-            ->getQuery()->getResult();
+        return $this->findBy(['pixieCode' => $pixieCode]);
+    }
+
+    public function findByPixieCodeAndLocale(string $pixieCode, string $locale): ?IndexInfo
+    {
+        return $this->findOneBy([
+            'pixieCode' => $pixieCode,
+            'locale' => $locale
+        ]);
+    }
+
+    /**
+     * @return IndexInfo[]
+     */
+    public function findProcessing(): array
+    {
+        return $this->createQueryBuilder('ii')
+            ->where('ii.status IN (:statuses)')
+            ->setParameter('statuses', ['queued', 'processing'])
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * @return IndexInfo[]
+     */
+    public function findStale(?\DateInterval $interval = null): array
+    {
+        $interval = $interval ?? new \DateInterval('PT1H'); // Default 1 hour
+        $staleTime = (new \DateTime())->sub($interval);
+
+        return $this->createQueryBuilder('ii')
+            ->where('ii.status IN (:statuses)')
+            ->andWhere('ii.lastIndexed < :staleTime')
+            ->setParameter('statuses', ['queued', 'processing'])
+            ->setParameter('staleTime', $staleTime)
+            ->getQuery()
+            ->getResult();
     }
 }

@@ -30,7 +30,6 @@ use Symfony\Component\Intl\Languages;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Yaml\Yaml;
-use Zenstruck\Alias;
 
 #[AsCommand(
     name: 'meili:create',

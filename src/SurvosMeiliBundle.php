@@ -6,7 +6,9 @@ use ReflectionClass;
 use Survos\CoreBundle\HasAssetMapperInterface;
 use Survos\CoreBundle\Traits\HasAssetMapperTrait;
 use Survos\InspectionBundle\Services\InspectionService;
+use Survos\MeiliBundle\Api\Filter\MultiFieldSearchFilter;
 use Survos\MeiliBundle\Command\FastSyncIndexesCommand;
+use Survos\MeiliBundle\Command\IterateIndexesCommand;
 use Survos\MeiliBundle\Command\SyncIndexesCommand;
 use Survos\MeiliBundle\Components\InstantSearchComponent;
 use Survos\MeiliBundle\Command\CreateCommand;
@@ -17,12 +19,15 @@ use Survos\MeiliBundle\Controller\MeiliController;
 use Survos\MeiliBundle\Controller\SearchController;
 use Survos\MeiliBundle\EventListener\DoctrineEventListener;
 use Survos\MeiliBundle\Filter\MeiliSearch\AbstractSearchFilter;
+use Survos\MeiliBundle\MessageHandler\BatchIndexEntitiesMessageHandler;
 use Survos\MeiliBundle\Metadata\MeiliIndex;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
 use Survos\MeiliBundle\Service\IndexFastSyncService;
 use Survos\MeiliBundle\Service\IndexSyncService;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\SettingsService;
+use Survos\MeiliBundle\Util\BabelLocaleScope;
+use Survos\MeiliBundle\Util\TextFieldResolver;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -52,7 +57,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->tag('doctrine.event_listener', ['event' => 'prePersist'])
             ->tag('doctrine.event_listener', ['event' => 'postPersist']);
 
-        foreach ([SettingsService::class, AbstractSearchFilter::class] as $class) {
+        foreach ([SettingsService::class, AbstractSearchFilter::class, MultiFieldSearchFilter::class] as $class) {
             $builder->autowire($class)
                 ->setPublic(true);
         }
@@ -73,15 +78,17 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         $container->services()->alias('meili_service', MeiliService::class);
 
         foreach ([IndexCommand::class, SettingsCommand::class,
-                     FastSyncIndexesCommand::class,
-                     SyncIndexesCommand::class, ListCommand::class, CreateCommand::class] as $class) {
+//                     FastSyncIndexesCommand::class,
+//                     SyncIndexesCommand::class,
+                     IterateIndexesCommand::class,
+                     ListCommand::class, CreateCommand::class] as $class) {
             $builder->autowire($class)
                 ->setPublic(true)
                 ->setAutoconfigured(true)
                 ->addTag('console.command');
         }
 
-        foreach ([IndexSyncService::class, IndexFastSyncService::class] as $class) {
+        foreach ([IndexSyncService::class, IndexFastSyncService::class, TextFieldResolver::class, BatchIndexEntitiesMessageHandler::class] as $class) {
             $builder->autowire($class)
                 ->setPublic(true)
                 ->setAutoconfigured(true);

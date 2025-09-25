@@ -3,6 +3,7 @@
 namespace Survos\MeiliBundle\Service;
 
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\EntityRepository;
 use Meilisearch\Client;
 use Meilisearch\Contracts\DocumentsQuery;
 use Meilisearch\Contracts\IndexesQuery;
@@ -14,6 +15,7 @@ use Psr\Log\LoggerInterface;
 use Survos\CoreBundle\Service\SurvosUtils;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
 use Survos\MeiliBundle\Message\BatchRemoveEntitiesMessage;
+use Survos\MeiliBundle\MessageHandler\BatchIndexEntitiesMessageHandler;
 use Survos\MeiliBundle\Metadata\MeiliIndex;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
@@ -68,6 +70,114 @@ class MeiliService
         return $this->searchKey; // @todo: 2 keys
     }
 
+    /**
+     * Convenience debug logger (namespaced). No-ops if logger is null.
+     */
+    private function dlog(string $msg, array $ctx = []): void
+    {
+        $this->logger?->debug('meili: ' . $msg, $ctx);
+    }
+
+    /**
+     * Resolve a final index name for an entity + locale, honoring the bundle prefix.
+     * If $explicit is given we use that (still prefixing if needed).
+     * Otherwise we default to {Short}_{locale} (or just {Short} if $locale is null).
+     */
+    public function resolveIndexName(string $entityClass, ?string $locale = null, ?string $explicit = null): string
+    {
+        if ($explicit) {
+            return $this->getPrefixedIndexName($explicit);
+        }
+        $short = (new \ReflectionClass($entityClass))->getShortName();
+        $base  = $locale ? sprintf('%s_%s', $short, $locale) : $short;
+        return $this->getPrefixedIndexName($base);
+    }
+
+    /**
+     * Get or create the target index for an entity+locale (or explicit name),
+     * and best-effort set its language for stemming/tokenization.
+     */
+    public function getOrCreateLocaleIndex(
+        string $entityClass,
+        ?string $locale,
+        ?string $explicitIndexName,
+        string $primaryKeyName = 'id',
+        bool $autoCreate = true
+    ): Indexes {
+        $name  = $this->resolveIndexName($entityClass, $locale, $explicitIndexName);
+        $index = $this->getOrCreateIndex($name, $primaryKeyName, $autoCreate);
+        if ($locale) {
+            try {
+                $index->updateSettings(['indexLanguages' => [$locale]]);
+            } catch (\Throwable $e) {
+                $this->dlog('indexLanguages not supported on server', ['index' => $name, 'locale' => $locale]);
+            }
+        }
+        return $index;
+    }
+
+    /**
+     * Build an IndexPlan to keep params tidy across call sites.
+     */
+    public function makePlan(
+        string $entityClass,
+        ?string $locale,
+        ?string $explicitIndexName,
+        string $primaryKeyName = 'id',
+        ?string $transport = null
+    ): \Survos\MeiliBundle\Model\IndexPlan {
+        $name = $this->resolveIndexName($entityClass, $locale, $explicitIndexName);
+        return new \Survos\MeiliBundle\Model\IndexPlan(
+            entityClass:     $entityClass,
+            locale:          $locale,
+            indexName:       $name,
+            primaryKeyName:  $primaryKeyName,
+            transport:       $transport
+        );
+    }
+
+    /**
+     * Dispatch a BatchIndexEntitiesMessage for a prepared plan and a set of ids.
+     * Keeps message wiring in one place. Returns the created message.
+     *
+     * @param list<scalar> $ids
+     */
+    public function dispatchBatchForPlan(
+        \Survos\MeiliBundle\Model\IndexPlan $plan,
+        array $ids,
+        bool $reload = true,
+        ?\Symfony\Component\Messenger\MessageBusInterface $bus = null
+    ): \Survos\MeiliBundle\Message\BatchIndexEntitiesMessage {
+        $this->dlog('dispatch batch', [
+            'index' => $plan->indexName,
+            'locale'=> $plan->locale,
+            'class' => $plan->entityClass,
+            'count' => \count($ids),
+        ]);
+
+        $msg = new \Survos\MeiliBundle\Message\BatchIndexEntitiesMessage(
+            entityClass:     $plan->entityClass,
+            entityData:      $ids,
+            reload:          $reload,
+            transport:       $plan->transport,
+            primaryKeyName:  $plan->primaryKeyName,
+            locale:          $plan->locale,
+            indexName:       $plan->indexName
+        );
+
+        if ($bus) {
+            $stamps = [];
+            if ($plan->transport) {
+                $stamps[] = new \Symfony\Component\Messenger\Stamp\TransportNamesStamp($plan->transport);
+            } else {
+                $stamps[] = new \Jwage\PhpAmqpLibMessengerBundle\Transport\AmqpStamp('meili');
+            }
+            dd($msg);
+            $bus->dispatch($msg, $stamps);
+        }
+
+        return $msg;
+    }
 
     public function reset(string $indexName)
     {
@@ -147,12 +257,18 @@ class MeiliService
         return $task;
     }
 
+    public function getPrefix(): ?string
+    {
+        return $this->getConfig()['meiliPrefix']??null;
+    }
+
     public function getPrefixedIndexName(string $indexName)
     {
         if (class_exists($indexName)) {
             $indexName = new \ReflectionClass($indexName)->getShortName();
         }
-        if ($prefix = $this->getConfig()['meiliPrefix']) {
+        if ($prefix = $this->getPrefix())
+        {
             if (!str_starts_with($indexName, $prefix)) {
                 $indexName = $prefix . $indexName;
             }
@@ -352,23 +468,39 @@ class MeiliService
 
 
 
-    private function getMeiliIndex(string $class): Indexes
+    private function getMeiliIndex(string $class, ?string $locale=null): Indexes
     {
-        $indexName = $this->getPrefixedIndexName(
-            (new \ReflectionClass($class))->getShortName()
-        );
+        $short     = (new \ReflectionClass($class))->getShortName();
+        $base      = $locale ? sprintf('%s_%s', $short, $locale) : $short;
+        $indexName = $this->getPrefixedIndexName($base);
         return $this->getIndex($indexName);
     }
 
-    #[AsMessageHandler]
+//    #[AsMessageHandler]
     public function batchIndexEntities(BatchIndexEntitiesMessage $message): void
     {
-        $repo = $this->entityManager->getRepository($message->entityClass);
+        assert(false, "moved to " . BatchIndexEntitiesMessageHandler::class);
+        $locale = $msg->locale ?? null;
+        $work = function () use ($message) {
+            dd($message);
+            // 1) Load records by ids
+            // 2) Normalize with groups (already defined in your entity attributes)
+            // 3) Ensure your "_translations.$locale.*" (or plain fields) are present
+            // 4) Add to the target index (use $msg->indexName if you passed it)
+        };
+
+        if ($locale && $this->localeScope) {
+            $this->localeScope->withDisplayLocale($locale, $work);
+        } else {
+            $work();
+        }
         $metadata = $this->entityManager->getClassMetadata($message->entityClass);
+
+        $repo = $this->entityManager->getRepository($message->entityClass);
         $identifierField = $metadata->getSingleIdentifierFieldName();
         $groups = $this->settingsService->getNormalizationGroups($message->entityClass);
-        $meiliIndex = $this->getMeiliIndex($message->entityClass);
-        $payloadThreshold = 50_000_000; // ~1MB
+        $meiliIndex = $this->getMeiliIndex($message->entityClass, $message->locale);
+        $payloadThreshold = 50_000_000; // in bytes
         $documents = [];
         $payloadSize = 0;
 
@@ -497,7 +629,14 @@ ORDER BY n.nspname, c.relname;");
      * @return void
      * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
      */
-    public function loadAndFlush(BatchIndexEntitiesMessage $message, \Doctrine\ORM\EntityRepository $repo, string $identifierField, ?array $groups, int $payloadSize, array $documents, int $payloadThreshold, Indexes $meiliIndex): void
+    public function loadAndFlush(BatchIndexEntitiesMessage $message,
+                                 EntityRepository $repo,
+                                 string $identifierField,
+                                 ?array $groups,
+                                 int $payloadSize,
+                                 array $documents,
+                                 int $payloadThreshold,
+                                 Indexes $meiliIndex): void
     {
         $batchSize = 500;
 

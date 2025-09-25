@@ -105,7 +105,7 @@ export default class extends Controller {
     static values = {
         serverUrl: String,
         serverApiKey: String,
-        indexName: String,
+        indexName: String, // without locale!
         embedderName: String,
         templateUrl: String,
         userLocale: {type: String, default: 'en'},
@@ -180,7 +180,7 @@ export default class extends Controller {
         window.searchClient = searchClient;
 
         const search = instantsearch({
-            indexName: this.indexNameValue, // 'dummy_products', //
+            indexName: this.indexNameValue, // + '_' + this.userLocaleValue, // 'md_EuroObj_en', //
             searchClient,
             routing: true,
         });

@@ -31,7 +31,6 @@ use Symfony\Component\Intl\Languages;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Yaml\Yaml;
-use Zenstruck\Alias;
 
 #[AsCommand(
     name: 'meili:list',
@@ -148,11 +147,6 @@ class ListCommand extends Command
         $filter = $input->getOption('filter');
         $filterArray = $filter ? Yaml::parse($filter) : null;
         $class = $input->getArgument('class');
-        if (!class_exists($class)) {
-            if (class_exists(Alias::class)) {
-                $class = Alias::classFor('user');
-            }
-        }
             $classes = [];
 
 

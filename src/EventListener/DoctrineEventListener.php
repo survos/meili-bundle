@@ -68,9 +68,6 @@ class DoctrineEventListener
 
     private function dispatchPendingMessages(): void
     {
-
-
-
         // Batch index operations by entity class
         foreach ($this->pendingIndexOperations as $entityClass => $objects) {
             // this isn't necessary, because they won't be added if not indexed. Debugging when messages were in doctrine too
@@ -99,16 +96,38 @@ class DoctrineEventListener
                 new AmqpStamp('meili'),
             ];
 
+            if ($fancyNewWay = false) {
+                $plan  = $this->meiliService->makePlan(
+                    entityClass:    $entityClass,
+                    locale:         $languageForIndex,   // e.g. 'en'
+                    explicitIndexName: $indexName,       // or null to derive
+                    primaryKeyName: $pk,
+                    transport:      $transport
+                );
 
-            try {
-                $this->messageBus->dispatch(new BatchIndexEntitiesMessage(
-                    $entityClass,
-                    $normalized,
-                    reload: false
-                ), $stamps);
-            } catch (\Exception $e) {
-                dd($entityClass, $normalized, $e);
+// optional: force index creation + set language now
+                $this->meiliService->getOrCreateLocaleIndex(
+                    entityClass:     $plan->entityClass,
+                    locale:          $plan->locale,
+                    explicitIndexName: $plan->indexName,
+                    primaryKeyName:  $plan->primaryKeyName,
+                    autoCreate:      true
+                );
 
+// later, per batch of ids:
+                $this->meiliService->dispatchBatchForPlan($plan, $chunk, reload: true);
+
+            } else {
+                try {
+                    $this->messageBus->dispatch(new BatchIndexEntitiesMessage(
+                        $entityClass,
+                        $normalized,
+                        reload: false
+                    ), $stamps);
+                } catch (\Exception $e) {
+                    dd($entityClass, $normalized, $e);
+
+                }
             }
         }
 

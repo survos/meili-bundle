@@ -43,7 +43,9 @@ final class IndexSyncService
             $uid = (string)$row['uid'];
 
             // create-or-load by PK (uid)
-            $indexInfo = $this->repo->find($uid) ?? new IndexInfo($uid);
+            if (!$indexInfo = $this->repo->find($uid)) {
+                $indexInfo = new IndexInfo($uid, );
+            }
             if ($indexInfo->lastSyncedAt === null) {
                 $this->em->persist($indexInfo);
             }

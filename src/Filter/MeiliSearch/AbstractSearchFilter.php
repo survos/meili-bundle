@@ -1,12 +1,15 @@
 <?php
 
+// the idea of this was to be able to search meili from api platform.  It is incomplete.
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Filter\MeiliSearch;
 
 use ApiPlatform\Metadata\Exception\PropertyNotFoundException;
+use ApiPlatform\Metadata\FilterInterface;
 use ApiPlatform\Metadata\ResourceClassResolverInterface;
-use Survos\ApiGrid\Filter\MeiliSearch\MeilISearchUtilTrait;
+//use Survos\ApiGrid\Filter\MeiliSearch\MeilISearchUtilTrait;
 use ApiPlatform\Metadata\Exception\ResourceClassNotFoundException;
 use ApiPlatform\Metadata\Property\Factory\PropertyMetadataFactoryInterface;
 use ApiPlatform\Metadata\Property\Factory\PropertyNameCollectionFactoryInterface;

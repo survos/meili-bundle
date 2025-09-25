@@ -2,9 +2,6 @@
 
 namespace Survos\MeiliBundle\Components;
 
-use ApiPlatform\Metadata\IriConverterInterface;
-use ApiPlatform\Doctrine\Orm\State\CollectionProvider;
-use ApiPlatform\Metadata\GetCollection;
 use Psr\Log\LoggerInterface;
 use Survos\InspectionBundle\Services\InspectionService;
 use Survos\MeiliBundle\Service\MeiliService;
@@ -69,12 +66,11 @@ class InstantSearchComponent // implements TwigBlocksInterface
     public array $globals = [];
     public array $searchBuilderFields = [];
 
-    public ?string $caller = null;
     public array|object|null $schema = null;
 
 //    public ?string $class = null;
     public ?string $index = null; // name of the meili index
-    public string $dom='BQlfrtpP';
+    public string $dom='BQlfrtpP'; // old!  This is from datatables.
     public int $pageLength=50;
     public string $searchPanesDataUrl; // maybe deprecate this?
     public ?string $apiGetCollectionUrl=null;

@@ -1,73 +1,60 @@
 <?php
+declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Command;
 
-use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
-use ApiPlatform\Metadata\ApiFilter;
-use ApiPlatform\Metadata\ApiResource;
 use Doctrine\ORM\EntityManagerInterface;
+use Jwage\PhpAmqpLibMessengerBundle\Transport\AmqpStamp;
 use Meilisearch\Endpoints\Indexes;
 use Psr\Log\LoggerInterface;
-use Survos\ApiGrid\Api\Filter\MultiFieldSearchFilter;
-//use Survos\ApiGrid\Service\DatatableService;
 use Survos\CoreBundle\Service\SurvosUtils;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
-use Survos\MeiliBundle\Metadata\MeiliIndex;
 use Survos\MeiliBundle\Service\DoctrinePrimaryKeyStreamer;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\SettingsService;
+use Survos\MeiliBundle\Util\BabelLocaleScope;
+use Survos\MeiliBundle\Util\TextFieldResolver;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Helper\ProgressBar;
 use Symfony\Component\Console\Helper\Table;
-use Symfony\Component\Console\Input\InputArgument;
-use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Input\InputOption;
-use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
-use Symfony\Component\Intl\Languages;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\TransportNamesStamp;
-use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
-use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Yaml\Yaml;
-use Zenstruck\Alias;
-//add AmqpTransport from Jwage
-use Jwage\PhpAmqpLibMessengerBundle\Transport\AmqpStamp;
+
 #[AsCommand(
     name: 'meili:index',
-    description: 'Index entities for use with meilisearch',
-    help: <<< END
-
-meili:index App\\Entity\\Task read the tasks from the database and index
-meili:index App\\Dto\\Task data/tasks.json read the json file, map to task and index.
-END
+    description: 'Index entities (per-locale) for Meilisearch'
 )]
 class IndexCommand extends Command
 {
-    private SymfonyStyle $io; // to make global
-    public function __construct(
-        protected ParameterBagInterface                       $bag,
-        protected EntityManagerInterface                      $entityManager,
-        private MessageBusInterface $messageBus,
-        private LoggerInterface                               $logger,
-        private MeiliService                                  $meiliService,
-        private SettingsService                               $settingsService,
-//        private NormalizerInterface                           $normalizer,
-        #[Autowire('%kernel.enabled_locales%')] private array $enabledLocales=[],
+    private SymfonyStyle $io;
 
-    )
-    {
+    public function __construct(
+        protected ParameterBagInterface $bag,
+        protected EntityManagerInterface $entityManager,
+        private MessageBusInterface $messageBus,
+        private LoggerInterface $logger,
+        private MeiliService $meiliService,
+        private SettingsService $settingsService,
+        #[Autowire('%kernel.enabled_locales%')] private array $enabledLocales = [],
+        #[Autowire('%kernel.default_locale%')] private string $defaultLocale = 'en',
+        private TextFieldResolver $textFieldResolver,
+        private ?BabelLocaleScope $localeScope = null, // optional (no-op if Babel not installed)
+    ) {
         parent::__construct();
     }
 
     /**
+     * Return fields configured as filterable (a.k.a. "browsable") in SettingsService.
+     *
      * @param array $settings
-     * @return array
+     * @return array<string>
      */
     public function getFilterableAttributes(array $settings): array
     {
@@ -76,413 +63,309 @@ class IndexCommand extends Command
 
     public function __invoke(
         SymfonyStyle $io,
-        #[Argument("Class name")] ?string $class = null,
-        #[Argument("CSV/Json filename/url")] ?string $filename = null,
-        #[Argument("filter class name")] string $filter='',
-        #[Option("limit")] ?int $limit = null,
-        #[Option("Don't actually update the settings")] ?bool $dry = null,
-        #[Option("pk")] string $pk = 'id',
-        #[Option("index name, defaults to prefix + class shortname")] ?string $name = null,
-        #[Option("dump")] ?int $dump = null,
-        #[Option("explicitly set all if no class")] ?bool $all = null,
-        #[Option("create/update settings ")] ?bool $updateSettings = null,
-        #[Option("reset the meili index")] ?bool $reset = null,
-        #[Option("fetch and index the documents")] ?bool $fetch = null,
-        #[Option("wait until index is finished before exiting")] ?bool $wait = null,
-        #[Option(shortcut: 'p')] ?string $transport=null,
-        #[Option("batch-size for sending documents to meili", name: 'batch')] int $batchSize = 1000,
-    ): int
-    {
+        #[Argument('Entity class')]
+        ?string $class = null,
 
-        $fetch ??= true; // use no-fetch to simply update the settings.
-        $filterArray = $filter ? Yaml::parse($filter) : null;
+        #[Argument('Filter as YAML (e.g., "status: published")')]
+        string $filter = '',
+
+        #[Option('Max documents to process (approx, producer side)', 'limit')]
+        ?int $limit = null,
+
+        #[Option("Don't actually update settings or send docs", 'dry')]
+        ?bool $dry = null,
+
+        #[Option('Primary key field name in Meili (defaults to detected or id)', 'pk')]
+        string $pk = 'id',
+
+        #[Option('Explicit index base name (defaults to prefix + class shortname)', 'name')]
+        ?string $name = null,
+
+        #[Option('Dump the Nth normalized row and exit', 'dump')]
+        ?int $dump = null,
+
+        #[Option('Index all registered Meili-managed entities when no class is given', 'all')]
+        ?bool $all = null,
+
+        #[Option('Create/Update index settings before indexing', 'update-settings')]
+        ?bool $updateSettings = null,
+
+        #[Option('Delete and recreate index settings (implies update-settings)', 'reset')]
+        ?bool $reset = null,
+
+        #[Option('Fetch and queue documents for indexing', 'fetch')]
+        ?bool $fetch = null,
+
+        #[Option('Wait for Meili tasks to complete at the end', 'wait')]
+        ?bool $wait = null,
+
+        #[Option('Messenger transport name (defaults to amqp "meili" via AmqpStamp)', 'p', 'p')]
+        ?string $transport = null,
+
+        #[Option('Batch size for producer primary-key streaming', 'batch')]
+        int $batchSize = 1000,
+
+        // Locale behavior
+        #[Option('Create one index per locale (suffix _{locale}); default ON', 'per-locale')]
+        ?bool $perLocale = null,
+
+        #[Option('run sync, same as -p sync')]
+        ?bool $sync = null,
+
+        #[Option('Comma-separated subset of locales to index (default: enabled_locales)', 'only-locales')]
+        ?string $onlyLocales = null,
+
+    ): int {
+        $this->io = $io;
+
+        // default behaviors
+        $fetch ??= true; // unless explicitly turned off
+        $perLocale = $perLocale ?? (count($this->enabledLocales) > 0);
+
+        // optional filter
+        $filterArray = $filter ? (is_array($parsed = Yaml::parse($filter)) ? $parsed : null) : null;
+
+        // normalize class
         if ($class && !class_exists($class)) {
             $class = "App\\Entity\\$class";
-            //
-//            if (class_exists(Alias::class)) {
-//                $class = Alias::classFor('user');
-//            }
         }
-        $classes = [];
         if (!$class && !$all) {
-            $io->error("Either a class or filter or --all");
+            $io->error('Either a class or filter or --all');
             return Command::FAILURE;
         }
 
-        // just the the meili managed indexes from meiliservice
+        // Gather Meili-managed classes
+        $classes = [];
         foreach ($this->meiliService->indexedEntities as $entityClass) {
-            $this->logger->warning($entityClass);
-            // https://abendstille.at/blog/?p=163
-            if ($class && ($entityClass <> $class)) {
+            if ($class && ($entityClass !== $class)) {
                 continue;
             }
-
-            // skip if no groups defined
             if (!$groups = $this->settingsService->getNormalizationGroups($entityClass)) {
-//                    if ($input->ver) {
-                $io->error("ERROR {$class}: no normalization groups for " . $entityClass);
+                $io->error("ERROR {$entityClass}: no normalization groups defined");
                 return Command::FAILURE;
-//                    }
-
             }
             $classes[$entityClass] = $groups;
         }
 
-        $this->io = $io;
+        // Locales to handle
+        $locales = $onlyLocales
+            ? array_values(array_filter(array_map('trim', explode(',', $onlyLocales))))
+            : $this->enabledLocales;
 
-        foreach ($classes as $class=>$groups) {
-            $indexName = $this->meiliService->getPrefixedIndexName((new \ReflectionClass($class))->getShortName());
-            $this->io->title($indexName);
-            if ($reset) {
-                // this deletes the index!
-                if ($dry) {
-                    $io->error("you cannot have both --reset and --dry");
+        foreach ($classes as $entityClass => $groups) {
+            $short = (new \ReflectionClass($entityClass))->getShortName();
+
+            // Build list of index names (per-locale or single)
+            $indexNames = [];
+            if ($perLocale) {
+                foreach ($locales as $loc) {
+                    $indexNames[$loc] = $this->meiliService->getPrefixedIndexName(($name ?: $short) . '_' . $loc);
+                }
+            } else {
+                // single index uses default framework locale as its language
+                $indexNames[$this->defaultLocale] = $this->meiliService->getPrefixedIndexName($name ?: $short);
+            }
+
+            foreach ($indexNames as $loc => $indexName) {
+                $languageForIndex = $loc ?: $this->defaultLocale;
+                $this->io->title($indexName);
+
+                if ($reset) {
+                    if ($dry) {
+                        $io->error('you cannot have both --reset and --dry');
+                        return Command::FAILURE;
+                    }
+                    $this->meiliService->reset($indexName);
+                    $updateSettings = true;
+                }
+
+                if ($updateSettings) {
+                    $idx = $this->meiliService->getIndex($indexName, $pk);
+                    $this->configureIndex($entityClass, $idx, $languageForIndex);
+                    if (!$reset && is_null($fetch)) {
+                        $fetch = false;
+                    }
+                }
+
+                $index = $this->meiliService->getOrCreateIndex($indexName, autoCreate: false);
+                if (!$index) {
+                    $this->io->error("Index {$indexName} not found, run meili:settings to create");
                     return Command::FAILURE;
                 }
-                $this->meiliService->reset($indexName);
-                $updateSettings = true;
-//                if (is_null($fetch)) {
-//                    $fetch = false; // don't fetch unless the indexed was mark
-//                }
-            }
 
-            if ($updateSettings) {
-                // pk of meili  index might be different than doctrine pk, e.g. $imdbId
-                $index = $this->meiliService->getIndex($indexName, $pk);
-                $this->configureIndex($class, $indexName, $index, $dry);
-                if (!$reset && is_null($fetch)) {
-                    $fetch = false; // ?
+                if ($fetch && !$dry) {
+                    // Producer side: stream primary keys in batches; consumer will load+normalize with the same locale
+                    $runner = function () use ($entityClass, $index, $batchSize, $indexName, $groups, $sync, $limit, $filterArray, $dump, $transport, $pk, $languageForIndex) {
+                        return $this->indexClass(
+                            class: $entityClass,
+                            index: $index,
+                            batchSize: $batchSize,
+                            indexName: $indexName,
+                            groups: $groups,
+                            limit: $limit ?? 0,
+                            filter: $filterArray,
+                            dump: $dump,
+                            primaryKey: $index->getPrimaryKey(),
+                            max: $limit,
+                            transport: $sync ? 'sync': $transport,
+                            pk: $pk,
+                            locale: $languageForIndex
+                        );
+                    };
+
+                    // If Babel is present, scope locale even while producing (mostly no-op here but consistent)
+                    $stats = $this->localeScope
+                        ? $this->localeScope->withLocale($languageForIndex, $runner)
+                        : $runner();
+
+                    $this->io->success($indexName . ' Document count: ' . $stats['numberOfDocuments']);
+
+                    if ($wait) {
+                        $this->meiliService->waitUntilFinished($index);
+                    }
                 }
+
+                if ($this->io->isVeryVerbose()) {
+                    $stats = $index->stats();
+                    $this->io->title("$indexName stats");
+                    $this->io->write(json_encode($stats, JSON_PRETTY_PRINT));
+                }
+
+                if ($this->io->isVerbose()) {
+                    $this->io->title("$indexName settings");
+                    $this->io->write(json_encode($index->getSettings(), JSON_PRETTY_PRINT));
+                }
+
+                $this->io->success($this->getName() . ' ' . $entityClass . ' finished indexing to ' . $indexName);
             }
-
-            // skip if no documents?  Obviously, docs could be added later, e.g. an Owner record after import
-//            $task = $this->waitForTask($this->getMeiliClient()->createIndex($indexName, ['primaryKey' => Instance::DB_CODE_FIELD]));
-
-            // pk of meili  index might be different than doctine pk, e.g. $imdbId
-//            $index = $this->configureIndex($class, $indexName);
-            $index = $this->meiliService->getOrCreateIndex($indexName, autoCreate: false);
-            if (!$index) {
-                $this->io->error("Index {$indexName} not found, run meili:settings to create");
-                return Command::FAILURE;
-            }
-
-            if ($fetch) {
-                // this needs to be dispatched so we can index large collections.
-                $stats = $this->indexClass($class, $index,
-                    batchSize: $batchSize,
-                    indexName: $indexName, groups: $groups,
-                    limit: $limit??0,
-                    filter: $filter ? $filterArray: null,
-                    primaryKey: $index->getPrimaryKey(),
-                    dump: $dump,
-                    max: $limit,
-                    transport: $transport,
-                    pk: $pk,
-                );
-
-                $this->io->success($indexName . ' Document count:' .$stats['numberOfDocuments']);
-                $this->meiliService->waitUntilFinished($index);
-            }
-
-
-            if ($this->io->isVeryVerbose()) {
-                $stats = $index->stats();
-                $this->io->title("$indexName stats");
-                $this->io->write(json_encode($stats, JSON_PRETTY_PRINT));
-            }
-
-            if ($this->io->isVerbose()) {
-                $this->io->title("$indexName settings");
-                $this->io->write(json_encode($index->getSettings(), JSON_PRETTY_PRINT));
-                // now what?
-            }
-            $this->io->success($this->getName() . ' ' . $class . ' finished indexing to ' . $indexName);
-
         }
 
         $this->io->success($this->getName() . ' complete.');
         return self::SUCCESS;
-
     }
 
-    private function configureIndex(string $class, string $indexName, Indexes $index): Indexes
+    /**
+     * Configure a Meilisearch index *for one language*.
+     * - no nested _translations
+     * - searchableAttributes = fields tagged #[Translatable] (or #[Searchable] fallback)
+     * - best-effort indexLanguages (ignore if unsupported)
+     */
+    private function configureIndex(string $class, Indexes $index, string $language): void
     {
+        $cfg = $this->settingsService->getSettingsFromAttributes($class);
 
-//        $reflection = new \ReflectionClass($class);
-//        $classAttributes = $reflection->getAttributes();
-//        $filterAttributes = [];
-//        $sortableAttributes = [];
+        // primary key (usually set at index creation; keep here for visibility)
+        $ids = $this->settingsService->getFieldsWithAttribute($cfg, 'is_primary');
+        $primaryKey = $ids[0] ?? 'id';
 
-        $settings = $this->settingsService->getSettingsFromAttributes($class);
-        $idFields = $this->settingsService->getFieldsWithAttribute($settings, 'is_primary');
-        $primaryKey = count($idFields) ? $idFields[0] : 'id';
+        // translatable text fields (flat)
+        $searchable = $this->textFieldResolver->resolveSearchable($class);
 
-        $localizedAttributes = [];
-        foreach ($this->enabledLocales as $locale) {
-            $localizedAttributes[] = ['locales' => [$locale],
-                'attributePatterns' => [sprintf('_translations.%s.*',$locale)]];
+        // filterable/sortable from attributes
+        $filterable = $this->settingsService->getFieldsWithAttribute($cfg, 'browsable');
+        $sortable   = $this->settingsService->getFieldsWithAttribute($cfg, 'sortable');
+
+        // best-effort: set indexLanguages (newer Meili servers)
+        try {
+            $index->updateSettings(['indexLanguages' => [$language]]);
+        } catch (\Throwable $e) {
+            // ignore on older servers
         }
 
-//        $index = $this->meiliService->getIndex($indexName, $primaryKey);
-//        $index->updateSortableAttributes($this->datatableService->getFieldsWithAttribute($settings, 'sortable'));
-//        $index->updateSettings(); // could do this in one call
-        $filterable = $this->getFilterableAttributes($settings);
-            $results = $index->updateSettings($debug = [
-//                'searchFacets' => false, // search _within_ facets
-                'localizedAttributes' => $localizedAttributes,
-                'displayedAttributes' => ['*'],
-                'filterableAttributes' => $filterable,
-                'sortableAttributes' => $this->settingsService->getFieldsWithAttribute($settings, 'sortable'),
-                "faceting" => [
-                    "sortFacetValuesBy" => ["*" => "count"],
-                    "maxValuesPerFacet" => $this->meiliService->getConfig()['maxValuesPerFacet']
-                ],
-            ]);
-            // potentiall problematic.
-//            $stats = $this->meiliService->waitUntilFinished($index);
-//            dd($stats, $debug, $filterable, $index->getUid());
-        return $index;
+        $index->updateSettings([
+            'displayedAttributes'  => ['*'],
+            'searchableAttributes' => $searchable ?: ['*'],
+            'filterableAttributes' => $filterable,
+            'sortableAttributes'   => $sortable,
+            'faceting' => [
+                'sortFacetValuesBy' => ['*' => 'count'],
+                'maxValuesPerFacet' => $this->meiliService->getConfig()['maxValuesPerFacet'],
+            ],
+            // 'primaryKey' => $primaryKey, // normally set when creating the index
+        ]);
     }
 
-    private function indexClass(string  $class,
-                                Indexes $index,
-                                int $batchSize,
-                                ?string $indexName=null,
-                                array $groups=[],
-                                int $limit=0,
-                                ?array $filter=[],
-                                ?int $dump=null,
-                                ?string $primaryKey=null,
-                                ?int $max = null,
-                                ?string $transport=null,
-                                ?string $subdomain=null,
-    ?string $pk = null
-    ): array
-    {
-        // not great, but okay for now.  hard-code to dedicated meili queue
+    /**
+     * Producer: stream entity primary keys and dispatch BatchIndexEntitiesMessage
+     * with the locale & target index name.
+     */
+    private function indexClass(
+        string  $class,
+        Indexes $index,
+        int $batchSize,
+        ?string $indexName = null,
+        array $groups = [],
+        int $limit = 0,
+        ?array $filter = [],
+        ?int $dump = null,
+        ?string $primaryKey = null,
+        ?int $max = null,
+        ?string $transport = null,
+        ?string $subdomain = null,
+        ?string $pk = null,
+        ?string $locale = null,
+    ): array {
         $stamps = [];
         if ($transport) {
             $stamps[] = new TransportNamesStamp($transport);
         } else {
+            // default to amqp queue named "meili"
             $stamps[] = new AmqpStamp('meili');
         }
-        $startingAt = 0;
-        $records = [];
+        if ($limit && ($batchSize > $limit)) {
+            $batchSize = $limit;
+        }
+
         $primaryKey ??= $index->getPrimaryKey();
-        $count = 0;
-        $streamer = new DoctrinePrimaryKeyStreamer($this->entityManager, $class);
+
+        // Stream ids from Doctrine
+        $streamer  = new DoctrinePrimaryKeyStreamer($this->entityManager, $class);
         $generator = $streamer->stream($batchSize);
 
-
-        //$stamps = [];
-
-//        $connection = $this->entityManager->getConnection();
-//        $sql = "SELECT $primaryKey FROM " . $this->entityManager->getClassMetadata($class)->getTableName();
-//        if ($max) {
-//            $sql .= " LIMIT $max";
-//        }
-//        $ids = $connection->fetchFirstColumn($sql);
-        $approx = $this->meiliService->getApproxCount($class);
-        if (!$approx) {
-            $approx = $this->entityManager->getRepository($class)->count();
-        }
+        // progress estimate
+        $approx = $this->meiliService->getApproxCount($class) ?: $this->entityManager->getRepository($class)->count();
         $progressBar = new ProgressBar($this->io, $approx);
         $progressBar->start();
         $this->io->title($class);
+
         foreach ($generator as $chunk) {
-            $progressBar->advance(count($chunk));
-            $envelope = $this->messageBus->dispatch(
-                new BatchIndexEntitiesMessage($class,
+            $progressBar->advance(\count($chunk));
+            // Pass locale + index name so consumer writes to correct index & scopes Babel before normalization
+            $this->messageBus->dispatch(
+                new BatchIndexEntitiesMessage(
+                    $class,
                     entityData: $chunk,
                     reload: true,
                     transport: $transport,
-                    primaryKeyName: $primaryKey),
+                    primaryKeyName: $primaryKey,
+                    locale: $locale,
+                    indexName: $indexName
+                ),
                 $stamps
             );
+
             if ($max && ($progressBar->getProgress() >= $max)) {
                 break;
             }
-            // $batch is like [1, 2, 54, ...]
-            // Process these IDs
         }
-        $progressBar->finish();
-        return [
-            'numberOfDocuments' => $progressBar->getProgress()
-        ];
-        $this->showIndexSettings($index);
-        // much less relevant, since the ids have been dispatched but not run.  We can show the difference though.
-        if ($wait) {
-            $this->meiliService->waitUntilFinished($index);
-        }
-
-        $ids = $this->em->createQueryBuilder()
-            ->select('e.' . $primaryKey)
-            ->from($class, 'e')
-            ->getQuery()
-            ->getScalarResult(); // Returns [['id' => 1], ['id' => 2], ['id' => 54]]
-
-        $ids = array_column($ids, 'id'); // Convert to [1, 2, 54]
-        //dd($ids, $approx);
-
-        $qb = $this->entityManager->getRepository($class)->createQueryBuilder('e');
-        $qb->select('e.' . $primaryKey . " as id");
-
-        if ($filter) {
-            foreach ($filter as $var => $val) {
-                $qb->andWhere('e.' . $var . "= :$var")
-                    ->setParameter($var, $val);
-            }
-//            $qb->andWhere($filter);
-        }
-
-
-        $total = (clone $qb)->select("count(e.{$primaryKey})")->getQuery()->getSingleScalarResult();
-        $this->io->title("Indexing $class ($total records, batches of $batchSize) ");
-        if (!$total) {
-            return ['numberOfDocuments'=>0];
-        }
-
-        $query = $qb->getQuery();
-        $progressBar = $this->getProcessBar($total);
-        $progressBar->setMessage("Indexing $class ($total records, batches of $batchSize) ");
-
-        do {
-        if ($batchSize) {
-            assert($count < $total, "count $count >= total $total");
-            $query
-                ->setFirstResult($startingAt)
-                ->setMaxResults($batchSize);
-//            $this->io->writeln("Fetching $startingAt ($batchSize)");
-        }
-        //dd($query->getResult());
-        $results = $query->toIterable();
-//        if (is_null($count)) {
-//            // slow if not filtered!
-//            $count = count(iterator_to_array($results, false));
-//        }
-//            $results = $qb->getQuery()->toIterable();
-            $startingAt += $batchSize;
-//            $count += count(iterator_to_array($results, false)); //??
-
-        if ($subdomain) {
-            assert($count == 1, "$count should be one for " . $subdomain);
-        }
-
-        // where should we get the id from?  ApiProperty(identifier: true)?  #[ORM\Id()]?  $rp?
-        foreach ($results as $idx => $r) {
-            $count++;
-            // @todo: pass in groups?  Or configure within the class itself?
-            // maybe these should come from the ApiPlatform normalizer.
-
-            // we should probably index from the actual api calls.
-            // for now, just match the groups in the normalization groups of the entity
-//            $groups = ['rp', 'searchable', 'marking', 'translation', sprintf("%s.read", strtolower($indexName))];
-//            $data = $this->normalizer->normalize($r, null, ['groups' => $groups]);
-            // maybe use less memory this way?
-            $data = $this->normalizer->normalize(clone $r, null, ['groups' => $groups]);
-            unset($r);
-
-            $data = SurvosUtils::removeNullsAndEmptyArrays($data);
-            if ($pk) {
-                $primaryKey = $pk;
-                SurvosUtils::assertKeyExists($pk, $data);
-                $data['id'] = $data[$pk];
-            }
-            if (!array_key_exists('rp', $data)) {
-
-            }
-//            assert(array_key_exists('rp', $data), "missing rp in $class\n\n" . join("\n", array_keys($data)));
-//            if (!array_key_exists($primaryKey, $data)) {
-//                $this->logger->error($msg = "No primary key $primaryKey for " . $class);
-//                SurvosUtils::assertKeyExists($primaryKey, $data);
-//                assert(false, $msg . "\n" . join("\n", array_keys($data)));
-//                return ['numberOfDocuments'=>0];
-//                break;
-//            }
-            $data['id'] = $data[$primaryKey]; // ??
-            if (array_key_exists('keyedTranslations', $data)) {
-                $data['_translations'] = $data['keyedTranslations'];
-                $data['targetLocales'] = array_keys($data['_translations']);
-//                unset($data['keyedTranslations']);
-            }
-            // @todo: use pk for dump index of index
-            if ($dump && ($dump === ($idx+1))) {
-                dd(data:    $data);
-            }
-//
-            $records[] = $data;
-//            if (count($data['tags']??[]) == 0) { continue; dd($data['tags'], $r->getTags()); }
-
-            if ($batchSize && (($progress = $progressBar->getProgress()) % $batchSize) === 0) {
-                $task = $index->addDocuments($records, $primaryKey);
-                // wait for the first record, so we fail early and catch the error, e.g. meili down, no index, etc.
-                if (!$progress) {
-                    $this->meiliService->waitForTask($task);
-                }
-                $this->io->writeln("Flushing " . count($records));
-                $records = [];
-                $this->entityManager->clear();
-                unset($records);
-                $records = [];
-                gc_collect_cycles();
-            }
-            $progressBar->advance();
-            assert($count == $progressBar->getProgress(), "$count  <> " . $progressBar->getProgress());
-
-            if ($limit && ($progressBar->getProgress() >= $limit)) {
-                $count = $total; // hack for breaking out of loop
-                break;
-            }
-        }
-//            $this->io->writeln("$count of $total loaded, this batch:" . count($records));
-        if ($startingAt > $total) {
-    //            dump($count, $total, $startingAt);
-        }
-        } while ( ($count < $total)) ;
 
         $progressBar->finish();
-        // if there are some that aren't batched...
-            $this->io->writeln("Final Flush " . count($records));
-            $task = $index->addDocuments($records, $primaryKey);
-            // if debugging
-            $this->meiliService->waitForTask($task);
-        if (count($records)) {
-        }
 
-
-
-        $this->showIndexSettings($index);
-        return $this->meiliService->waitUntilFinished($index);
-
+        return ['numberOfDocuments' => $progressBar->getProgress()];
     }
 
-//    private function getTranslationArray($entity, $accessor) {
-//        $rows = [];
-//        $updatedRow = [Instance::DB_CODE_FIELD => $entity->getCode()];
-//        foreach ($entity->getTranslations() as $translation) {
-//            foreach (Instance::TRANSLATABLE_FIELDS as $fieldName) {
-//                $translatedValue = $accessor->getValue($translation, $fieldName);
-//                $updatedRow['_translations'][$translation->getLocale()][$fieldName] = $translatedValue;
-//            }
-//        }
-//
-//        return $updatedRow;
-//    }
-
-    public function getProcessBar(int $total=0): ProgressBar
+    public function getProcessBar(int $total = 0): ProgressBar
     {
-        // https://jonczyk.me/2017/09/20/make-cool-progressbar-symfony-command/
         $progressBar = new ProgressBar($this->io, $total);
         if ($total) {
             $progressBar->setFormat(' %current%/%max% [%bar%] %percent:3s%% %elapsed:6s%/%estimated:-6s% %memory:6s% -- %message%');
         } else {
             $progressBar->setFormat(' %current% [%bar%] %elapsed:6s% %memory:6s% -- %message%');
-
         }
         return $progressBar;
     }
 
-    public function showIndexSettings(Indexes $index)
+    public function showIndexSettings(Indexes $index): void
     {
         if ($this->io->isVeryVerbose()) {
             $table=  new Table($this->io);
@@ -491,18 +374,14 @@ class IndexCommand extends Command
                 $settings = $index->getSettings();
                 foreach ($settings as $var => $val) {
                     if (is_array($val)) {
-                        $table->addRow([str_replace('Attributes', '', $var)
-                            , join("\n", $val)]);
+                        $table->addRow([str_replace('Attributes', '', $var), join("\n", $val)]);
                     }
                 }
-            } catch (\Exception $exception) {
-                // no settings if it doesn't exist
+            } catch (\Exception) {
+                // ignore if index missing or server error
             }
-            $table->render();;
+            $table->render();
             $this->io->writeln($index->getUid());
         }
-
     }
-
-
 }

@@ -40,7 +40,7 @@ final class IndexFastSyncService
          * @var Indexes $serverInfo
          */
         foreach ($rows as $uid=> $serverInfo) {
-//            dd($serverInfo);
+            dd($serverInfo);
 //            $uid = (string)$serverInfo['uid'];
 //            if ($uid === '') { continue; }
 
