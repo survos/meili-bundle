@@ -99,7 +99,7 @@ class DoctrineEventListener
             if ($fancyNewWay = false) {
                 $plan  = $this->meiliService->makePlan(
                     entityClass:    $entityClass,
-                    locale:         $languageForIndex,   // e.g. 'en'
+                    locale:         $languuageForIndex,   // e.g. 'en'
                     explicitIndexName: $indexName,       // or null to derive
                     primaryKeyName: $pk,
                     transport:      $transport
