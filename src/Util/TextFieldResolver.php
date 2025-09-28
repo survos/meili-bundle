@@ -24,6 +24,10 @@ final class TextFieldResolver
         }
 
         $searchable = $this->settings->getFieldsWithAttribute($cfg, 'searchable');
+        if (!array_is_list($searchable)) {
+            // ['name' => 'partial', 'code' => 'exact']
+            $searchable = array_keys($searchable);
+        }
         return array_values(array_unique($searchable));
     }
 }

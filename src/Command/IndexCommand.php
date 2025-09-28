@@ -272,6 +272,7 @@ class IndexCommand extends Command
         } catch (\Throwable $e) {
             // ignore on older servers
         }
+//        dd($searchable, $filterable, $sortable);
 
         $index->updateSettings([
             'displayedAttributes'  => ['*'],

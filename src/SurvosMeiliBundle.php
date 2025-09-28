@@ -212,8 +212,9 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             }
             $contents = file_get_contents($file->getRealPath());
             if (preg_match('/namespace\s+([^;]+);/i', $contents, $nsMatch)
-                && preg_match('/class\s+([^\s]+)/i', $contents, $classMatch)) {
-                $classes[] = $nsMatch[1] . '\\' . $classMatch[1];
+                && preg_match('/^class\s+([A-Za-z_][A-Za-z0-9_]*)/m', $contents, $classMatch)) {
+                $classes[] = ($class = $nsMatch[1] . '\\' . $classMatch[1]);
+                assert(class_exists($class), "missing class $class in " . $contents);
             }
         }
 

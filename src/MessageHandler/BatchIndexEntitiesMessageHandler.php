@@ -36,7 +36,7 @@ final class BatchIndexEntitiesMessageHandler
             $this->apply($message);
         } else {
             // Scope everything (DB hydration + normalization) to the message locale.
-            $this->localeContext->run($locale, fn($message) => $this->apply($message));
+            $this->localeContext->run($locale, fn() => $this->apply($message));
         }
 
     }

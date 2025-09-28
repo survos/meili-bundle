@@ -79,14 +79,14 @@ class SettingsService
             }
             $properties = $attrInstance->properties;
             foreach ($properties as $property) {
-                if (!array_key_exists($property, $settings)) {
-                    $settings[$property] = [
-                        'name' => $property,
-                        'browsable' => false,
-                        'sortable' => false,
-                        'searchable' => false
-                    ];
-                }
+//                if (!array_key_exists($property, $settings)) {
+//                    $settings[$property] = [
+//                        'name' => $property,
+//                        'browsable' => false,
+//                        'sortable' => false,
+//                        'searchable' => false
+//                    ];
+//                }
                 switch ($filter) {
 //                    case RangeFilter::class:
                     case FacetsFieldSearchFilter::class:
@@ -99,6 +99,12 @@ class SettingsService
                         break;
 
                     case SearchFilter::class:
+                        foreach ($properties as $prop=>$type) {
+                            if ($type === 'partial') {
+                                $settings[$prop]['searchable'] = true;
+                            }
+                        }
+                        break;
 //                    case MeiliMultiFieldSearchFilter::class:
 //                    case MultiFieldSearchFilter::class:
                     case RangeFilter::class:
@@ -160,6 +166,7 @@ class SettingsService
             }
         }
         // @todo: methods
+//        dd($settings);
         return $settings;
     }
 
