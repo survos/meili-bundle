@@ -1,3 +1,9 @@
+Version 2
+
+Requires php 8.4.
+
+@todo: write readme.
+
 ```bash
 composer require survos/meili-bundle
 bin/console importmap:require @andypf/json-viewer
