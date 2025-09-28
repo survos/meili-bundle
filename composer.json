@@ -16,7 +16,7 @@
         "twig/twig": "^3.4",
         "survos/installer": "^2.0",
         "symfony/property-access": "^7.3",
-        "meilisearch/meilisearch-php": "v2.x-dev",
+        "meilisearch/meilisearch-php": "^v1.16",
         "adbario/php-dot-notation": "^3.3",
         "cebe/php-openapi": "^1.8",
         "survos/core-bundle": "^1.5",
