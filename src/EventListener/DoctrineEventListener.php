@@ -164,6 +164,11 @@ class DoctrineEventListener
 
     private function scheduleForIndexing(object $object): void
     {
+        // @todo: we need a way to disable this from the bundle config!!
+        return;
+
+
+
         if (!in_array($object::class, $this->meiliService->indexedEntities)) {
             return;
         }
