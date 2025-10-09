@@ -9,6 +9,7 @@ use Survos\InspectionBundle\Services\InspectionService;
 use Survos\MeiliBundle\Api\Filter\MultiFieldSearchFilter;
 use Survos\MeiliBundle\Command\FastSyncIndexesCommand;
 use Survos\MeiliBundle\Command\IterateIndexesCommand;
+use Survos\MeiliBundle\Command\MeiliFlushFileCommand;
 use Survos\MeiliBundle\Command\SyncIndexesCommand;
 use Survos\MeiliBundle\Components\InstantSearchComponent;
 use Survos\MeiliBundle\Command\CreateCommand;
@@ -24,6 +25,7 @@ use Survos\MeiliBundle\Metadata\MeiliIndex;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
 use Survos\MeiliBundle\Service\IndexFastSyncService;
 use Survos\MeiliBundle\Service\IndexSyncService;
+use Survos\MeiliBundle\Service\MeiliNdjsonUploader;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\SettingsService;
 use Survos\MeiliBundle\Util\BabelLocaleScope;
@@ -81,6 +83,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
 //                     FastSyncIndexesCommand::class,
 //                     SyncIndexesCommand::class,
                      IterateIndexesCommand::class,
+                     MeiliFlushFileCommand::class,
                      ListCommand::class, CreateCommand::class] as $class) {
             $builder->autowire($class)
                 ->setPublic(true)
@@ -88,7 +91,10 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                 ->addTag('console.command');
         }
 
-        foreach ([IndexSyncService::class, IndexFastSyncService::class, TextFieldResolver::class, BatchIndexEntitiesMessageHandler::class] as $class) {
+        foreach ([IndexSyncService::class,
+                     MeiliNdjsonUploader::class,
+
+                     IndexFastSyncService::class, TextFieldResolver::class, BatchIndexEntitiesMessageHandler::class] as $class) {
             $builder->autowire($class)
                 ->setPublic(true)
                 ->setAutoconfigured(true);

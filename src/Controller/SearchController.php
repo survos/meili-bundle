@@ -45,7 +45,10 @@ class SearchController extends AbstractController
     {
         $locale = $request->getLocale();
         $template = $indexName . '.html.twig';
-        $indexName .= "_$locale";
+
+        if ($this->meiliService->passLocale) {
+            $indexName .= "_$locale";
+        }
         if (0) {
             $dummyServer = 'https://dummy.survos.com/api/docs.jsonopenapi';
 // realpath is needed for resolving references with relative Paths or URLs

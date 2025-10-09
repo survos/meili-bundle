@@ -50,10 +50,14 @@ class MeiliService
 //        assert($this->meiliKey);
     }
 
+    public function getAdminKey(): ?string { return $this->adminKey; }
+
     public function getConfig(): array
     {
         return $this->config;
     }
+
+    public bool $passLocale { get => $this->config['passLocale'] ?? false; }
 
     public function setConfig(array $config): void
     {
