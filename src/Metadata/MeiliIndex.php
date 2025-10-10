@@ -1,41 +1,55 @@
 <?php
-
-/*
- * This file is part of the API Platform project.
- *
- * (c) Kévin Dunglas <dunglas@gmail.com>
- *
- * For the full copyright and license information, please view the LICENSE
- * file that was distributed with this source code.
- */
-
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Metadata;
 
-use ApiPlatform\Metadata\Exception\InvalidArgumentException;
+use Attribute;
 
-/**
- * Tags entity class as meili index for doctrine events and interactive index questions
- *
- * @author Antoine Bluchet <soyuka@gmail.com>
- */
-#[\Attribute(\Attribute::TARGET_CLASS)]
+#[Attribute(Attribute::TARGET_CLASS | Attribute::IS_REPEATABLE)]
 final class MeiliIndex
 {
-    /**
-     * @param string|null $indexName defaults to shortClass
-     * @param string|null $id defaults to meiliprefix + shortClass
-     * @param string|null $alias
-     */
+    private Fields $displaySel;
+    private Fields $filterableSel;
+    private Fields $sortableSel;
+    private Fields $searchableSel;
+
     public function __construct(
-        public ?string $indexName=null,
-        public ?string $id = null,
-        public ?string $alias = null,
-        public ?string $pk = null,
+        public ?string $name = null,
+        public ?string $class = null,
+        public ?string $primaryKey = 'id',
+        /** Base serializer groups for payload normalization */
+        public ?array  $groups = null,
+
+        /** Meili settings selections (fields + optional groups override) */
+        Fields|array   $displayed = ['*'],
+        Fields|array   $filterable = [],
+        Fields|array   $sortable = [],
+        Fields|array   $searchable = [],
+
+        /** Reserved / extra knobs */
+        public array   $faceting = [],
+        public array   $filter = [],
     ) {
-//        if (!is_a($this->filterClass, FilterInterface::class, true)) {
-//            throw new InvalidArgumentException(\sprintf('The filter class "%s" does not implement "%s". Did you forget a use statement?', $this->filterClass, FilterInterface::class));
-//        }
+        $this->displaySel    = Fields::from($displayed);
+        $this->filterableSel = Fields::from($filterable);
+        $this->sortableSel   = Fields::from($sortable);
+        $this->searchableSel = Fields::from($searchable);
+    }
+
+    // Accessors used by the compiler pass (keeps the pass dumb & stable)
+    /** @return string[] */ public function displayFields(): array    { return $this->displaySel->fields; }
+    /** @return string[] */ public function filterableFields(): array { return $this->filterableSel->fields; }
+    /** @return string[] */ public function sortableFields(): array   { return $this->sortableSel->fields; }
+    /** @return string[] */ public function searchableFields(): array { return $this->searchableSel->fields; }
+
+    /** @return string[]|null */ public function displayGroups(): ?array    { return $this->displaySel->groups; }
+    /** @return string[]|null */ public function filterableGroups(): ?array { return $this->filterableSel->groups; }
+    /** @return string[]|null */ public function sortableGroups(): ?array   { return $this->sortableSel->groups; }
+    /** @return string[]|null */ public function searchableGroups(): ?array { return $this->searchableSel->groups; }
+
+    public function defaultName(string $fqcn): string
+    {
+        $short = substr($fqcn, (int) (strrpos($fqcn, '\\') ?: -1) + 1);
+        return strtolower($short);
     }
 }

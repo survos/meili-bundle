@@ -45,9 +45,12 @@ final class BatchIndexEntitiesMessageHandler
         $metadata        = $this->entityManager->getClassMetadata($message->entityClass);
         $repo            = $this->entityManager->getRepository($message->entityClass);
         $identifierField = $metadata->getSingleIdentifierFieldName();
-        $groups          = $this->settingsService->getNormalizationGroups($message->entityClass);
+//        $groups          = $this->settingsService->getNormalizationGroups($message->entityClass);
 
         $index = $this->getMeiliIndex($message->indexName, $message->entityClass, $message->locale);
+        $indexSettings = $this->meiliService->settings[$message->indexName];
+        $groups = $indexSettings['groups']??[]; // this is ONLY going to work with doctrine indexes, not pixie
+//        dump($message->entityClass, $groups);
 
         if ($message->reload) {
             // Load → normalize → upload as NDJSON (chunked)
@@ -71,8 +74,8 @@ final class BatchIndexEntitiesMessageHandler
         }
         $short = (new \ReflectionClass($entityClass))->getShortName();
         $loc   = $locale ?: $this->localeContext?->getDefault();
-        $name  = $this->meiliService->getPrefixedIndexName(sprintf('%s%s', $short, $loc ? "_$loc" : ''));
-        return $this->meiliService->getOrCreateIndex($name, autoCreate: true);
+
+        return $this->meiliService->getOrCreateIndex($indexName, autoCreate: true);
     }
 
     /**
@@ -85,6 +88,9 @@ final class BatchIndexEntitiesMessageHandler
             $entity = $repo->find($id);
             if (!$entity) { continue; }
             $doc = $this->normalizer->normalize($entity, format: null, context: ['groups' => $groups]);
+            // empty groups are okay if there's no nested entities
+//            $doc = $this->normalizer->normalize($entity, format: null, context: ['groups' => []]);
+//            dd($doc, $entity, $groups);
             if (!\is_array($doc)) { continue; }
             yield $doc;
         }

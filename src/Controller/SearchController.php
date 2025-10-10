@@ -56,18 +56,21 @@ class SearchController extends AbstractController
             $openapi->resolveReferences();
         }
 
+        // @todo: starting only
+        $templateName = str_replace($this->meiliService->getPrefix(), '', $indexName);
+
         // Entity, then _list_ of groups separated by _
 //        dd($openapi->components->schemas['Product.jsonld-product.read_product.details']);
 
 
 //        dd($openapi);
-        if (!class_exists($indexName) && class_exists($appEntityClass = 'App\\Entity\\' . $indexName)) {
-            $indexName = $appEntityClass;
-        }
-
-        if (class_exists($indexName)) {
-            $indexName = $this->meiliService->getPrefixedIndexName($indexName);
-        }
+//        if (!class_exists($indexName) && class_exists($appEntityClass = 'App\\Entity\\' . $indexName)) {
+//            $indexName = $appEntityClass;
+//        }
+//
+//        if (class_exists($indexName)) {
+//            $indexName = $this->meiliService->getPrefixedIndexName($indexName);
+//        }
 
         $locale = 'en'; // @todo
         $index = $this->meiliService->getIndexEndpoint($indexName);
@@ -102,19 +105,20 @@ class SearchController extends AbstractController
             'settings' => $settings,
             'endpoint' => null,
             'embedder' => $embedder,
+            'templateName' => $templateName,
             'related' => $related, // the facet lookups
         ];
         return $params;
     }
 
     // hack function until we can figure out relative routing for jstwig
-    #[Route('/template/{indexName}', name: 'meili_template')]
-    public function jsTemplate(string $indexName): Response|array
+    #[Route('/template/{templateName}', name: 'meili_template')]
+    public function jsTemplate(string $templateName): Response|array
     {
         // remove the locale, ugh.
-        $indexName = preg_replace('/_..$/', '', $indexName);
+        $templateName = preg_replace('/_..$/', '', $templateName);
 //        dd($indexName);
-        $jsTwigTemplate = $this->jsTemplateDir . $indexName . '.html.twig';
+        $jsTwigTemplate = $this->jsTemplateDir . $templateName . '.html.twig';
         assert(file_exists($jsTwigTemplate), "missing $jsTwigTemplate");
         $template = file_get_contents($jsTwigTemplate);
 //        dd($template);

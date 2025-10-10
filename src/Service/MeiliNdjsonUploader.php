@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
 
+// is this necessary?  Can't we just call  public function addDocumentsNdjson(string $documents, ?string $primaryKey = null) from $meiliClient?
+
 use Meilisearch\Endpoints\Indexes;
 use Psr\Log\LoggerInterface;
 use Survos\JsonlBundle\IO\JsonlReader;

@@ -32,6 +32,7 @@ use Nyholm\Psr7\Factory\Psr17Factory;
 
 class MeiliService
 {
+    public array $settings = [];
     public function __construct(
         protected ParameterBagInterface $bag,
         private SettingsService $settingsService,
@@ -43,11 +44,43 @@ class MeiliService
         private array                   $config = [],
         private array                   $groupsByClass = [],
         private ?LoggerInterface        $logger = null,
-                private ?HttpClientInterface $symfonyHttpClient=null,
+        private ?HttpClientInterface $symfonyHttpClient=null,
         protected ?ClientInterface      $httpClient = null,
-        private(set) readonly array $indexedEntities = []
+        private(set) readonly array $indexedEntities = [],
+        private readonly array $indexSettings=[],
+
     ) {
+        foreach ($this->indexSettings as $class => $indexes) {
+            foreach ($indexes as $rawName => $settings) {
+                $this->settings[$this->getPrefix() . $rawName] = $settings;
+            }
+        }
+//        dd($this->indexSettings, $this->getPrefix());
 //        assert($this->meiliKey);
+    }
+
+//    public function getAllIndexSettings(): array
+//    {
+//        $settingsWithActualIndexName = [];
+//        foreach ($this->indexSettings as $indexName => $settings) {
+//            $settingsWithActualIndexName[$this->getPrefix() . $indexName] = $settings;
+//        }
+//        return $settingsWithActualIndexName;
+//    }
+
+    public function indexedByClass(): array
+    {
+        $response = [];
+        foreach ($this->settings as $index=>$settings) {
+            // we don't really need to repeat the settings, but this saves another lookup
+            $response[$settings['class']][$index] = $settings;
+        }
+        return $response;
+
+    }
+    public function getIndexSetting(string $rawName): ?array
+    {
+        return $this->settings[$this->getPrefix()  . $rawName] ?? null;
     }
 
     public function getAdminKey(): ?string { return $this->adminKey; }
@@ -342,7 +375,7 @@ class MeiliService
 
     public function getIndex(string $indexName, string $key = 'id', bool $autoCreate = true): ?Indexes
     {
-        $indexName = $this->getPrefixedIndexName($indexName);
+//        $indexName = $this->getPrefixedIndexName($indexName);
         $this->loadExistingIndexes();
         static $indexes = [];
         if (!$index = $indexes[$indexName] ?? null) {
@@ -507,6 +540,7 @@ class MeiliService
         $payloadThreshold = 50_000_000; // in bytes
         $documents = [];
         $payloadSize = 0;
+        dd($message);
 
         // argh, lost this in the merge!
         if ($message->reload) {
@@ -648,6 +682,7 @@ ORDER BY n.nspname, c.relname;");
             $entities = $repo->findBy([$identifierField => $chunk]);
 
             foreach ($entities as $entity) {
+                dd($this->indexSettings, $message);
                 $normalized = $this->normalizer->normalize($entity, 'array', ['groups' => $groups]);
                 $normalized = SurvosUtils::removeNullsAndEmptyArrays($normalized);
 

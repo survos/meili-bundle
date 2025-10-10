@@ -4,6 +4,8 @@ namespace Survos\MeiliBundle\Controller;
 
 use Adbar\Dot;
 use cebe\openapi\Reader;
+use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminRoute;
+use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Bridge\Twig\Attribute\Template;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -25,6 +27,21 @@ class MeiliAdminController extends AbstractController
     )
     {
 //        $this->helper = $helper;
+    }
+
+//    #[Route(path: '/index', name: 'meili_admin_index', methods: ['GET'])]
+    #[AdminRoute('/meili-index', name: 'meili_index')]
+    #[Template('@SurvosMeili/index.html.twig')]
+    public function index(AdminContext $context): Response|array
+    {
+
+//        {% extends '@EasyAdmin/layout.html.twig' %}
+        // @todo: check if easyAdmin: true is set in the config
+//        dd($this->meiliService->indexSettings, $request->get('_route'));
+        return [
+            'adminContext' => $context,
+            'indexSettings' => $this->meiliService->indexedByClass()
+        ];
     }
 
     //

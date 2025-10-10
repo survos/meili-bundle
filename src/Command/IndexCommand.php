@@ -118,6 +118,7 @@ class IndexCommand extends Command
     ): int {
         $this->io = $io;
 
+        $sync ??= true;
         // default behaviors
         $fetch ??= true; // unless explicitly turned off
         $perLocale = $perLocale ?? (count($this->enabledLocales) > 0);
@@ -129,6 +130,7 @@ class IndexCommand extends Command
         if ($class && !class_exists($class)) {
             $class = "App\\Entity\\$class";
         }
+        $all ??= true;
         if (!$class && !$all) {
             $io->error('Either a class or filter or --all');
             return Command::FAILURE;
@@ -136,111 +138,113 @@ class IndexCommand extends Command
 
         // Gather Meili-managed classes
         $classes = [];
-        foreach ($this->meiliService->indexedEntities as $entityClass) {
-            if ($class && ($entityClass !== $class)) {
-                $this->logger->info("Skipping $entityClass, does not match $class");
-                continue;
-            }
-            if (!$groups = $this->settingsService->getNormalizationGroups($entityClass)) {
-                $io->error("ERROR {$entityClass}: no normalization groups defined");
-                return Command::FAILURE;
-            }
-            $classes[$entityClass] = $groups;
-        }
-
+//        foreach ($this->meiliService->indexedEntities as $entityClass) {
+//            if ($class && ($entityClass !== $class)) {
+//                $this->logger->info("Skipping $entityClass, does not match $class");
+//                continue;
+//            }
+//            if (!$groups = $this->settingsService->getNormalizationGroups($entityClass)) {
+//                $io->error("ERROR {$entityClass}: no normalization groups defined");
+//                return Command::FAILURE;
+//            }
+//            $classes[$entityClass] = $groups;
+//        }
+//
         // Locales to handle
         $locales = $onlyLocales
             ? array_values(array_filter(array_map('trim', explode(',', $onlyLocales))))
             : $this->enabledLocales;
-
-        foreach ($classes as $entityClass => $groups) {
-            $short = (new \ReflectionClass($entityClass))->getShortName();
-
-            // Build list of index names (per-locale or single)
-            $indexNames = [];
-            if ($perLocale) {
-                foreach ($locales as $loc) {
-                    $indexNames[$loc] = $this->meiliService->getPrefixedIndexName(($name ?: $short) . '_' . $loc);
-                }
-            } else {
-                // single index uses default framework locale as its language
-                $indexNames[$this->defaultLocale] = $this->meiliService->getPrefixedIndexName($name ?: $short);
-            }
-
-            foreach ($indexNames as $loc => $indexName) {
-                $languageForIndex = $loc ?: $this->defaultLocale;
-                $this->io->title($indexName);
-
-                if ($reset) {
-                    if ($dry) {
-                        $io->error('you cannot have both --reset and --dry');
-                        return Command::FAILURE;
+        $indexNames = [];
+        foreach ($this->meiliService->indexedByClass() as $class=>$indexes) {
+            foreach ($indexes as $indexName => $settings) {
+                if ($perLocale) {
+                    foreach ($locales as $loc) {
+                        $indexNames[$class][$loc] = $indexName . '_' . $loc;
                     }
-                    $this->meiliService->reset($indexName);
-                    $updateSettings = true;
+                } else {
+                    // single index uses default framework locale as its language
+                    $indexNames[$class][$this->defaultLocale] = $indexName;
                 }
-
-                if ($updateSettings) {
-                    $idx = $this->meiliService->getIndex($indexName, $pk);
-                    $this->configureIndex($entityClass, $idx, $languageForIndex);
-                    if (!$reset && is_null($fetch)) {
-                        $fetch = false;
-                    }
-                }
-
-                $index = $this->meiliService->getOrCreateIndex($indexName, autoCreate: false);
-                if (!$index) {
-                    $this->io->error("Index {$indexName} not found, run meili:settings to create");
-                    return Command::FAILURE;
-                }
-
-                if ($fetch && !$dry) {
-                    // Producer side: stream primary keys in batches; consumer will load+normalize with the same locale
-                    $runner = function () use ($entityClass, $index, $batchSize, $indexName, $groups, $sync, $limit, $filterArray, $dump, $transport, $pk, $languageForIndex) {
-                        return $this->indexClass(
-                            class: $entityClass,
-                            index: $index,
-                            batchSize: $batchSize,
-                            indexName: $indexName,
-                            groups: $groups,
-                            limit: $limit ?? 0,
-                            filter: $filterArray,
-                            dump: $dump,
-                            primaryKey: $index->getPrimaryKey(),
-                            max: $limit,
-                            transport: $sync ? 'sync': $transport,
-                            pk: $pk,
-                            locale: $languageForIndex
-                        );
-                    };
-
-                    // If Babel is present, scope locale even while producing (mostly no-op here but consistent)
-                    $stats = $this->localeScope
-                        ? $this->localeScope->withLocale($languageForIndex, $runner)
-                        : $runner();
-
-                    $this->io->success($indexName . ' Document count: ' . $stats['numberOfDocuments']);
-
-                    if ($wait) {
-                        $this->meiliService->waitUntilFinished($index);
-                    }
-                }
-
-                if ($this->io->isVeryVerbose()) {
-                    $stats = $index->stats();
-                    $this->io->title("$indexName stats");
-                    $this->io->write(json_encode($stats, JSON_PRETTY_PRINT));
-                }
-
-                if ($this->io->isVerbose()) {
-                    $this->io->title("$indexName settings");
-                    $this->io->write(json_encode($index->getSettings(), JSON_PRETTY_PRINT));
-                }
-
-                $this->io->success($this->getName() . ' ' . $entityClass . ' finished indexing to ' . $indexName);
             }
         }
+            foreach ($indexNames as $entityClass => $indexes) {
+                foreach ($indexes as $loc => $indexName) {
+                    $languageForIndex = $loc ?: $this->defaultLocale;
+                    $this->io->title($indexName);
 
+                    if ($reset) {
+                        if ($dry) {
+                            $io->error('you cannot have both --reset and --dry');
+                            return Command::FAILURE;
+                        }
+                        $this->meiliService->reset($indexName);
+                        $updateSettings = true;
+                    }
+
+
+                    if ($updateSettings) {
+                        dd("moved to meili:schema:update --force, but we can flag if it's out of sync");
+                        $idx = $this->meiliService->getIndex($indexName, $pk);
+                        $this->configureIndex($entityClass, $idx, $languageForIndex);
+                        if (!$reset && is_null($fetch)) {
+                            $fetch = false;
+                        }
+                    }
+
+                    $index = $this->meiliService->getOrCreateIndex($indexName, autoCreate: false);
+                    if (!$index) {
+                        $this->io->error("Index {$indexName} not found, run meili:settings to create");
+                        return Command::FAILURE;
+                    }
+
+                    if ($fetch && !$dry) {
+                        // Producer side: stream primary keys in batches; consumer will load+normalize with the same locale
+                        $runner = function () use ($entityClass,
+                            $index, $batchSize, $indexName,
+                            $sync,
+                            $limit, $filterArray, $dump, $transport, $pk, $languageForIndex) {
+                            return $this->indexClass(
+                                class: $entityClass,
+                                index: $index,
+                                batchSize: $batchSize,
+                                indexName: $indexName,
+                                limit: $limit ?? 0,
+                                filter: $filterArray,
+                                dump: $dump,
+                                primaryKey: $index->getPrimaryKey(),
+                                max: $limit,
+                                transport: $sync ? 'sync' : $transport,
+                                pk: $pk,
+                                locale: $languageForIndex
+                            );
+                        };
+
+                        // If Babel is present, scope locale even while producing (mostly no-op here but consistent)
+                        $stats = $this->localeScope
+                            ? $this->localeScope->withLocale($languageForIndex, $runner)
+                            : $runner();
+
+                        $this->io->success($indexName . ' Document count: ' . $stats['numberOfDocuments']);
+
+                        if ($wait) {
+                            $this->meiliService->waitUntilFinished($index);
+                        }
+                    }
+
+                    if ($this->io->isVeryVerbose()) {
+                        $stats = $index->stats();
+                        $this->io->title("$indexName stats");
+                        $this->io->write(json_encode($stats, JSON_PRETTY_PRINT));
+                    }
+
+                    if ($this->io->isVerbose()) {
+                        $this->io->title("$indexName settings");
+                        $this->io->write(json_encode($index->getSettings(), JSON_PRETTY_PRINT));
+                    }
+
+                    $this->io->success($this->getName() . ' ' . $entityClass . ' finished indexing to ' . $indexName);
+                }
+            }
         $this->io->success($this->getName() . ' complete.');
         return self::SUCCESS;
     }
@@ -296,7 +300,6 @@ class IndexCommand extends Command
         Indexes $index,
         int $batchSize,
         ?string $indexName = null,
-        array $groups = [],
         int $limit = 0,
         ?array $filter = [],
         ?int $dump = null,
@@ -332,17 +335,18 @@ class IndexCommand extends Command
 
         foreach ($generator as $chunk) {
             $progressBar->advance(\count($chunk));
+            $message = new BatchIndexEntitiesMessage(
+                $class,
+                entityData: $chunk,
+                reload: true,
+                transport: $transport,
+                primaryKeyName: $primaryKey,
+                locale: $locale,
+                indexName: $indexName
+            );
             // Pass locale + index name so consumer writes to correct index & scopes Babel before normalization
             $this->messageBus->dispatch(
-                new BatchIndexEntitiesMessage(
-                    $class,
-                    entityData: $chunk,
-                    reload: true,
-                    transport: $transport,
-                    primaryKeyName: $primaryKey,
-                    locale: $locale,
-                    indexName: $indexName
-                ),
+                $message,
                 $stamps
             );
 

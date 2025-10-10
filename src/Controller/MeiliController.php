@@ -2,12 +2,17 @@
 
 namespace Survos\MeiliBundle\Controller;
 
+use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminRoute;
+use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
+use Meilisearch\Exceptions\ApiException;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Bridge\Twig\Attribute\Template;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Attribute\MapQueryParameter;
+use Symfony\Component\HttpKernel\Attribute\MapQueryString;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Contracts\Translation\TranslatorInterface;
@@ -26,6 +31,51 @@ class MeiliController extends AbstractController
     {
 //        $this->helper = $helper;
     }
+
+    #[AdminRoute(path: '/show/{indexName}', name: 'meili_show_index')]
+    public function showIndex(
+        AdminContext $context,
+        string $indexName,
+    ): Response {
+
+        // configured
+        $settings = $this->meiliService->settings[$indexName];
+        // live
+        $this->meiliService->getIndex($indexName, autoCreate: false);
+
+        $indexApi  = $this->meiliService->getIndexEndpoint($indexName);
+        try {
+            $rawInfo = $indexApi->fetchRawInfo(); // NOT a task
+        } catch (ApiException $e) {
+            if ($e->getCode() == 404) {
+                $index = $this->meiliService->getOrCreateIndex($indexName, $settings['primaryKey']);
+
+//                $task = $indexApi->create($actualIndexName, );
+//                dd($indexApi, $task);
+                $task = $index->updateSettings($settings['schema']);
+                $info = $indexApi->getSettings();
+                // this is an object, NOT a json structure.  No way to get it via the client
+                foreach ($info as $key => $value) {
+                    if (is_object($value)) {
+                        unset($info[$key]);
+                    }
+                }
+
+            }
+        }
+//        $rawInfo = $indexApi->fetchRawInfo(); // NOT a task
+
+//        $info = $this->meiliService->getMeiliClient()->getRawIndex($actualIndexName);
+
+        return $this->render('@SurvosMeili/index/show.html.twig', [
+            'indexName' => $indexName,
+//            'rawInfo' => $rawInfo,
+            'settings' => $settings,
+            'adminContext' => $context,
+
+        ]);
+    }
+
 
     #[Route(path: '/realtime/abc/{indexName}.{_format}', name: 'survos_meili_realtime_stats', methods: ['GET'])]
     #[Template('@SurvosMeili/_realtime.html.twig')]

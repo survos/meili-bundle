@@ -32,6 +32,7 @@ use Symfony\Component\Yaml\Yaml;
 
 #[AsCommand(
     name: 'meili:settings',
+    aliases: ['meili:schema:update'],
     description: 'view and set meilisearch settings',
 )]
 class SettingsCommand # extends Command
@@ -70,35 +71,38 @@ class SettingsCommand # extends Command
     ): int
     {
         // if !class, prompt for possible classes
-
         if ($class && !class_exists($class)) {
             $class = "App\\Entity\\$class";
         }
+//        dd($this->meiliService->indexedEntities);
+        foreach ($this->meiliService->indexedEntities as $class) {
+            $indexName = $this->meiliService->getPrefixedIndexName((new \ReflectionClass($class))->getShortName());
 
-        $indexName = $this->meiliService->getPrefixedIndexName((new \ReflectionClass($class))->getShortName());
-
-        $io->title($indexName);
-        if ($reset) {
-            // this deletes the index!
-            if ($dry) {
-                $io->error("you cannot have both --reset and --dry");
-                return Command::FAILURE;
+            $io->title($indexName);
+            if ($reset) {
+                // this deletes the index!
+                if ($dry) {
+                    $io->error("you cannot have both --reset and --dry");
+                    return Command::FAILURE;
+                }
+                $this->meiliService->reset($indexName);
             }
-            $this->meiliService->reset($indexName);
-        }
 
-        // skip if no documents?  Obviously, docs could be added later, e.g. an Owner record after import
+            // skip if no documents?  Obviously, docs could be added later, e.g. an Owner record after import
 //            $task = $this->waitForTask($this->getMeiliClient()->createIndex($indexName, ['primaryKey' => Instance::DB_CODE_FIELD]));
 
-        // pk of meili  index might be different than doctrine pk, e.g. $imdbId
-        $index = $this->meiliService->getIndex($indexName, $pk);
-        $index = $this->configureIndex($class, $indexName, $index, $dry);
+            // pk of meili  index might be different than doctrine pk, e.g. $imdbId
+            $index = $this->meiliService->getIndex($indexName, $pk);
+            $index = $this->configureIndex($class, $indexName, $index, $dry);
 
-        $stats = $index->stats();
+            $stats = $index->stats();
 
 
-        $io->title("$indexName stats");
-        $io->write(json_encode($stats, JSON_PRETTY_PRINT));
+            $io->title("$indexName stats");
+            $io->write(json_encode($stats, JSON_PRETTY_PRINT));
+
+        }
+
 
         return Command::SUCCESS;
 
@@ -106,11 +110,6 @@ class SettingsCommand # extends Command
 
     private function configureIndex(string $class, string $indexName, Indexes $index, ?bool $dry): Indexes
     {
-
-//        $reflection = new \ReflectionClass($class);
-//        $classAttributes = $reflection->getAttributes();
-//        $filterAttributes = [];
-//        $sortableAttributes = [];
 
         $settings = $this->settingsService->getSettingsFromAttributes($class);
         $idFields = $this->settingsService->getFieldsWithAttribute($settings, 'is_primary');

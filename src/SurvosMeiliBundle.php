@@ -10,12 +10,16 @@ use Survos\MeiliBundle\Api\Filter\MultiFieldSearchFilter;
 use Survos\MeiliBundle\Command\FastSyncIndexesCommand;
 use Survos\MeiliBundle\Command\IterateIndexesCommand;
 use Survos\MeiliBundle\Command\MeiliFlushFileCommand;
+use Survos\MeiliBundle\Command\MeiliSchemaUpdateCommand;
+use Survos\MeiliBundle\Command\MeiliSchemaValidateCommand;
 use Survos\MeiliBundle\Command\SyncIndexesCommand;
+use Survos\MeiliBundle\Compiler\MeiliIndexPass;
 use Survos\MeiliBundle\Components\InstantSearchComponent;
 use Survos\MeiliBundle\Command\CreateCommand;
 use Survos\MeiliBundle\Command\IndexCommand;
 use Survos\MeiliBundle\Command\ListCommand;
 use Survos\MeiliBundle\Command\SettingsCommand;
+use Survos\MeiliBundle\Controller\MeiliAdminController;
 use Survos\MeiliBundle\Controller\MeiliController;
 use Survos\MeiliBundle\Controller\SearchController;
 use Survos\MeiliBundle\EventListener\DoctrineEventListener;
@@ -64,6 +68,9 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                 ->setPublic(true);
         }
 
+        $builder->setParameter('survos_meili.entity_dirs', $config['entity_dirs']);
+        $builder->setParameter('survos_meili.prefix', $config['meiliPrefix']);
+
         $builder->autowire(MeiliService::class)
             ->setArgument('$config', $config)
             ->setArgument('$meiliHost', $config['host'])
@@ -83,6 +90,8 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
 //                     FastSyncIndexesCommand::class,
 //                     SyncIndexesCommand::class,
                      IterateIndexesCommand::class,
+                     MeiliSchemaUpdateCommand::class,
+                     MeiliSchemaValidateCommand::class,
                      MeiliFlushFileCommand::class,
                      ListCommand::class, CreateCommand::class] as $class) {
             $builder->autowire($class)
@@ -105,6 +114,14 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                 ->setPublic(true)
                 ->addTag('doctrine.repository_service')
                 ->setAutoconfigured(true);
+        }
+
+        foreach ([MeiliAdminController::class] as $class) {
+            $builder->autowire($class)
+                ->addTag('container.service_subscriber')
+                ->addTag('controller.service_arguments')
+                ->setAutoconfigured(true)
+                ->setPublic(true);
         }
 
         $builder->autowire(MeiliController::class)
@@ -143,6 +160,16 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->scalarNode('meiliPrefix')->defaultValue('%env(default::MEILI_PREFIX)%')->end()
             ->booleanNode('passLocale')->defaultValue(false)->end()
             ->integerNode('maxValuesPerFacet')->defaultValue(1000)->end()
+
+            /**
+             * NEW: allow multiple directories to be scanned for #[MeiliIndex].
+             * Defaults to the standard Doctrine location.
+             */
+            ->arrayNode('entity_dirs')
+                ->prototype('scalar')->end()
+                ->defaultValue(['%kernel.project_dir%/src/Entity'])
+            ->end()
+
             ->end();
     }
 
@@ -175,6 +202,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
     {
         parent::build($container);
         $container->addCompilerPass($this);
+        $container->addCompilerPass(new MeiliIndexPass());
     }
 
     /**
@@ -183,7 +211,8 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
     public function process(ContainerBuilder $container): void
     {
         $attributeClass = MeiliIndex::class; // adjust if different
-        // @todo: recurse?  Allow bundle entities?
+        // @todo: allow an array of entity dirs to scan in config, defaulting to src/Entity
+
         // use             $metas = $this->entityManager->getMetadataFactory()->getAllMetadata(); to get the doctrine-managed classes?
         $entityDir = $container->getParameter('kernel.project_dir') . '/src/Entity';
         $indexedClasses = [];
@@ -195,11 +224,13 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             }
         }
 
+
         $container->setParameter('meili.indexed_entities', $indexedClasses);
 
         if ($container->hasDefinition(MeiliService::class)) {
             $def = $container->getDefinition(MeiliService::class);
             $def->setArgument('$indexedEntities', $indexedClasses);
+//            $def->setArgument('$indexSettings', $indexSettings);
         }
     }
 
