@@ -1,0 +1,56 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block title %}{{ package.name }}{% endblock %}
+
+{#{% block content_header %}#}
+{#    <div class="content-header-title">#}
+{#        <h1 class="title">{{ product.title }}</h1>#}
+{#    </div>#}
+
+{#    <div class="page-actions">#}
+{#        <a href="{{ path('admin_meili_admin_index') }}" class="btn btn-secondary">#}
+{#            <i class="fa fa-arrow-left"></i> Back to list#}
+{#        </a>#}
+{#    </div>#}
+{#{% endblock %}#}
+
+{% block main %}
+    {# tempting to use simple-datatables! #}
+    <table class="table">
+        <thead>
+        <tr>
+            <th>uid</th>
+            {% for x in ['displayed','filterable','searchable'] %}
+                <th>{{ x }}</th>
+            {% endfor %}
+            <th>facets</th>
+            <th>search</th>
+        </tr>
+        </thead>
+        <tbody>
+            {% for class, indexes in indexSettings %}
+            {% for name, settings in indexes %}
+            {% set schema = settings.schema %}
+            <tr>
+                <td>
+                    <a href="{{ path('meili_admin_meili_show_index', {
+                        indexName: name}) }}">
+                        {{ name }}
+                    </a>
+                    <a href="{{ path('meili_insta', {indexName: name}) }}">SEARCH</a>
+                </td>
+                {% for x in ['displayed','filterable','searchable'] %}
+                    <td>{{ attribute(schema, x ~ 'Attributes')|join('|') }}</td>
+                {% endfor %}
+                                <td>{{ schema|json_pretty }}</td>
+
+{#            </tr>#}
+            {% endfor %}
+            {% endfor %}
+
+
+        </tbody>
+    </table>
+
+
+{% endblock %}

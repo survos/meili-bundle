@@ -30,6 +30,7 @@ use Survos\MeiliBundle\Repository\IndexInfoRepository;
 use Survos\MeiliBundle\Service\IndexFastSyncService;
 use Survos\MeiliBundle\Service\IndexSyncService;
 use Survos\MeiliBundle\Service\MeiliNdjsonUploader;
+use Survos\MeiliBundle\Service\MeiliPayloadBuilder;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\SettingsService;
 use Survos\MeiliBundle\Util\BabelLocaleScope;
@@ -63,7 +64,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->tag('doctrine.event_listener', ['event' => 'prePersist'])
             ->tag('doctrine.event_listener', ['event' => 'postPersist']);
 
-        foreach ([SettingsService::class, AbstractSearchFilter::class, MultiFieldSearchFilter::class] as $class) {
+        foreach ([SettingsService::class, MeiliPayloadBuilder::class, AbstractSearchFilter::class, MultiFieldSearchFilter::class] as $class) {
             $builder->autowire($class)
                 ->setPublic(true);
         }

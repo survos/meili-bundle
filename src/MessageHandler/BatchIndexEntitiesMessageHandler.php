@@ -9,9 +9,11 @@ use Psr\Log\LoggerInterface;
 use Survos\BabelBundle\Service\LocaleContext;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
 use Survos\MeiliBundle\Service\MeiliNdjsonUploader;
+use Survos\MeiliBundle\Service\MeiliPayloadBuilder;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\SettingsService;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
+use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 
 final class BatchIndexEntitiesMessageHandler
@@ -24,6 +26,7 @@ final class BatchIndexEntitiesMessageHandler
         private readonly MeiliNdjsonUploader    $uploader,
         private readonly ?LocaleContext         $localeContext=null,
         private readonly ?LoggerInterface       $logger = null,
+        private MeiliPayloadBuilder $payloadBuilder,
     ) {}
 
     #[AsMessageHandler]
@@ -49,8 +52,11 @@ final class BatchIndexEntitiesMessageHandler
 
         $index = $this->getMeiliIndex($message->indexName, $message->entityClass, $message->locale);
         $indexSettings = $this->meiliService->settings[$message->indexName];
-        $groups = $indexSettings['groups']??[]; // this is ONLY going to work with doctrine indexes, not pixie
+//        $groups = $indexSettings['groups']??[]; // this is ONLY going to work with doctrine indexes, not pixie
 //        dump($message->entityClass, $groups);
+        $persisted = $indexSettings['persisted'];
+        $primaryKey = $indexSettings['primaryKey'];
+
 
         if ($message->reload) {
             // Load → normalize → upload as NDJSON (chunked)
@@ -58,12 +64,13 @@ final class BatchIndexEntitiesMessageHandler
                 $repo,
                 $identifierField,
                 $message->entityData,
-                $groups
+                $persisted,
             );
-            $this->uploader->uploadDocuments($index, $iter);
+
+            $this->uploader->uploadDocuments($index, $iter, $primaryKey);
         } else {
             // Already-normalized docs: send directly
-            $this->uploader->uploadDocuments($index, $message->entityData);
+            $this->uploader->uploadDocuments($index, $message->entityData, $primaryKey);
         }
     }
 
@@ -82,15 +89,12 @@ final class BatchIndexEntitiesMessageHandler
      * Generator to yield normalized docs one-by-one (keeps memory flat).
      * @param iterable<int|string> $ids
      */
-    private function yieldNormalizedDocs(object $repo, string $idField, iterable $ids, array $groups): \Generator
+    private function yieldNormalizedDocs(object $repo, string $idField, iterable $ids, array $persisted): \Generator
     {
         foreach ($ids as $id) {
             $entity = $repo->find($id);
             if (!$entity) { continue; }
-            $doc = $this->normalizer->normalize($entity, format: null, context: ['groups' => $groups]);
-            // empty groups are okay if there's no nested entities
-//            $doc = $this->normalizer->normalize($entity, format: null, context: ['groups' => []]);
-//            dd($doc, $entity, $groups);
+            $doc = $this->payloadBuilder->build($entity, $persisted);
             if (!\is_array($doc)) { continue; }
             yield $doc;
         }

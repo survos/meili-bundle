@@ -7,6 +7,8 @@ use Doctrine\ORM\EntityRepository;
 use Meilisearch\Client;
 use Meilisearch\Contracts\DocumentsQuery;
 use Meilisearch\Contracts\IndexesQuery;
+use Meilisearch\Contracts\TasksQuery;
+use Meilisearch\Contracts\TasksResults;
 use Meilisearch\Endpoints\Indexes;
 use Meilisearch\Exceptions\ApiException;
 use Meilisearch\Exceptions\JsonDecodingException;
@@ -33,6 +35,7 @@ use Nyholm\Psr7\Factory\Psr17Factory;
 class MeiliService
 {
     public array $settings = [];
+    public array $rawSettings = [];
     public function __construct(
         protected ParameterBagInterface $bag,
         private SettingsService $settingsService,
@@ -53,6 +56,7 @@ class MeiliService
         foreach ($this->indexSettings as $class => $indexes) {
             foreach ($indexes as $rawName => $settings) {
                 $this->settings[$this->getPrefix() . $rawName] = $settings;
+                $this->rawSettings[$rawName] = $settings;
             }
         }
 //        dd($this->indexSettings, $this->getPrefix());
@@ -68,6 +72,12 @@ class MeiliService
 //        return $settingsWithActualIndexName;
 //    }
 
+    // raw because no prefix
+    public function getRawIndexSettings(): array
+    {
+        return $this->rawSettings;
+    }
+
     public function indexedByClass(): array
     {
         $response = [];
@@ -78,9 +88,13 @@ class MeiliService
         return $response;
 
     }
-    public function getIndexSetting(string $rawName): ?array
+    public function getRawIndexSetting(string $rawName): ?array
     {
-        return $this->settings[$this->getPrefix()  . $rawName] ?? null;
+        return $this->rawSettings[$rawName] ?? null;
+    }
+    public function getIndexSetting(string $indexName): ?array
+    {
+        return $this->settings[$indexName] ?? null;
     }
 
     public function getAdminKey(): ?string { return $this->adminKey; }
@@ -105,6 +119,20 @@ class MeiliService
     public function getPublicApiKey(): ?string
     {
         return $this->searchKey; // @todo: 2 keys
+    }
+
+    public function getTasks(?string $indexUid = null, array $statuses = [], int $limit=100): TasksResults
+    {
+        $tasksQuery = new TasksQuery();
+        if ($indexUid !== null) {
+            $tasksQuery->setIndexUids([$indexUid]);
+        }
+        if (count($statuses) > 0) {
+            $tasksQuery->setStatuses($statuses);
+        }
+        $tasks = $this->getMeiliClient()->getTasks($tasksQuery);
+        return $tasks;
+
     }
 
     /**

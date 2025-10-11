@@ -12,13 +12,15 @@ final class MeiliIndex
     private Fields $filterableSel;
     private Fields $sortableSel;
     private Fields $searchableSel;
+    private Fields $persistedSel;
 
     public function __construct(
         public ?string $name = null,
         public ?string $class = null,
         public ?string $primaryKey = 'id',
         /** Base serializer groups for payload normalization */
-        public ?array  $groups = null,
+//        public ?array  $groups = null,
+        public Fields|array   $persisted = [],
 
         /** Meili settings selections (fields + optional groups override) */
         Fields|array   $displayed = ['*'],
@@ -34,6 +36,8 @@ final class MeiliIndex
         $this->filterableSel = Fields::from($filterable);
         $this->sortableSel   = Fields::from($sortable);
         $this->searchableSel = Fields::from($searchable);
+        // used by the serializer
+        $this->persistedSel = Fields::from($this->persisted);
     }
 
     // Accessors used by the compiler pass (keeps the pass dumb & stable)

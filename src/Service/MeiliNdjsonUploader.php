@@ -23,7 +23,7 @@ final class MeiliNdjsonUploader
      * Upload docs (arrays) as NDJSON, chunked by bytes.
      * @param iterable<array<string,mixed>> $docs
      */
-    public function uploadDocuments(Indexes $index, iterable $docs): void
+    public function uploadDocuments(Indexes $index, iterable $docs, string $primaryKey): void
     {
         $lines = [];
         $bytes = 0;
@@ -45,6 +45,9 @@ final class MeiliNdjsonUploader
         foreach ($docs as $doc) {
             $line = \json_encode($doc, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) . "\n";
             $len  = \strlen($line);
+            // meili requirement, throw error during dev
+            assert(array_key_exists($primaryKey, $doc));
+
             if ($len > $this->maxPayloadBytes) {
                 $flush();
                 $this->postNdjson($index, $line);

@@ -1,0 +1,24 @@
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block title %}{{ indexName }}{% endblock %}
+
+{% block content_header %}
+    <div class="content-header-title">
+        <h1 class="title">{{ indexName }}</h1>
+    </div>
+
+    <div class="page-actions">
+        <a href="{{ path('meili_admin_meili_index') }}" class="btn btn-secondary">
+            <i class="fa fa-arrow-left"></i> Back to Meili Index
+        </a>
+    </div>
+{% endblock %}
+
+{% block main %}
+    {{ dump(indexName) }}
+
+    {{ dump(settings) }}
+{#    {{ dump(adminContext.dashboardTitle) }}#}
+{#    {{ dump(adminContext.getDashboardRouteName) }}#}
+
+{% endblock %}
