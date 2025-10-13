@@ -105,8 +105,10 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
 
         foreach ([IndexSyncService::class,
                      MeiliNdjsonUploader::class,
-
-                     IndexFastSyncService::class, TextFieldResolver::class, BatchIndexEntitiesMessageHandler::class] as $class) {
+                     SyncIndexesCommand::class,
+                     IndexFastSyncService::class,
+                     TextFieldResolver::class,
+                     BatchIndexEntitiesMessageHandler::class] as $class) {
             $builder->autowire($class)
                 ->setPublic(true)
                 ->setAutoconfigured(true);
