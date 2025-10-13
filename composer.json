@@ -20,7 +20,7 @@
         "cebe/php-openapi": "^1.8",
         "survos/core-bundle": "^2.0",
         "survos/inspection-bundle": "^2.0",
-        "survos/installer": "^2.0",
+        "survos/installer": "*",
         "nyholm/psr7": "^1.8",
         "zenstruck/bytes": "^1.0",
         "symfony/stopwatch": "^7.3",
