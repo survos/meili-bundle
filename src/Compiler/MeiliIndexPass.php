@@ -54,12 +54,51 @@ final class MeiliIndexPass implements CompilerPassInterface
                     $sortable   = $this->groupResolver->expandUnion($class, $cfg->sortableFields(),   $cfg->sortableGroups());
                     $searchable = $this->groupResolver->expandUnion($class, $cfg->searchableFields(), $cfg->searchableGroups());
 
+                    // ADD: expand persisted (union of explicit fields + groups)
+                    $persistedFields = $cfg->persistedFields();
+                    $persistedGroups = $cfg->persistedGroups();
+                    $persisted       = $this->groupResolver->expandUnion($class, $persistedFields, $persistedGroups);
+
+
                     // Ensure Facet-decorated fields are filterable
                     foreach (array_keys($facetMap) as $field) {
                         if (!in_array($field, $filterable, true)) {
                             $filterable[] = $field;
                         }
                     }
+
+                    // Validate that filterable/sortable/searchable fields exist in persisted
+//                    $persisted = array_values(array_unique(array_filter((array) $cfg->persisted)));
+                    if ($persisted !== []) { // only validate if user constrained persisted
+                        $strict = (bool) ($container->hasParameter('survos_meili.strict')
+                            ? $container->getParameter('survos_meili.strict') : false);
+                        $strict = true;
+                        $toCheck = [
+                            'filterable' => $filterable,
+                            'sortable'   => $sortable,
+                            'searchable' => ($searchable === ['*']) ? [] : $searchable,
+                        ];
+
+
+
+                        foreach ($toCheck as $label => $fields) {
+                            foreach ($fields as $f) {
+                                if ($f === '*') { continue; }
+                                if (!in_array($f, $persisted, true)) {
+                                    dd($persisted, $f);
+                                    $msg = sprintf(
+                                        '[Survos/Meili] %s field "%s" is not in persisted for index "%s" (%s); it will not be effective.',
+                                        $label, $f, $name, $class
+                                    );
+                                    if ($strict) {
+                                        throw new \InvalidArgumentException($msg);
+                                    }
+                                    @trigger_error($msg, E_USER_WARNING);
+                                }
+                            }
+                        }
+                    }
+
 
                     $indexEntities[$name] = $class;
 

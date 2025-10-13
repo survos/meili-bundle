@@ -45,11 +45,13 @@ final class MeiliIndex
     /** @return string[] */ public function filterableFields(): array { return $this->filterableSel->fields; }
     /** @return string[] */ public function sortableFields(): array   { return $this->sortableSel->fields; }
     /** @return string[] */ public function searchableFields(): array { return $this->searchableSel->fields; }
+    /** @return string[] */ public function persistedFields(): array { return $this->persistedSel->fields; }
 
     /** @return string[]|null */ public function displayGroups(): ?array    { return $this->displaySel->groups; }
     /** @return string[]|null */ public function filterableGroups(): ?array { return $this->filterableSel->groups; }
     /** @return string[]|null */ public function sortableGroups(): ?array   { return $this->sortableSel->groups; }
     /** @return string[]|null */ public function searchableGroups(): ?array { return $this->searchableSel->groups; }
+    /** @return string[]|null */ public function persistedGroups(): ?array { return $this->persistedSel->groups; }
 
     public function defaultName(string $fqcn): string
     {
