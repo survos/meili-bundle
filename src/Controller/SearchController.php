@@ -57,7 +57,8 @@ class SearchController extends AbstractController
         }
 
         // @todo: starting only
-        $templateName = str_replace($this->meiliService->getPrefix(), '', $indexName);
+        $settings = $this->meiliService->getIndexSetting($indexName);
+        $templateName = $settings['rawName']; // skip the prefix
 
         // Entity, then _list_ of groups separated by _
 //        dd($openapi->components->schemas['Product.jsonld-product.read_product.details']);
@@ -84,12 +85,10 @@ class SearchController extends AbstractController
                 ];
             }
         }
-
-
         $facets = $settings['filterableAttributes'];
 
         // this is specific to our way of handling related, translated messages, soon to be removed.
-        $related = $this->meiliService->getRelated($facets, $indexName, $locale);
+        $related = []; // $this->meiliService->getRelated($facets, $indexName, $locale);
         // use proxy for translations or hidden
         $params = [
             'server' =>
@@ -119,6 +118,9 @@ class SearchController extends AbstractController
         $templateName = preg_replace('/_..$/', '', $templateName);
 //        dd($indexName);
         $jsTwigTemplate = $this->jsTemplateDir . $templateName . '.html.twig';
+        if (!file_exists($jsTwigTemplate)) {
+            return new Response("Missing $jwTwigTemplate template");
+        }
         assert(file_exists($jsTwigTemplate), "missing $jsTwigTemplate");
         $template = file_get_contents($jsTwigTemplate);
 //        dd($template);

@@ -31,7 +31,7 @@ use Symfony\Component\Yaml\Yaml;
     name: 'meili:index',
     description: 'Index entities (per-locale) for Meilisearch'
 )]
-class IndexCommand extends Command
+class IndexCommand extends MeiliBaseCommand
 {
     private SymfonyStyle $io;
 
@@ -39,15 +39,15 @@ class IndexCommand extends Command
         protected ParameterBagInterface $bag,
         protected EntityManagerInterface $entityManager,
         private MessageBusInterface $messageBus,
-        private LoggerInterface $logger,
-        private MeiliService $meiliService,
         private SettingsService $settingsService,
+        private MeiliService $meiliService,
+        protected ?LoggerInterface $logger,
         #[Autowire('%kernel.enabled_locales%')] private array $enabledLocales = [],
         #[Autowire('%kernel.default_locale%')] private string $defaultLocale = 'en',
         private TextFieldResolver $textFieldResolver,
         private ?BabelLocaleScope $localeScope = null, // optional (no-op if Babel not installed)
     ) {
-        parent::__construct();
+        parent::__construct($meiliService, $logger);
     }
 
     /**
@@ -78,8 +78,8 @@ class IndexCommand extends Command
         #[Option('Primary key field name in Meili (defaults to detected or id)', 'pk')]
         string $pk = 'id',
 
-        #[Option('Explicit index base name (defaults to prefix + class shortname)', 'name')]
-        ?string $name = null,
+        #[Option('Explicit index base name (defaults to prefix + class shortname)')]
+        ?string $index = null,
 
         #[Option('Dump the Nth normalized row and exit', 'dump')]
         ?int $dump = null,
@@ -136,6 +136,8 @@ class IndexCommand extends Command
             return Command::FAILURE;
         }
 
+        $targets = $this->resolveTargets($index, $class);
+
         // Gather Meili-managed classes
         $classes = [];
 //        foreach ($this->meiliService->indexedEntities as $entityClass) {
@@ -155,21 +157,30 @@ class IndexCommand extends Command
             ? array_values(array_filter(array_map('trim', explode(',', $onlyLocales))))
             : $this->enabledLocales;
         $indexNames = [];
-        foreach ($this->meiliService->indexedByClass() as $class=>$indexes) {
-            foreach ($indexes as $indexName => $settings) {
-                if ($perLocale) {
-                    foreach ($locales as $loc) {
-                        $indexNames[$class][$loc] = $indexName . '_' . $loc;
-                    }
-                } else {
-                    // single index uses default framework locale as its language
-                    $indexNames[$class][$this->defaultLocale] = $indexName;
-                }
-            }
-        }
-            foreach ($indexNames as $entityClass => $indexes) {
-                foreach ($indexes as $loc => $indexName) {
-                    $languageForIndex = $loc ?: $this->defaultLocale;
+
+
+//        foreach ($this->meiliService->indexedByClass() as $class=>$indexes) {
+//            foreach ($indexes as $indexName => $settings) {
+//                if ($perLocale) {
+//                    foreach ($locales as $loc) {
+//                        $indexNames[$class][$loc] = $indexName . '_' . $loc;
+//                    }
+//                } else {
+//                    // single index uses default framework locale as its language
+//                    $indexNames[$class][$this->defaultLocale] = $indexName;
+//                }
+//            }
+//        }
+
+        foreach ($targets as $indexName) {
+            {
+                $settings = $this->meiliService->rawSettings[$indexName];
+                $indexName = $this->meiliService->getPrefixedIndexName($indexName);
+//            dd($indexName, $settings);
+//        }
+//            foreach ($indexNames as $entityClass => $indexes) {
+//                foreach ($indexes as $loc => $indexName) {
+//                    $languageForIndex = $loc ?: $this->defaultLocale;
                     $this->io->title($indexName);
 
                     if ($reset) {
@@ -182,14 +193,14 @@ class IndexCommand extends Command
                     }
 
 
-                    if ($updateSettings) {
-                        dd("moved to meili:schema:update --force, but we can flag if it's out of sync");
-                        $idx = $this->meiliService->getIndex($indexName, $pk);
-                        $this->configureIndex($entityClass, $idx, $languageForIndex);
-                        if (!$reset && is_null($fetch)) {
-                            $fetch = false;
-                        }
-                    }
+//                    if ($updateSettings) {
+//                        dd("moved to meili:schema:update --force, but we can flag if it's out of sync");
+//                        $idx = $this->meiliService->getIndex($indexName, $pk);
+//                        $this->configureIndex($entityClass, $idx, $languageForIndex);
+//                        if (!$reset && is_null($fetch)) {
+//                            $fetch = false;
+//                        }
+//                    }
 
                     $index = $this->meiliService->getOrCreateIndex($indexName, autoCreate: false);
                     if (!$index) {
@@ -198,11 +209,13 @@ class IndexCommand extends Command
                     }
 
                     if ($fetch && !$dry) {
+                        $entityClass = $settings['class'];
                         // Producer side: stream primary keys in batches; consumer will load+normalize with the same locale
                         $runner = function () use ($entityClass,
                             $index, $batchSize, $indexName,
                             $sync,
-                            $limit, $filterArray, $dump, $transport, $pk, $languageForIndex) {
+                            $limit, $filterArray, $dump, $transport, $pk,
+                        ) {
                             return $this->indexClass(
                                 class: $entityClass,
                                 index: $index,
@@ -215,7 +228,7 @@ class IndexCommand extends Command
                                 max: $limit,
                                 transport: $sync ? 'sync' : $transport,
                                 pk: $pk,
-                                locale: $languageForIndex
+                                locale: null, // $languageForIndex
                             );
                         };
 

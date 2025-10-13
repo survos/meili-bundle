@@ -40,7 +40,7 @@
         "api-platform/doctrine-orm": "^4.1",
         "symfony/intl": "^7.3",
         "symfony/ux-twig-component": "^2.8",
-        "doctrine/doctrine-bundle": "^2.7",
+        "doctrine/doctrine-bundle": "^2.7|^3.0",
         "symfony/messenger": "^7.3",
         "jwage/phpamqplib-messenger": "^0.8.5",
         "survos/js-twig-bundle": "^2.0",

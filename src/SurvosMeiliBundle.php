@@ -10,6 +10,7 @@ use Survos\MeiliBundle\Api\Filter\MultiFieldSearchFilter;
 use Survos\MeiliBundle\Command\FastSyncIndexesCommand;
 use Survos\MeiliBundle\Command\IterateIndexesCommand;
 use Survos\MeiliBundle\Command\MeiliFlushFileCommand;
+use Survos\MeiliBundle\Command\MeiliSchemaCreateCommand;
 use Survos\MeiliBundle\Command\MeiliSchemaUpdateCommand;
 use Survos\MeiliBundle\Command\MeiliSchemaValidateCommand;
 use Survos\MeiliBundle\Command\SyncIndexesCommand;
@@ -91,6 +92,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
 //                     FastSyncIndexesCommand::class,
 //                     SyncIndexesCommand::class,
                      IterateIndexesCommand::class,
+                     MeiliSchemaCreateCommand::class,
                      MeiliSchemaUpdateCommand::class,
                      MeiliSchemaValidateCommand::class,
                      MeiliFlushFileCommand::class,

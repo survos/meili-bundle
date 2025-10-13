@@ -15,6 +15,18 @@
 {% endblock %}
 
 {% block main %}
+
+    <a class="btn btn-primary" href="{{ path('meili_insta', {indexName: indexName}) }}">
+        SEARCH
+    </a>
+
+    {% set riccox = 'http://localhost:24900/ins/1/index/' ~ indexName %}
+    <a class="btn btn-primary" href="{{ riccox }}">
+        Tasks
+    </a>
+
+
+
     {{ dump(indexName) }}
 
     {{ dump(settings) }}

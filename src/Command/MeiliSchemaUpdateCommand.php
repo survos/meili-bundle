@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Survos\MeiliBundle\Command;
 
 use Meilisearch\Client;
+use Survos\MeiliBundle\Meili\MeiliTaskStatus;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
@@ -95,6 +96,7 @@ final class MeiliSchemaUpdateCommand extends Command
             }
 
             $task = $index->updateSettings($settings['schema']);
+            $io->writeln(json_encode($settings['schema'], JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
             $io->writeln(sprintf('updateSettings taskUid=%s', (string)($task['taskUid'] ?? 'unknown')));
 
             try {
@@ -125,7 +127,7 @@ final class MeiliSchemaUpdateCommand extends Command
         return $names;
     }
 
-    private function deleteIndexIfExists(string $uid, SymfonyStyle $io): void
+        private function deleteIndexIfExists(string $uid, SymfonyStyle $io): void
     {
         try {
             $task = $this->meili->index($uid)->delete();
@@ -142,7 +144,7 @@ final class MeiliSchemaUpdateCommand extends Command
 
     private function pendingTasks(string $uid): int
     {
-        $resp = $this->meili->getTasks($uid,  ['enqueued', 'processing']);
+        $resp = $this->meili->getTasks($uid,  MeiliTaskStatus::ACTIVE);
 
         return \count($resp['results'] ?? []);
     }

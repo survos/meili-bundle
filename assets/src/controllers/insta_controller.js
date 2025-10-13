@@ -303,14 +303,23 @@ export default class extends Controller {
                         // this _does_ work, with includes!
                         // let x= tpl.render({hit: hit, title: 'const tpl'});
                         // return hit.title + '/'; // JSON.stringify(hit);
-                        return this.template.render({
-                            x: '', // x,
-                            hit: hit,
-                            _sc_modal: '@survos/meili-bundle/json',
-                            templateUrl: this.templateUrlValue,
-                            icons: this.icons,
-                            globals: this.globals
-                        });
+                        console.error(this.templateUrlValue);
+                        let response = this.templateUrlValue;
+
+                        try {
+                            response =  this.template.render({
+                                x: '', // x,
+                                hit: hit,
+                                _sc_modal: '@survos/meili-bundle/json',
+                                templateUrl: this.templateUrlValue,
+                                icons: this.icons,
+                                globals: this.globals
+                            });
+                        } catch (e) {
+                            console.error(e);
+                            html += e.message;
+                        }
+                        return response;
                     },
                 },
             }),
