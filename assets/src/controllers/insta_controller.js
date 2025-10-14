@@ -1,8 +1,28 @@
 import {Controller} from '@hotwired/stimulus';
 
 
-import Routing from "fos-routing";
-import RoutingData from "/js/fos_js_routes.js";
+// import Routing from "fos-routing";
+// import RoutingData from "/js/fos_js_routes.js";
+// Routing.setData(RoutingData);
+let Routing = null;
+
+try {
+    const module = await import("fos-routing");
+    Routing = module.default;
+    const RoutingDataModule = await import("/js/fos_js_routes.js");
+    const RoutingData = RoutingDataModule.default;
+    Routing.setData(RoutingData);
+} catch (error) {
+    console.warn("fos-routing not available, skipping routing setup");
+}
+
+// Rest of your controller code
+// Check if Routing exists before using it
+if (Routing) {
+    // Use Routing here
+}
+
+
 import {prettyPrintJson} from 'pretty-print-json';
 import Twig from 'twig';
 import instantsearch from 'instantsearch.js'
@@ -23,7 +43,6 @@ import 'pretty-print-json/dist/css/pretty-print-json.min.css';
 import 'flag-icons/css/flag-icons.min.css';
 import "@andypf/json-viewer"
 
-Routing.setData(RoutingData);
 
 
 Twig.extend(function (Twig) {
@@ -351,6 +370,8 @@ export default class extends Controller {
         attributeDivs.forEach(div => {
             const attribute = div.getAttribute("data-attribute")
             const lookup = JSON.parse(div.getAttribute('data-lookup'));
+
+
 
             // const startDate = new Date(2003, 0, 1);      // Jan 2020
             // const endDate   = new Date(2022, 11, 1);     // Dec 2022
