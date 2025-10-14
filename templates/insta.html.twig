@@ -1,37 +1,35 @@
 {% extends "base.html.twig" %}
-{# {% extends "@SurvosBootstrap/tabler/base.html.twig" %} #}
-
-{# {% block javascripts %} #}
-{#    {% block importmap %}{{ importmap('app') }}{% endblock %} #}
-{# {% endblock %} #}
 
 {% block stylesheets %}
     {{ parent() }}
     <style>
-        li .ais-Hits-item {
-            width: calc(33% - 1rem);
-        }
-
-        .container {
+        .insta-grid {
             display: grid;
-            grid-template-columns: 350px 1fr;
+            grid-template-columns: 320px 1fr;
             gap: 1rem;
         }
 
-        aside {
-            min-height: 100vh;
-            justify-content: space-between;
-            flex-direction: column;
+        .facet-header {
+            display: flex;
+            align-items: baseline;
+            gap: .75rem;
+        }
+
+        .facet-title {
+            text-transform: none;
+            font-weight: 600;
+        }
+
+        .facet-sort {
+            margin-left: auto;
         }
     </style>
 {% endblock %}
 
 {% block body %}
+    {% set _sc = '@survos/meili-bundle/insta' %}
+    {% set _sc_modal = '@survos/meili-bundle/json' %}
 
-    {% set _sc = '@survos/meili-bundle/insta' %} {#  for loading hits #}
-    {% set _sc_modal = '@survos/meili-bundle/json' %} {#  for debugging the json #}
-
-    {#        {{ stimulus_controller(_sc_modal) }} #}
     {% set globals = {
         serverUrl: server,
         serverApiKey: apiKey,
@@ -39,6 +37,7 @@
         _sc_modal: _sc_modal,
         debug: app.request.get('debug', false) ? true : false
     } %}
+
     {% set icons = {
         json: ux_icon('si:json-duotone'),
         bug: ux_icon('tabler:bug'),
@@ -47,101 +46,114 @@
         facebook: ux_icon('mdi:facebook'),
     } %}
 
-    {% set hitClass = app.request.get('class', 'grid-' ~ app.request.get('grid')|default(2)) %}
-    <div {{ stimulus_controller(_sc, {
-        serverUrl: server,
-        serverApiKey: apiKey,
-        indexName: indexName,
-        embedderName: embedder,
-        hitClass: hitClass,
-        sortingJson: sorting|json_encode,
-        globalsJson: globals|json_encode,
-        iconsJson: icons|json_encode,
-        templateUrl: path('meili_template', {templateName: templateName})
-    }) }}
+    {% set templateUrl = path('meili_template', { templateName: templateName }) %}
+
+    <div
+            {{ stimulus_controller(_sc, {
+                serverUrl: server,
+                serverApiKey: apiKey,
+                indexName: indexName,
+                embedderName: embedder,
+                hitClass: app.request.get('class', 'grid-' ~ app.request.get('grid')|default(2)),
+                sortingJson: sorting|default([])|json_encode,
+                globalsJson: globals|json_encode,
+                iconsJson: icons|json_encode,
+                configJson: indexConfig|json_encode,
+                templateUrl: templateUrl
+            }) }}
             class="container-fluid py-4"
     >
-        {% set _sc_locale = 'display_locale' %}
-        <div class="w-100" {{ stimulus_controller(_sc_locale, {userLocale: app.request.locale}) }}>
-            <div class="row g-4">
-                <div class="col-lg-3">
-                    <div class="card insta-side-panel">
-                        <div class="p-3">
+        <div
+                {{ stimulus_controller(_sc_modal, {
+                    serverUrl: server,
+                    serverApiKey: apiKey,
+                    indexName: indexName,
+                    globalsJson: globals|json_encode
+                }) }}
+        >
+            {{ include('@SurvosMeili/components/_modal.html.twig', { _sc_modal: _sc_modal }) }}
 
-                            <div class="d-flex align-items-center mb-4">
-                                <h4 class="card-title fs-5 flex-grow-1 fw-bold mb-0">Insta</h4>
-                                <div class="d-flex justify-content-end mb-3">
-                                    <div {{ stimulus_target(_sc, 'reset') }}></div>
-                                </div>
+            <div class="insta-grid">
+                <aside {{ stimulus_target(_sc, 'refinementList') }}>
+                    {# Render each facet as: header row (title + sort select) + mount div #}
+                    {% for name, conf in indexConfig.facets %}
+                        <div class="facet-block mb-5" data-facet-block>
+                            <div class="facet-header">
+                                <button class="facet-collapse btn btn-ghost btn-xxs p-0 me-2"
+                                        type="button"
+                                        data-collapse-control
+                                        data-attribute="{{ name }}"
+                                        aria-expanded="{{ (conf.collapsed is same as(true)) ? 'false' : 'true' }}"
+                                        title="Collapse/Expand">
+                                    {{ ux_icon('tabler:chevron-down')|raw }}
+                                </button>
+
+                                <div class="facet-title">{{ conf.label ?? name }}</div>
+
+                                {# compact sort controls ONLY for list-like widgets #}
+                                {% set widget = conf.widget ?? conf.type ?? 'RefinementList' %}
+                                {% if widget in ['RefinementList', 'Menu'] %}
+                                    {% set initialSort = conf.sortMode|default('count') %}
+                                    <span class="facet-sort-icons ms-auto d-inline-flex align-items-center gap-1"
+                                          data-attribute="{{ name }}">
+        <button type="button"
+                class="btn btn-ghost btn-icon btn-xxs"
+                title="Sort by count"
+                data-sort-toggle
+                data-attribute="{{ name }}"
+                data-mode="count"
+                aria-pressed="{{ initialSort == 'count' ? 'true' : 'false' }}">
+          {{ ux_icon('tabler:numbers')|raw }}
+        </button>
+        <button type="button"
+                class="btn btn-ghost btn-icon btn-xxs"
+                title="Sort by name"
+                data-sort-toggle
+                data-attribute="{{ name }}"
+                data-mode="name"
+                aria-pressed="{{ initialSort in ['name','alpha'] ? 'true' : 'false' }}">
+          {{ ux_icon('tabler:letters-case')|raw }}
+        </button>
+      </span>
+                                {% endif %}
+                            </div> {# <-- close the header BEFORE the body #}
+
+                            <div class="facet-body mt-2">
+                                <div
+                                        data-attribute="{{ name }}"
+                                        data-widget="{{ conf.widget ?? conf.type ?? 'RefinementList' }}"
+                                        {% if conf.sortMode is defined %} data-sort-mode="{{ conf.sortMode }}"{% endif %}
+                                        {% if conf.searchable is same as(true) %} data-searchable="true"{% elseif conf.searchable is same as(false) %} data-searchable="false"{% endif %}
+                                        {% if conf.limit is defined %} data-limit="{{ conf.limit }}"{% endif %}
+                                        {% if conf.showMoreLimit is defined %} data-show-more-limit="{{ conf.showMoreLimit }}"{% endif %}
+                                        {% if conf.lookup is defined and conf.lookup is iterable %} data-lookup='{{ conf.lookup|json_encode }}'{% endif %}
+
+                                        {# Range options (used when widget is RangeSlider) #}
+                                        {% if widget == 'RangeSlider' %}
+                                            {% if conf.step is defined %} data-step="{{ conf.step }}"{% endif %}
+                                            {% if conf.min is defined %} data-min="{{ conf.min }}"{% endif %}
+                                            {% if conf.max is defined %} data-max="{{ conf.max }}"{% endif %}
+                                            {% if conf.pips is defined %} data-pips="{{ conf.pips ? 'true' : 'false' }}"{% endif %}
+                                            {% if conf.tooltips is defined %} data-tooltips='{{ conf.tooltips|json_encode }}'{% endif %}
+                                        {% endif %}
+                                ></div>
                             </div>
-
-                            {% if embedder %}
-                                <div id="semantic-widget">{{ embedder }}</div>
-                            {% endif %}
-
-                            {# aside might not be the best element for this. #}
-                            <aside class="col-12 col-md-12 mb-4"
-                                    {{ stimulus_target(_sc, 'refinementList') }}
-                            >
-                                {% for attr in facets %}
-                                    <div class="mb-4">
-                                        <h5 class="sub-title mb-2 fw-medium">{{ attr }}</h5>
-                                        {#                                        {{ dump(related[attr]|default([])|json_encode) }} #}
-                                        <div
-                                                data-lookup="{{ related[attr]|default({})|json_encode }}"
-                                                data-attribute="{{ attr }}"
-                                        ></div>
-                                    </div>
-                                {% endfor %}
-                            </aside>
                         </div>
+                    {% endfor %}
+                </aside>
+
+                <main>
+                    <div class="mb-3 d-flex gap-2 align-items-center">
+                        <div class="flex-grow-1" {{ stimulus_target(_sc, 'searchBox') }}></div>
+                        <div {{ stimulus_target(_sc, 'reset') }}></div>
                     </div>
-                </div>
-                <div class="col-lg-9">
-                    <div class="insta-list">
+                    <div class="mb-2 small text-muted" {{ stimulus_target(_sc, 'stats') }}></div>
+                    <div class="mt-4" {{ stimulus_target(_sc, 'sort') }}></div>
 
-                        {# @todo: move this to a dropdown somewhere.  Or maybe where the json test was? #}
-                            <details>
-                                <summary>{{ indexName }} Settings</summary>
-                                {{ settings|json_pretty }}
-                            </details>
-
-                        {# Sidebar: search + filters #}
-                        <div class="mb-3" {{ stimulus_target(_sc, 'searchBox') }}></div>
-
-                        {# the sorting dropdown #}
-                        <div class="mt-4" {{ stimulus_target(_sc, 'sort') }}></div>
-
-                        {# Main: hits + pagination #}
-                        <main
-                                {{ stimulus_controller(_sc_modal, {
-                                    serverUrl: server,
-                                    serverApiKey: apiKey,
-                                    indexName: indexName,
-                                    globalsJson: globals|json_encode,
-                                }) }}
-                        >
-
-                            <div {{ stimulus_target(_sc_modal, 'modal') }}>
-                                {# all them templates use this modal, so it's _outside_ of the individual hit template #}
-                                {{ include('@SurvosMeili/components/_modal.html.twig', {_sc_modal: _sc_modal}) }}
-
-                                <div {{ stimulus_target(_sc, 'hits') }}>
-
-                                </div>
-                            </div>
-
-
-                            <div class="mt-4" {{ stimulus_target(_sc, 'pagination') }}></div>
-
-                        </main>
-                    </div>
-                </div>
+                    <div {{ stimulus_target(_sc, 'hits') }}></div>
+                    <div class="mt-4" {{ stimulus_target(_sc, 'pagination') }}></div>
+                </main>
             </div>
         </div>
-
     </div>
-
-
 {% endblock %}
-

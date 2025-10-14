@@ -86,7 +86,7 @@ class SearchController extends AbstractController
             }
         }
         $facets = $settings['filterableAttributes'];
-
+        $config = $this->meiliService->getIndexSetting($indexName);
         // this is specific to our way of handling related, translated messages, soon to be removed.
         $related = []; // $this->meiliService->getRelated($facets, $indexName, $locale);
         // use proxy for translations or hidden
@@ -99,9 +99,12 @@ class SearchController extends AbstractController
 
             'apiKey' => $this->meiliService->getPublicApiKey(),
             'indexName' => $indexName,
+
+            'indexConfig' => $this->meiliService->getIndexSetting($indexName),
+            'settings' => $config,
+
             'facets' => $facets,
             'sorting' => $sorting,
-            'settings' => $settings,
             'endpoint' => null,
             'embedder' => $embedder,
             'templateName' => $templateName,

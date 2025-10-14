@@ -8,6 +8,7 @@
 // /* stimulusFetch: 'lazy' */
 import Dialog from "@stimulus-components/dialog"
 import {Meilisearch} from "meilisearch";
+import "@andypf/json-viewer"; // define <andypf-json-viewer> in this scope
 
 export default class extends Dialog {
     static targets = ['content', 'title', 'body']
@@ -76,7 +77,7 @@ export default class extends Dialog {
 
     modal(e) {
         // we could move the index logic here, so we have have a title
-        console.log(e.currentTarget.dataset.hitId);
+        console.log({hitId: e.currentTarget.dataset.hitId});
         this.hitId = e.currentTarget.dataset.hitId;
         this.open();
     }
