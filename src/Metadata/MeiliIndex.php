@@ -31,6 +31,8 @@ final class MeiliIndex
         /** Reserved / extra knobs */
         public array   $faceting = [],
         public array   $filter = [],
+        public array $embedders = [] // array<Embedder>
+
     ) {
         $this->displaySel    = Fields::from($displayed);
         $this->filterableSel = Fields::from($filterable);
@@ -38,6 +40,7 @@ final class MeiliIndex
         $this->searchableSel = Fields::from($searchable);
         // used by the serializer
         $this->persistedSel = Fields::from($this->persisted);
+
     }
 
     // Accessors used by the compiler pass (keeps the pass dumb & stable)

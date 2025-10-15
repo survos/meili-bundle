@@ -128,6 +128,16 @@ final class MeiliIndexPass implements CompilerPassInterface
                     $facetMap = $this->orderFacets($facetMap, $filterable);
 
 
+                    // collect raw embedder array to persist and later push in schema:update
+                    $embeddersArray = [];
+                    foreach ($cfg->embedders as $emb) {
+                        $embeddersArray[$emb->name] = array_filter([
+                            'source'           => $emb->source,
+                            'model'            => $emb->model,
+                            'apiKeyParameter'  => $emb->apiKeyParameter, // resolve later
+                            'documentTemplate' => $emb->documentTemplate,
+                        ], static fn($v) => $v !== null);
+                    }
 
                     $indexSettings[$class][$name] = [
                         'schema'     => $indexSchema,
@@ -135,6 +145,7 @@ final class MeiliIndexPass implements CompilerPassInterface
                         'persisted'  => (array) $cfg->persisted,
                         'class'      => $class,
                         'facets'     => $facetMap,
+                        'embedders'  => $embeddersArray, // <— NEW
                     ];
                 }
             }

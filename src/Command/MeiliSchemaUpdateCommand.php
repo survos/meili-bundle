@@ -63,9 +63,11 @@ final class MeiliSchemaUpdateCommand extends Command
 //                dd($settings, $name);
                 $index = $this->meili->getIndex($this->meili->getPrefixedIndexName($name));
                 // is update different than create?
-                $task = $index->updateSettings($settings['schema']);
-                dump($task);
+//                $task = $index->updateSettings($settings['schema']);
+//                dump($task);
                 $io->writeln(json_encode($settings['schema'], JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES));
+
+
             }
             if (!$force) {
                 return Command::SUCCESS;
@@ -96,6 +98,26 @@ final class MeiliSchemaUpdateCommand extends Command
             }
 
             $task = $index->updateSettings($settings['schema']);
+            $embedders = $settings['embedders'] ?? [];
+            if ($embedders !== []) {
+                dd($embedders);
+                // resolve api keys from params if provided as parameter names
+                foreach ($embedders as $name => &$cfg) {
+                    if (!empty($cfg['apiKeyParameter'])) {
+                        $paramName = $cfg['apiKeyParameter'];
+                        $cfg['apiKey'] = $this->params->get($paramName) ?? getenv($paramName) ?? null;
+                        unset($cfg['apiKeyParameter']);
+                    }
+                }
+                // Wrap into the structure Meilisearch expects: [ name => [ ...config... ] ]
+                $task = $index->updateEmbedders($embedders);
+                $res  = $this->meiliService->waitForTask($task);
+                if (($res['status'] ?? null) !== 'succeeded') {
+                    throw new \RuntimeException('Embedders update failed: '.json_encode($res));
+                }
+            }
+
+
             $io->writeln(json_encode($settings['schema'], JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
             $io->writeln(sprintf('updateSettings taskUid=%s', (string)($task['taskUid'] ?? 'unknown')));
 
