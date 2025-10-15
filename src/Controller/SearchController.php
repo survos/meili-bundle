@@ -35,7 +35,9 @@ class SearchController extends AbstractController
     }
 
     #[Route('/index/{indexName}', name: 'meili_insta', options: ['expose' => true])]
+    #[Route('/embedder/{indexName}/{embedder}', name: 'meili_insta_embed', options: ['expose' => true])]
     #[Template('@SurvosMeili/insta.html.twig')]
+//    #[Template('@SurvosMeili/instant/instant.html.twig')]
     public function index(
         Request $request, // for the locale, but we will need a better way!
         string                       $indexName, //  = 'packagesPackage',

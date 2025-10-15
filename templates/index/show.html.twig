@@ -25,6 +25,13 @@
         Tasks
     </a>
 
+    <h3>Embedders</h3>
+    {% for e in settings.embedders %}
+        <a class="btn btn-success" href="{{ path('meili_insta_embed', {indexName: indexName, embedder: e}) }}">
+            Semantic Search with {{ e }}
+        </a>
+    {% endfor %}
+
 
 
     {{ dump(indexName) }}

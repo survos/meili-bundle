@@ -31,7 +31,7 @@ final class MeiliIndex
         /** Reserved / extra knobs */
         public array   $faceting = [],
         public array   $filter = [],
-        public array $embedders = [] // array<Embedder>
+        public array $embedders = [] // array<string>
 
     ) {
         $this->displaySel    = Fields::from($displayed);

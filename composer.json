@@ -44,7 +44,9 @@
         "symfony/messenger": "^7.3",
         "jwage/phpamqplib-messenger": "^0.8.5",
         "survos/js-twig-bundle": "^2.0",
-        "survos/babel-bundle": "^2.0"
+        "survos/babel-bundle": "^2.0",
+        "yethee/tiktoken": "^0.11.1",
+        "liquid/liquid": "^1.4"
     },
     "autoload": {
         "psr-4": {

@@ -3,32 +3,38 @@ declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Command;
 
+use Liquid\Template;
 use Meilisearch\Client;
 use Survos\MeiliBundle\Meili\MeiliTaskStatus;
+use Survos\MeiliBundle\Meili\Task;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Yethee\Tiktoken\EncoderProvider;
 
 #[AsCommand('meili:schema:update', 'Update Meilisearch index settings from compiler-pass schema')]
-final class MeiliSchemaUpdateCommand extends Command
+final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 {
     /** @param array<string,array<string,mixed>> $indexSettings (indexName => settings)
      *  @param array<string,string>               $indexEntities (indexName => FQCN)
      */
-    public function __construct(
-        private readonly MeiliService $meili,
-    ) {
-        parent::__construct();
-    }
+//    public function __construct(
+//        public readonly MeiliService $meili,
+//    ) {
+//        parent::__construct();
+//    }
 
     public function __invoke(
         SymfonyStyle $io,
 
         #[Option('Dump settings without applying', name: 'dump')]
         bool $dumpSettings = false,
+
+        #[Option('calculate the cost of the embedders.  Works with --dry')]
+        ?bool $cost = null,
 
         #[Option('Wait for task to complete')]
         bool $wait = false,
@@ -59,9 +65,9 @@ final class MeiliSchemaUpdateCommand extends Command
         if ($dumpSettings) {
             foreach ($targets as $name) {
                 $io->section(sprintf('Index "%s"', $name));
-                $settings = $this->meili->getRawIndexSetting($name);
-//                dd($settings, $name);
                 $index = $this->meili->getIndex($this->meili->getPrefixedIndexName($name));
+                $settings = $this->meili->getRawIndexSetting($name);
+                dd($settings, $name);
                 // is update different than create?
 //                $task = $index->updateSettings($settings['schema']);
 //                dump($task);
@@ -74,12 +80,19 @@ final class MeiliSchemaUpdateCommand extends Command
             }
         }
 
+// constructor-inject ResolvedEmbeddersProvider $embedders
+
+
         foreach ($targets as $name) {
             $io->section(sprintf('Processing index "%s"', $name));
 //            $uid = $this->prefixed($name);
 
             $settings = $this->meili->getRawIndexSetting($name);
-            $index = $this->meili->getIndex($this->meili->getPrefixedIndexName($name));
+
+            $embedders = $this->embeddersProvider->forMeili();
+//            $task = $index->updateEmbedders($embedders);
+
+            $index = $this->meili->getIndex($this->meili->getPrefixedIndexName($name), $settings['primaryKey']??'id');
             $pending = $this->pendingTasks($name);
             if (!$reset && $pending > 0) {
                 $io->error(sprintf('Index "%s" has %d pending tasks. Re-run with --reset.', $index->getUid(), $pending));
@@ -88,38 +101,95 @@ final class MeiliSchemaUpdateCommand extends Command
 
             if ($reset) {
                 $io->warning('Reset: canceling tasks and deleting index…');
-                $this->cancelTasks($index->getUid(), $io);
+//                $this->cancelTasks($index->getUid(), $io);
                 $this->deleteIndexIfExists($index->getUid(), $io);
             }
 
-            if (!$force) {
-                $io->note('Dry run (no --force): settings NOT applied.');
-                continue;
+//            if (!$force) {
+//                $io->note('Dry run (no --force): settings NOT applied.');
+//                continue;
+//            }
+
+            if ($force) {
+                $task = new Task($index->updateSettings($settings['schema']));
+                $io->writeln(sprintf('updateSettings taskUid=%s', (string)$task->taskUid));
             }
 
-            $task = $index->updateSettings($settings['schema']);
-            $embedders = $settings['embedders'] ?? [];
+            $totalTokens = [];
+            $embedderKeys = $settings['embedders'] ?? [];
             if ($embedders !== []) {
-                dd($embedders);
                 // resolve api keys from params if provided as parameter names
                 foreach ($embedders as $name => &$cfg) {
                     if (!empty($cfg['apiKeyParameter'])) {
                         $paramName = $cfg['apiKeyParameter'];
-                        $cfg['apiKey'] = $this->params->get($paramName) ?? getenv($paramName) ?? null;
+//                        $cfg['apiKey'] = $this->params->get($paramName) ?? getenv($paramName) ?? null;
+                        $cfg['apiKey'] = 'API_KEY'; // getenv($paramName) ?? null;
+
+                        if (!$cfg['apiKey']) {
+                            throw new \RuntimeException("API Key parameter ($paramName) not defined");
+                        }
                         unset($cfg['apiKeyParameter']);
                     }
                 }
                 // Wrap into the structure Meilisearch expects: [ name => [ ...config... ] ]
-                $task = $index->updateEmbedders($embedders);
-                $res  = $this->meiliService->waitForTask($task);
-                if (($res['status'] ?? null) !== 'succeeded') {
-                    throw new \RuntimeException('Embedders update failed: '.json_encode($res));
+
+                if ($embedderKeys) {
+                    $embeddersForThisIndex = [];
+                    foreach ($embedderKeys as $key) {
+                        $embeddersForThisIndex[$key] = $embedders[$key];
+                    }
+                    dump($embeddersForThisIndex);
+                    if ($cost) {
+                        foreach ($embeddersForThisIndex as $embedderName => $embedder) {
+                            $totalTokens[$embedderName] = 0;
+                            $templates[$embedderName] = new Template();
+                            $templates[$embedderName]->parse($embedder['documentTemplate']);
+                        }
+
+                        // iterate through the records, render the liquid template, and pass to totenizer estmiate
+                        // @todo: batches, etc.  Argh. Should this be a separate command?
+                        $iterator = $this->entityManager->getRepository($settings['class'])->createQueryBuilder('e')->select('e')
+                            ->setMaxResults(3)
+                            ->getQuery()
+                            ->toIterable();
+                        foreach ($iterator as $e) {
+                            // chicken and egg -- we want to get the data from meili, it's exact, but we don't want to add it if the embedder is active.
+                            $data = $this->payloadBuilder->build($e, $settings['persisted']);
+//                            $data = $this->normalizer->normalize($e, 'array');
+//                            dump($data);
+                            foreach ($embeddersForThisIndex as $embedderName => $embedder) {
+                                $text = $templates[$embedderName]->render(['doc' => $data]);
+
+                                $provider = new EncoderProvider();
+                                $encoder = $provider->getForModel($embedder['model']); // or 'gpt-3.5-turbo'
+                                $tokens = $encoder->encode($text);
+                                $tokenCount = count($tokens);
+                                $totalTokens[$embedderName] += $tokenCount;
+                                dump($embedder['model'], $embedderName, $tokenCount);
+                            }
+                        }
+                        dump($totalTokens);
+                        foreach ($embeddersForThisIndex as $embedderName => $embedder) {
+                            $io->writeln("$embedderName tokens: " . $totalTokens[$embedderName]);
+                        }
+                    }
+
+                    if ($force) {
+                        $embeddersTask = new Task($index->updateEmbedders($embeddersForThisIndex));
+                        $res  = $this->meili->waitForTask($embeddersTask);
+                        if (!$embeddersTask->succeeded) {
+                            dump($embeddersTask);
+                            throw new \RuntimeException('Embedders update failed: '.json_encode($res));
+                        }
+                    }
+
+
                 }
+
             }
 
 
             $io->writeln(json_encode($settings['schema'], JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
-            $io->writeln(sprintf('updateSettings taskUid=%s', (string)($task['taskUid'] ?? 'unknown')));
 
             try {
                 $this->meili->waitForTask($task['taskUid'] ?? 0, $index, true, 50);
@@ -131,51 +201,4 @@ final class MeiliSchemaUpdateCommand extends Command
 
         return Command::SUCCESS;
     }
-
-    /** @return string[] */
-    private function resolveTargets(?string $index, ?string $class): array
-    {
-        $classes = array_keys($this->meili->indexedByClass());
-        $names = array_keys($this->meili->getRawIndexSettings());
-        if ($index) {
-            $names = array_filter($names, static fn($n) => $n === $index);
-        }
-        if ($class) {
-            $names = array_values(array_filter($classes, function ($n) use ($class) {
-                return ($this->indexEntities[$n] ?? null) === $class
-                    || str_ends_with($this->indexEntities[$n] ?? '', '\\' . ltrim($class, '\\'));
-            }));
-        }
-        return $names;
-    }
-
-        private function deleteIndexIfExists(string $uid, SymfonyStyle $io): void
-    {
-        try {
-            $task = $this->meili->index($uid)->delete();
-            $io->writeln(sprintf('delete index taskUid=%s', (string)($task['taskUid'] ?? 'unknown')));
-            try { $this->meili->waitForTask($task['taskUid'] ?? 0, 2000, 50); } catch (\Throwable) {}
-        } catch (\Meilisearch\Exceptions\ApiException $e) {
-            if ($e->getCode() === 404) {
-                $io->writeln('Index did not exist.');
-                return;
-            }
-            throw $e;
-        }
-    }
-
-    private function pendingTasks(string $uid): int
-    {
-        $resp = $this->meili->getTasks($uid,  MeiliTaskStatus::ACTIVE);
-
-        return \count($resp['results'] ?? []);
-    }
-
-    private function cancelTasks(string $uid, SymfonyStyle $io): void
-    {
-        $resp = $this->meili->cancelTasks(['indexUids' => [$uid]]);
-        $io->writeln(sprintf('cancelTasks taskUid=%s', (string)($resp['taskUid'] ?? 'unknown')));
-        try { $this->meili->waitForTask($resp['taskUid'] ?? 0, 2000, 50); } catch (\Throwable) {}
-    }
-
 }

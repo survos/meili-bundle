@@ -117,6 +117,7 @@ final class MeiliIndexPass implements CompilerPassInterface
                         break; // at most one per class
                     }
 
+
                     // 1) Ensure every MeiliIndex::filterable has a facet config (defaults when not annotated)
                     foreach ($filterable as $field) {
                         if (!isset($facetMap[$field])) {
@@ -126,17 +127,14 @@ final class MeiliIndexPass implements CompilerPassInterface
 
 // 2) Order facets: first by MeiliIndex::filterable order, then by class declaration order
                     $facetMap = $this->orderFacets($facetMap, $filterable);
-
-
-                    // collect raw embedder array to persist and later push in schema:update
-                    $embeddersArray = [];
-                    foreach ($cfg->embedders as $emb) {
-                        $embeddersArray[$emb->name] = array_filter([
-                            'source'           => $emb->source,
-                            'model'            => $emb->model,
-                            'apiKeyParameter'  => $emb->apiKeyParameter, // resolve later
-                            'documentTemplate' => $emb->documentTemplate,
-                        ], static fn($v) => $v !== null);
+                    // check for invalid facets
+                    foreach (array_keys($facetMap) as $field) {
+                        if (!in_array($field, $filterable, true)) {
+                            // Make it a hard error in strict mode:
+                            throw new \InvalidArgumentException(
+                                sprintf('[Survos/Meili] Facet "%s" is not listed in MeiliIndex::filterable for "%s".', $field, $name)
+                            );
+                        }
                     }
 
                     $indexSettings[$class][$name] = [
@@ -145,7 +143,7 @@ final class MeiliIndexPass implements CompilerPassInterface
                         'persisted'  => (array) $cfg->persisted,
                         'class'      => $class,
                         'facets'     => $facetMap,
-                        'embedders'  => $embeddersArray, // <— NEW
+                        'embedders'  => $cfg->embedders,
                     ];
                 }
             }

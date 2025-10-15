@@ -1,0 +1,116 @@
+/* Survos Meili “Instant” layout and facet styles */
+
+/* ---- Layout ---- */
+
+/* Desktop grid: sidebar 320 px + flexible main; single column on mobile */
+.insta-grid {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 1rem;
+}
+@media (max-width: 991.98px) {
+  .insta-grid { grid-template-columns: 1fr; }
+}
+
+/* Sticky sidebar on large screens */
+.facet-sticky {
+  position: sticky;
+  top: 1rem;
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  padding-right: .25rem;
+}
+@media (max-width: 991.98px) {
+  .facet-sticky { position: static; max-height: none; overflow: visible; }
+}
+
+/* Neutralize Bootstrap offcanvas on desktop so grid width controls layout */
+@media (min-width: 992px) {
+  #facetDrawer.offcanvas,
+  #facetDrawer.offcanvas-lg {
+    position: static !important;
+    transform: none !important;
+    visibility: visible !important;
+    width: auto !important;
+    max-width: none !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+  #facetDrawer.offcanvas-lg .offcanvas-body {
+    padding: 0 !important;
+  }
+}
+.insta-grid > main { min-width: 0; }
+
+/* ---- Facet headers ---- */
+.facet-block  { margin-bottom: 1.1rem; }
+.facet-header { display:flex; align-items:center; gap:.5rem; }
+.facet-title  { font-weight:600; flex:1 1 auto; min-width:0; }
+.facet-actions{ display:inline-flex; gap:.25rem; margin-left:auto; }
+
+.btn-xxs { padding:2px 4px; line-height:1; }
+.btn-icon svg { width:16px; height:16px; vertical-align:-2px; }
+.btn-ghost { background:transparent; border:0; color:var(--bs-secondary-color); }
+.btn-ghost[aria-pressed="true"] { color:var(--bs-primary); }
+
+.facet-collapse svg { width:16px; height:16px; transition:transform .15s ease; }
+.facet-collapse[aria-expanded="false"] svg { transform:rotate(-90deg); }
+.facet-body { margin-top:.5rem; }
+
+/* ---- InstantSearch tweaks ---- */
+
+/* RangeSlider: prevent clipped digits */
+.ais-RangeSlider,
+.ais-RangeSlider .rheostat,
+.ais-RangeSlider .rheostat-background,
+.ais-RangeSlider .rheostat-progress {
+  overflow: visible !important;
+}
+.ais-RangeSlider { padding-right:.5rem; }
+
+/* RefinementList readability */
+.ais-RefinementList-label { display:flex; align-items:center; gap:.5rem; }
+.ais-RefinementList-count { margin-left:.25rem; font-size:.9rem; color:var(--bs-secondary-color); }
+.ais-RefinementList-showMore { background:none; border:0; padding:0; color:var(--bs-primary); }
+
+/* Base font sanity */
+html { font-size:16px; }
+:root {
+  --bs-body-font-size: 1rem;
+  --tblr-font-size-base: 1rem;
+}
+body { font-size: var(--bs-body-font-size); }
+
+/* InstantSearch inputs: inherit normal text size */
+.ais-SearchBox-input,
+.ais-RefinementList-input,
+.ais-Menu-searchBox .ais-SearchBox-input { font-size: inherit; }
+
+/* Mobile drawer width */
+@media (max-width: 991.98px) {
+  #facetDrawer.offcanvas { --bs-offcanvas-width: 85vw; }
+}
+
+
+/* Make the offcanvas column behave like a normal block on desktop, no matter what */
+@media (min-width: 992px){
+  #facetDrawer.offcanvas.offcanvas-lg{
+    display: block !important;
+    position: static !important;
+    transform: none !important;
+    visibility: visible !important;
+    width: auto !important;
+    max-width: none !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+  #facetDrawer.offcanvas-lg .offcanvas-body{ padding: 0 !important; }
+}
+
+/* Ensure the grid actually renders two columns on desktop */
+.insta-grid{
+  display: grid !important;
+  grid-template-columns: 320px minmax(0, 1fr) !important;
+  gap: 1rem !important;
+}
+.insta-grid > main{ min-width: 0 !important; }

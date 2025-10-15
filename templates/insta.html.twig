@@ -75,48 +75,50 @@
 
             <div class="insta-grid">
                 <aside {{ stimulus_target(_sc, 'refinementList') }}>
+
                     {# Render each facet as: header row (title + sort select) + mount div #}
                     {% for name, conf in indexConfig.facets %}
                         <div class="facet-block mb-5" data-facet-block>
                             <div class="facet-header">
-                                <button class="facet-collapse btn btn-ghost btn-xxs p-0 me-2"
-                                        type="button"
-                                        data-collapse-control
-                                        data-attribute="{{ name }}"
-                                        aria-expanded="{{ (conf.collapsed is same as(true)) ? 'false' : 'true' }}"
-                                        title="Collapse/Expand">
-                                    {{ ux_icon('tabler:chevron-down')|raw }}
-                                </button>
+                                <h3 class="facet-title h6 m-0">{{ conf.label ?? name }}</h3>
 
-                                <div class="facet-title">{{ conf.label ?? name }}</div>
-
-                                {# compact sort controls ONLY for list-like widgets #}
                                 {% set widget = conf.widget ?? conf.type ?? 'RefinementList' %}
-                                {% if widget in ['RefinementList', 'Menu'] %}
+                                {% if widget in ['RefinementList','Menu'] %}
                                     {% set initialSort = conf.sortMode|default('count') %}
-                                    <span class="facet-sort-icons ms-auto d-inline-flex align-items-center gap-1"
-                                          data-attribute="{{ name }}">
-        <button type="button"
-                class="btn btn-ghost btn-icon btn-xxs"
-                title="Sort by count"
-                data-sort-toggle
-                data-attribute="{{ name }}"
-                data-mode="count"
-                aria-pressed="{{ initialSort == 'count' ? 'true' : 'false' }}">
-          {{ ux_icon('tabler:numbers')|raw }}
-        </button>
-        <button type="button"
-                class="btn btn-ghost btn-icon btn-xxs"
-                title="Sort by name"
-                data-sort-toggle
-                data-attribute="{{ name }}"
-                data-mode="name"
-                aria-pressed="{{ initialSort in ['name','alpha'] ? 'true' : 'false' }}">
-          {{ ux_icon('tabler:letters-case')|raw }}
-        </button>
-      </span>
+                                    <span class="facet-actions" data-attribute="{{ name }}">
+      <button type="button"
+              class="btn btn-ghost btn-icon btn-xxs facet-sort-toggle"
+              title="Toggle sort (count ⇆ name)"
+              data-sort-toggle
+              data-attribute="{{ name }}"
+              data-mode="{{ initialSort }}"
+              aria-pressed="{{ initialSort == 'name' ? 'true' : 'false' }}">
+        {# show an icon hint; letters-case when name, numbers when count #}
+          {{ initialSort in ['name','alpha'] ? ux_icon('tabler:letters-case')|raw : ux_icon('tabler:numbers')|raw }}
+      </button>
+
+      <button class="facet-collapse btn btn-ghost btn-xxs p-0"
+              type="button"
+              data-collapse-control
+              data-attribute="{{ name }}"
+              aria-expanded="{{ (conf.collapsed is same as(true)) ? 'false' : 'true' }}"
+              title="Collapse/Expand">
+        {{ ux_icon('tabler:chevron-down')|raw }}
+      </button>
+    </span>
+                                {% else %}
+                                    <span class="facet-actions">
+      <button class="facet-collapse btn btn-ghost btn-xxs p-0"
+              type="button"
+              data-collapse-control
+              data-attribute="{{ name }}"
+              aria-expanded="{{ (conf.collapsed is same as(true)) ? 'false' : 'true' }}"
+              title="Collapse/Expand">
+        {{ ux_icon('tabler:chevron-down')|raw }}
+      </button>
+    </span>
                                 {% endif %}
-                            </div> {# <-- close the header BEFORE the body #}
+                            </div>
 
                             <div class="facet-body mt-2">
                                 <div
@@ -143,6 +145,26 @@
                 </aside>
 
                 <main>
+
+                    {% if embedder|default(false) %}
+                        <div class="semantic-toolbar d-flex align-items-center gap-2 mb-3">
+                            <span class="badge text-bg-secondary">{{ embedder }}</span>
+                            <label class="small text-muted" for="semantic-range">Semantic</label>
+                            {% set initialSemantic = (app.request.get('semantic') ?? 30) %}
+                            <input
+                                    {{ stimulus_action(_sc, 'semantic', 'change') }}
+                                    type="range"
+                                    min="0" max="100" step="1"
+                                    value="{{ initialSemantic }}"
+                                    style="width: 180px;"
+                            >
+                            <output {{ stimulus_target(_sc, 'semanticOutput') }} class="small text-muted">{{ initialSemantic }}%</output>
+
+                            {# Sort-by sits right here #}
+                            <div class="ms-3" {{ stimulus_target(_sc, 'sortBy') }}></div>
+                        </div>
+                    {% endif %}
+
                     <div class="mb-3 d-flex gap-2 align-items-center">
                         <div class="flex-grow-1" {{ stimulus_target(_sc, 'searchBox') }}></div>
                         <div {{ stimulus_target(_sc, 'reset') }}></div>

@@ -2,21 +2,18 @@ import { Controller } from '@hotwired/stimulus';
 import * as StimAttrs from 'stimulus-attributes';
 import instantsearch from 'instantsearch.js';
 import { instantMeiliSearch } from '@meilisearch/instant-meilisearch';
-import Twig from 'twig';
+import Twig from 'twig'; // AssetMapper maps to browser ESM
 
 import {
   searchBox, infiniteHits, stats, pagination,
   currentRefinements, clearRefinements, hitsPerPage, sortBy, configure
 } from 'instantsearch.js/es/widgets';
 
-// our modules
 import { installTwigAPI } from './insta_twig.js';
-import {
-  safeParse, stripProtocol, escapeHtml, normalizeConfig
-} from './insta_helpers.js';
+import { safeParse, stripProtocol, escapeHtml, normalizeConfig } from './insta_helpers.js';
 import { mountFacetFromNode } from './insta_facets.js';
 
-// optional Routing for path() helper
+// Optional Routing for path() helper (ok as top-level await in ESM)
 let Routing = null;
 try {
   const module = await import('fos-routing');
@@ -26,16 +23,22 @@ try {
   Routing.setData(RoutingData);
 } catch { /* optional */ }
 
-// install Twig helpers once
 installTwigAPI({ Routing, StimAttrs });
 
+const DBG = (...a) => console.debug('[insta]', ...a);
+
 export default class extends Controller {
-  static targets = ['searchBox','hits','sort','reset','pagination','refinementList','stats'];
+  static targets = [
+    'searchBox','hits','reset','pagination','refinementList','stats',
+    'semanticSlider','semanticOutput','sortBy'
+  ];
+
   static values = {
     serverUrl: String,
     serverApiKey: String,
     indexName: String,
     embedderName: String,
+    semanticRatio: Number, // 0.0–1.0
     templateUrl: String,
     userLocale: { type: String, default: 'en' },
     hitClass: { type: String, default: 'grid-3' },
@@ -55,17 +58,51 @@ export default class extends Controller {
     this.sorting = safeParse(this.sortingJsonValue, []);
     this.config  = normalizeConfig( safeParse(this.configJsonValue, {}) );
 
-    this.regionNames   = new Intl.DisplayNames([this.userLocaleValue], { type: 'region' });
-    this.languageNames = new Intl.DisplayNames([this.userLocaleValue], { type: 'language' });
+    this._globalFacetCounts = {};
+    this.search = null;
 
-    this._facetWidgets = new Map();
-    this._globalFacetCounts = {}; // full-index baseline counts
-    this._is = null;
+    // Options snapshot used when creating the meili client
+    this._meiliOptions = {
+      meiliSearchParams: {
+        keepZeroFacets: false,
+        showRankingScore: true,
+        showRankingScoreDetails: true
+        // 'hybrid' injected when embedder present
+      }
+    };
+
+    // Debounce for typing only (avoid vectorizing partial words)
+    this._timer = null;
+    this._debounce = (fn, ms = 350) => (...args) => {
+      clearTimeout(this._timer);
+      this._timer = setTimeout(() => fn(...args), ms);
+    };
+    this._debouncedQueryHook = this._debounce((q, hook) => hook(q), 350);
+
+    this._rebuilding = false;
   }
 
   async connect() {
     await this._loadTemplate();
+
+    // Seed hybrid BEFORE creating the client (if embedder configured)
+    if (this.hasEmbedderNameValue && !this._meiliOptions.meiliSearchParams.hybrid) {
+      const percent = this.hasSemanticSliderTarget ? Number(this.semanticSliderTarget.value) || 30 : 30;
+      const ratio = Math.max(0, Math.min(100, percent)) / 100;
+      this.semanticRatioValue = ratio;
+      this._meiliOptions.meiliSearchParams.hybrid = {
+        embedder: this.embedderNameValue,
+        semanticRatio: ratio
+      };
+      DBG('hybrid:init', this._meiliOptions.meiliSearchParams.hybrid);
+    }
+
     await this._startSearch();
+  }
+
+  disconnect() {
+    try { this.search?.dispose(); } catch {}
+    this.search = null;
   }
 
   async _loadTemplate() {
@@ -77,28 +114,62 @@ export default class extends Controller {
     this.template = Twig.twig({ data });
   }
 
-  async _startSearch() {
+  _createClient() {
     const { searchClient } = instantMeiliSearch(
       this.serverUrlValue,
       this.serverApiKeyValue,
-      { meiliSearchParams: { keepZeroFacets: false, showRankingScore: true, showRankingScoreDetails: true, semantic_ratio: 0.5 } }
+      this._meiliOptions
     );
 
+    // Wrap to log outgoing queries and responses
+    return {
+      ...searchClient,
+      search: (requests, ...rest) => {
+        try {
+          const q = Array.isArray(requests) ? requests.map((r) => ({
+            indexUid: r.indexName || r.indexUid,
+            params: r.params || {},
+          })) : requests;
+          DBG('multi-search:REQUEST', JSON.parse(JSON.stringify(q)));
+          DBG('client:meiliSearchParams', JSON.parse(JSON.stringify(this._meiliOptions.meiliSearchParams)));
+        } catch {}
+        return searchClient.search(requests, ...rest).then((resp) => {
+          try {
+            const out = (resp?.results || []).map((r) => ({
+              indexUid: r.indexUid || r.index,
+              hits: r.hits?.length ?? 0,
+              sample: (r.hits || []).slice(0, 3).map(h => ({
+                id: h.id ?? h.objectID,
+                title: h.title ?? h.name ?? h._formatted?.title ?? null
+              }))
+            }));
+            DBG('multi-search:RESPONSE', out);
+          } catch {}
+          return resp;
+        });
+      }
+    };
+  }
+
+  async _startSearch() {
     const is = instantsearch({
       indexName: this.indexNameValue,
-      searchClient,
+      searchClient: this._createClient(),
       routing: this.config?.instantsearch?.routing ?? true,
       insights: this.config?.instantsearch?.insights ?? false
     });
-    this._is = is;
-    window.search = is;
+    this.search = is;
+    window.search = is; // handy in DevTools
 
     await this._prefetchGlobalFacets().catch(() => {});
 
-    is.addWidgets([
-      searchBox({ container: this.searchBoxTarget, placeholder: `${this.indexNameValue} on ${stripProtocol(this.serverUrlValue)}` }),
+    const widgets = [
+      searchBox({
+        container: this.searchBoxTarget,
+        placeholder: `${this.indexNameValue} on ${stripProtocol(this.serverUrlValue)}`,
+        queryHook: this._debouncedQueryHook
+      }),
       ...(this.hasStatsTarget ? [ stats({ container: this.statsTarget }) ] : []),
-      ...(this.hasSortTarget ? [ currentRefinements({ container: this.sortTarget }) ] : []),
       ...(this.hasResetTarget ? [ clearRefinements({
         container: this.resetTarget,
         clearsQuery: true,
@@ -113,28 +184,54 @@ export default class extends Controller {
           { value: 50, label: '50 / page' }
         ]
       }),
-      sortBy({ container: document.createElement('div'), items: this.sorting }),
       configure({ showRankingScore: true, hitsPerPage: 20 }),
-      ...(this.hasHitsTarget ? [ (
-        await import('instantsearch.js/es/widgets')).infiniteHits({
+      ...(this.hasHitsTarget ? [ infiniteHits({
         container: this.hitsTarget,
-        cssClasses: { item: this.hitClassValue, loadMore: 'btn btn-primary', disabledLoadMore: 'btn btn-secondary disabled' },
+        cssClasses: {
+          item: this.hitClassValue,
+          loadMore: 'btn btn-primary',
+          disabledLoadMore: 'btn btn-secondary disabled'
+        },
         templates: {
           item: (hit) => {
             try {
               return this.template
-                ? this.template.render({ hit, icons: this.icons, globals: this.globals, hints: (this.config?.hints || {}), view: (this.config?.view || {}) })
+                ? this.template.render({
+                    hit,
+                    icons: this.icons,
+                    globals: this.globals,
+                    hints: (this.config?.hints || {}),
+                    view: (this.config?.view || {})
+                  })
                 : `<pre>${escapeHtml(JSON.stringify(hit, null, 2))}</pre>`;
-            } catch (e) { return `<pre>${escapeHtml(e.message)}</pre>`; }
+            } catch (e) {
+              return `<pre>${escapeHtml(e.message)}</pre>`;
+            }
           }
         }
       }) ] : []),
       ...(this.hasPaginationTarget ? [ pagination({ container: this.paginationTarget }) ] : [])
-    ]);
+    ];
 
-    // Mount only real facet nodes
+    // SortBy next to the slider
+    if (this.hasSortByTarget) {
+      widgets.push(sortBy({
+        container: this.sortByTarget,
+        items: this.sorting
+      }));
+    }
+
+    is.addWidgets(widgets);
+
+    // Sidebar facets
     const nodes = this.refinementListTarget?.querySelectorAll?.('[data-attribute][data-widget]') || [];
     nodes.forEach((el) => mountFacetFromNode(this, is, el));
+
+    // Initialize slider output
+    if (this.hasSemanticSliderTarget && this.hasSemanticOutputTarget) {
+      const p = Number(this.semanticSliderTarget.value) || 30;
+      this.semanticOutputTarget.textContent = `${Math.round(p)}%`;
+    }
 
     is.start();
   }
@@ -153,5 +250,44 @@ export default class extends Controller {
 
     const res = await index.search('', { facets, hitsPerPage: 0, limit: 0 });
     this._globalFacetCounts = res.facetDistribution || {};
+  }
+
+  /**
+   * Slider action — **change** only (wire in Twig: data-action="change->...#semantic").
+   * Rebuilds the client with updated meiliSearchParams.hybrid and restarts search.
+   */
+  async semantic(event) {
+    console.log(event);
+    if (!this.hasEmbedderNameValue) return;
+
+    const el = this.hasSemanticSliderTarget ? this.semanticSliderTarget : (event?.currentTarget ?? null);
+    const percent = Number(el?.value ?? 0) || 0;
+    const clamped = Math.max(0, Math.min(100, percent));
+    const ratio = clamped / 100;
+
+    if (this.semanticRatioValue === ratio) return;
+
+    this.semanticRatioValue = ratio;
+    if (this.hasSemanticOutputTarget) {
+      this.semanticOutputTarget.textContent = `${Math.round(clamped)}%`;
+    }
+
+    // Update and log the actual params we will use to build the client
+    this._meiliOptions.meiliSearchParams.hybrid = {
+      embedder: this.embedderNameValue,
+      semanticRatio: ratio
+    };
+    DBG('hybrid:change', this._meiliOptions.meiliSearchParams.hybrid);
+
+    // Full rebuild (dispose + start new) to ensure the adapter snapshots new params
+    if (this._rebuilding) return;
+    this._rebuilding = true;
+    try {
+      try { this.search?.dispose(); } catch {}
+      this.search = null;
+      await this._startSearch();
+    } finally {
+      this._rebuilding = false;
+    }
   }
 }

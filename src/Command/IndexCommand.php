@@ -13,6 +13,8 @@ use Survos\MeiliBundle\Service\DoctrinePrimaryKeyStreamer;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\SettingsService;
 use Survos\MeiliBundle\Util\BabelLocaleScope;
+use Survos\MeiliBundle\Util\EmbedderConfig;
+use Survos\MeiliBundle\Util\ResolvedEmbeddersProvider;
 use Survos\MeiliBundle\Util\TextFieldResolver;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -29,6 +31,7 @@ use Symfony\Component\Yaml\Yaml;
 
 #[AsCommand(
     name: 'meili:index',
+    aliases: ['meili:populate'],
     description: 'Index entities (per-locale) for Meilisearch'
 )]
 class IndexCommand extends MeiliBaseCommand
@@ -45,9 +48,10 @@ class IndexCommand extends MeiliBaseCommand
         #[Autowire('%kernel.enabled_locales%')] private array $enabledLocales = [],
         #[Autowire('%kernel.default_locale%')] private string $defaultLocale = 'en',
         private TextFieldResolver $textFieldResolver,
+        protected ResolvedEmbeddersProvider $resolvedEmbeddersProvider,
         private ?BabelLocaleScope $localeScope = null, // optional (no-op if Babel not installed)
     ) {
-        parent::__construct($meiliService, $logger);
+        parent::__construct($meiliService,$resolvedEmbeddersProvider);
     }
 
     /**
@@ -86,6 +90,9 @@ class IndexCommand extends MeiliBaseCommand
 
         #[Option('Index all registered Meili-managed entities when no class is given', 'all')]
         ?bool $all = null,
+
+        #[Option('calculate the cost of the embedders.  Works with --dry')]
+        ?bool $cost = null,
 
         #[Option('Create/Update index settings before indexing', 'update-settings')]
         ?bool $updateSettings = null,
@@ -268,7 +275,7 @@ class IndexCommand extends MeiliBaseCommand
      * - searchableAttributes = fields tagged #[Translatable] (or #[Searchable] fallback)
      * - best-effort indexLanguages (ignore if unsupported)
      */
-    private function configureIndex(string $class, Indexes $index, string $language): void
+    private function configureIndexOLD(string $class, Indexes $index, string $language): void
     {
         $cfg = $this->settingsService->getSettingsFromAttributes($class);
 
@@ -355,7 +362,7 @@ class IndexCommand extends MeiliBaseCommand
                 transport: $transport,
                 primaryKeyName: $primaryKey,
                 locale: $locale,
-                indexName: $indexName
+                indexName: $indexName,
             );
             // Pass locale + index name so consumer writes to correct index & scopes Babel before normalization
             $this->messageBus->dispatch(

@@ -1,0 +1,148 @@
+{% extends "base.html.twig" %}
+
+{% block stylesheets %}
+  {{ parent() }}
+  <link rel="stylesheet" type="text/css" href="{{ asset('bundles/survosmeili/style.css') }}">
+  <link rel="stylesheet" type="text/css" href="{{ asset('bundles/survosmeili/styles/instant.css') }}">
+
+  {#  <link rel="stylesheet" href="{{ asset('assets/styles/instant.css') }}">#}
+{% endblock %}
+
+{% block body %}
+  {% set _sc = '@survos/meili-bundle/insta' %}
+  {% set _sc_modal = '@survos/meili-bundle/json' %}
+
+  {% set globals = {
+    serverUrl: server,
+    serverApiKey: apiKey,
+    indexName: indexName,
+    _sc_modal: _sc_modal,
+    debug: app.request.get('debug', false) ? true : false
+  } %}
+
+  {% set icons = {
+    json: ux_icon('si:json-duotone'),
+    bug: ux_icon('tabler:bug'),
+    wikidata: ux_icon('openmoji:wikidata'),
+    website: ux_icon('fluent-mdl2:website'),
+    facebook: ux_icon('mdi:facebook'),
+  } %}
+
+  {% set templateUrl = path('meili_template', { templateName: templateName }) %}
+
+  <div
+    {{ stimulus_controller(_sc, {
+      serverUrl: server,
+      serverApiKey: apiKey,
+      indexName: indexName,
+      embedderName: embedder,
+      hitClass: app.request.get('class', 'grid-' ~ app.request.get('grid')|default(2)),
+      sortingJson: sorting|default([])|json_encode,
+      globalsJson: globals|json_encode,
+      iconsJson: icons|json_encode,
+      configJson: indexConfig|json_encode,
+      templateUrl: templateUrl
+    }) }}
+    class="container-fluid py-4"
+  >
+    <div
+      {{ stimulus_controller(_sc_modal, {
+        serverUrl: server,
+        serverApiKey: apiKey,
+        indexName: indexName,
+        globalsJson: globals|json_encode
+      }) }}
+    >
+      {{ include('@SurvosMeili/components/_modal.html.twig', { _sc_modal: _sc_modal }) }}
+
+      <!-- Mobile filter button -->
+      <div class="d-lg-none d-flex justify-content-between align-items-center mb-2">
+        <button class="btn btn-outline-secondary" type="button"
+                data-bs-toggle="offcanvas" data-bs-target="#facetDrawer" aria-controls="facetDrawer">
+          {{ ux_icon('tabler:adjustments-alt')|raw }} Filters
+        </button>
+      </div>
+
+      <div class="insta-grid">
+        <!-- Sidebar: offcanvas on mobile, static on lg+ -->
+        <div id="facetDrawer" class="offcanvas offcanvas-start offcanvas-lg" tabindex="-1" aria-labelledby="facetDrawerLabel">
+          <div class="offcanvas-header d-lg-none">
+            <h5 id="facetDrawerLabel" class="offcanvas-title">Filters</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+          </div>
+          <div class="offcanvas-body facet-sticky">
+            <nav aria-label="Refinements" {{ stimulus_target(_sc, 'refinementList') }}>
+              {% for name, conf in indexConfig.facets %}
+                {% set widget = conf.widget ?? conf.type ?? 'RefinementList' %}
+                {% set initialSort = conf.sortMode|default('count') %}
+
+                <section class="facet-block" data-facet-block>
+                  <div class="facet-header">
+                    <h3 class="facet-title h6 m-0">{{ conf.label ?? name }}</h3>
+                    <span class="facet-actions" data-attribute="{{ name }}">
+                      {% if widget in ['RefinementList','Menu'] %}
+                        <button type="button"
+                                class="btn btn-ghost btn-icon btn-xxs facet-sort-toggle"
+                                title="Toggle sort (count ⇆ name)"
+                                data-sort-toggle
+                                data-attribute="{{ name }}"
+                                data-mode="{{ initialSort }}"
+                                aria-pressed="{{ initialSort in ['name','alpha'] ? 'true' : 'false' }}">
+                          {{ initialSort in ['name','alpha'] ? ux_icon('tabler:letters-case')|raw : ux_icon('tabler:numbers')|raw }}
+                        </button>
+                      {% endif %}
+                      <button class="btn btn-ghost btn-icon btn-xxs facet-collapse p-0"
+                              type="button"
+                              data-collapse-control
+                              data-attribute="{{ name }}"
+                              aria-expanded="{{ (conf.collapsed is same as(true)) ? 'false' : 'true' }}"
+                              title="Collapse/Expand">
+                        {{ ux_icon('tabler:chevron-down')|raw }}
+                      </button>
+                    </span>
+                  </div>
+
+                  <div class="facet-body mt-2">
+                    <div
+                      data-attribute="{{ name }}"
+                      data-widget="{{ widget }}"
+                      {% if conf.sortMode is defined %} data-sort-mode="{{ conf.sortMode }}"{% endif %}
+                      {% if conf.searchable is same as(true) %} data-searchable="true"{% elseif conf.searchable is same as(false) %} data-searchable="false"{% endif %}
+                      {% if conf.limit is defined and conf.limit is not null %} data-limit="{{ conf.limit }}"{% endif %}
+                      {% if conf.showMoreLimit is defined and conf.showMoreLimit is not null %} data-show-more-limit="{{ conf.showMoreLimit }}"{% endif %}
+                      {% if conf.lookup is defined and conf.lookup is iterable %} data-lookup='{{ conf.lookup|json_encode }}'{% endif %}
+
+                      {% if widget == 'RangeSlider' %}
+                        {% if conf.step is defined %} data-step="{{ conf.step }}"{% endif %}
+                        {% if conf.min is defined %} data-min="{{ conf.min }}"{% endif %}
+                        {% if conf.max is defined %} data-max="{{ conf.max }}"{% endif %}
+                        {% if conf.pips is defined %} data-pips="{{ conf.pips ? 'true' : 'false' }}"{% endif %}
+                        {% if conf.tooltips is defined %} data-tooltips='{{ conf.tooltips|json_encode }}'{% endif %}
+                      {% endif %}
+                    ></div>
+                  </div>
+                </section>
+              {% endfor %}
+            </nav>
+          </div>
+        </div>
+
+        <main>
+          <div class="mb-3 d-flex gap-2 align-items-center">
+            <div class="flex-grow-1" {{ stimulus_target(_sc, 'searchBox') }}></div>
+            <div {{ stimulus_target(_sc, 'reset') }}></div>
+          </div>
+          <div class="mb-2 small text-muted" {{ stimulus_target(_sc, 'stats') }}></div>
+          <div class="mt-4" {{ stimulus_target(_sc, 'sort') }}></div>
+
+          <div {{ stimulus_target(_sc, 'hits') }}></div>
+          <div class="mt-4" {{ stimulus_target(_sc, 'pagination') }}></div>
+        </main>
+      </div>
+    </div>
+  </div>
+
+  {# load Instant overrides last so they always win #}
+  <link rel="stylesheet" href="{{ asset('assets/styles/instant.css') }}" media="all">
+
+{% endblock %}

@@ -2,6 +2,7 @@
 
 namespace Survos\MeiliBundle;
 
+use Psr\Log\LoggerAwareInterface;
 use ReflectionClass;
 use Survos\CoreBundle\HasAssetMapperInterface;
 use Survos\CoreBundle\Traits\HasAssetMapperTrait;
@@ -35,6 +36,8 @@ use Survos\MeiliBundle\Service\MeiliPayloadBuilder;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\SettingsService;
 use Survos\MeiliBundle\Util\BabelLocaleScope;
+use Survos\MeiliBundle\Util\EmbedderConfig;
+use Survos\MeiliBundle\Util\ResolvedEmbeddersProvider;
 use Survos\MeiliBundle\Util\TextFieldResolver;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
@@ -69,6 +72,12 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             $builder->autowire($class)
                 ->setPublic(true);
         }
+
+        $builder->autowire(ResolvedEmbeddersProvider::class)
+            ->setArgument(0, $config['embedders'] ?? [])
+            ->setPublic(true);
+//        $resolved = EmbedderConfig::resolveEmbedders($config, $builder);
+//        $builder->setParameter('survos_meili.embedders', $resolved);
 
         $builder->setParameter('survos_meili.entity_dirs', $config['entity_dirs']);
         $builder->setParameter('survos_meili.prefix', $config['meiliPrefix']);
@@ -165,7 +174,18 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->scalarNode('meiliPrefix')->defaultValue('%env(default::MEILI_PREFIX)%')->end()
             ->booleanNode('passLocale')->defaultValue(false)->end()
             ->integerNode('maxValuesPerFacet')->defaultValue(1000)->end()
-
+            ->arrayNode('embedders')
+                    ->useAttributeAsKey('name')
+                    ->arrayPrototype()
+                        ->children()
+                            ->scalarNode('source')->isRequired()->cannotBeEmpty()->end()      // e.g. 'openAi'
+                            ->scalarNode('model')->isRequired()->cannotBeEmpty()->end()       // e.g. 'text-embedding-3-small'
+                            ->scalarNode('apiKey')->defaultNull()->end()                      // e.g. '%env(OPENAI_API_KEY)%'
+                            ->scalarNode('for')->defaultNull()->end()                         // optional FQCN (e.g. App\Entity\Product)
+                            ->scalarNode('template')->defaultNull()->end()                    // optional inline template
+                        ->end()
+                    ->end()
+                ->end()
             /**
              * NEW: allow multiple directories to be scanned for #[MeiliIndex].
              * Defaults to the standard Doctrine location.
@@ -235,8 +255,14 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         if ($container->hasDefinition(MeiliService::class)) {
             $def = $container->getDefinition(MeiliService::class);
             $def->setArgument('$indexedEntities', $indexedClasses);
+
 //            $def->setArgument('$indexSettings', $indexSettings);
         }
+
+        // this should happen automatically.  Maybe we should implement this for MeiliService?
+        if (0)
+        $container->registerForAutoconfiguration(LoggerAwareInterface::class)
+            ->addMethodCall('setLogger', [new Reference('logger')]);
     }
 
     private function getClassesInDirectory(string $dir): array

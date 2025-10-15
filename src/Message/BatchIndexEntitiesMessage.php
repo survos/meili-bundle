@@ -22,6 +22,8 @@ class BatchIndexEntitiesMessage
         public readonly ?string $transport=null,
         public readonly ?string $locale=null,
         public readonly ?string $indexName=null,
+        public readonly ?bool $dry=null,
+        public readonly ?bool $cost=null,
     ) {
     }
 }

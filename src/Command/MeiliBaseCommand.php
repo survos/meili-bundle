@@ -3,22 +3,33 @@ declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Command;
 
+use Doctrine\ORM\EntityManagerInterface;
 use Meilisearch\Client;
+use Psr\Log\LoggerAwareInterface;
+use Psr\Log\LoggerAwareTrait;
 use Psr\Log\LoggerInterface;
 use Survos\MeiliBundle\Meili\MeiliTaskStatus;
 use Survos\MeiliBundle\Meili\MeiliTaskType;
+use Survos\MeiliBundle\Service\MeiliPayloadBuilder;
 use Survos\MeiliBundle\Service\MeiliService;
+use Survos\MeiliBundle\Util\ResolvedEmbeddersProvider;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 
-class MeiliBaseCommand extends Command
+class MeiliBaseCommand extends Command implements LoggerAwareInterface
 {
+    use LoggerAwareTrait;
     public function __construct(
         public readonly MeiliService $meili,
-        protected ?LoggerInterface $logger=null,
+        protected ResolvedEmbeddersProvider $embeddersProvider,
+        protected EntityManagerInterface $entityManager,
+        protected NormalizerInterface $normalizer,
+        protected MeiliPayloadBuilder $payloadBuilder,
+//        protected ?LoggerInterface $logger=null,
     ) {
         parent::__construct();
     }
@@ -60,7 +71,7 @@ class MeiliBaseCommand extends Command
     protected function  deleteIndexIfExists(string $uid, SymfonyStyle $io): void
     {
         try {
-            $task = $this->meili->index($uid)->delete();
+            $task = $this->meili->getIndex($uid)->delete();
             $io->writeln(sprintf('delete index taskUid=%s', (string)($task['taskUid'] ?? 'unknown')));
             try { $this->meili->waitForTask($task['taskUid'] ?? 0, 2000, 50); } catch (\Throwable) {}
         } catch (\Meilisearch\Exceptions\ApiException $e) {
@@ -74,13 +85,17 @@ class MeiliBaseCommand extends Command
 
     public function pendingTasks(string $uid): int
     {
-        $resp = $this->meili->getTasks($uid,  ['enqueued', 'processing']);
+        $resp = $this->meili->getTasks($uid,  MeiliTaskStatus::ACTIVE);
 
         return \count($resp['results'] ?? []);
     }
 
     public function cancelTasks(string $uid, SymfonyStyle $io): void
     {
+        // @todo
+        foreach ($this->meili->getTasks($uid,  MeiliTaskStatus::ACTIVE) as $task) {
+            $this->meili->getMeiliClient()->cancelTasks($task['taskUid']);
+        }
         $resp = $this->meili->cancelTasks(['indexUids' => [$uid]]);
         $io->writeln(sprintf('cancelTasks taskUid=%s', (string)($resp['taskUid'] ?? 'unknown')));
         try { $this->meili->waitForTask($resp['taskUid'] ?? 0, 2000, 50); } catch (\Throwable) {}
