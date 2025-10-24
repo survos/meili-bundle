@@ -260,7 +260,7 @@ class MeiliService
         try {
             $index = $client->index($indexName);
 //            dd($index);
-            $task = $client->deleteIndex($indexName);
+            $task = new Task($client->deleteIndex($indexName));
             $this->waitForTask($task, $index);
 //            $this->io()->info("Deletion Task is at " . $task['status']);
             $this->logger->warning("Index " . $indexName . " has been deleted.");

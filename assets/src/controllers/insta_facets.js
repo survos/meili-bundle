@@ -4,6 +4,13 @@ import { safeParse } from './insta_helpers.js';
 /**
  * Mount a single facet widget from a DOM node prepared by Twig.
  * Node must have: data-attribute and data-widget (RefinementList|Menu|RangeSlider)
+ *
+ * Supported options on the node:
+ * - data-searchable="true|false"
+ * - data-search-mode="contains|prefix"         (default: contains)
+ * - data-limit / data-show-more-limit
+ * - data-sort-mode="count|name|alpha"
+ * - data-lookup='{ "raw":"Label", ... }'
  */
 export function mountFacetFromNode(ctrl, instantSearch, el) {
   if (!el || !el.getAttribute) return;
@@ -16,6 +23,7 @@ export function mountFacetFromNode(ctrl, instantSearch, el) {
   const limitAttr         = el.getAttribute('data-limit');
   const showMoreLimitAttr = el.getAttribute('data-show-more-limit');
   const searchableAttr    = el.getAttribute('data-searchable'); // "true" | "false" | null
+  const searchModeAttr    = el.getAttribute('data-search-mode'); // "contains" | "prefix" | null
   const lookupJson        = el.getAttribute('data-lookup') || '{}';
 
   // facet defaults (from compiled configJson if present)
@@ -31,8 +39,11 @@ export function mountFacetFromNode(ctrl, instantSearch, el) {
         ? false
         : (typeof facetConf.searchable === 'boolean' ? facetConf.searchable : false));
 
+  const searchMode = (searchModeAttr || facetConf.searchMode || 'contains').toLowerCase();
+
+  // lookup map → label transforms
   const lookup = safeParse(lookupJson, {});
-  const transformItems = (items) => {
+  const applyLookup = (items) => {
     if (!lookup || Object.keys(lookup).length === 0) return items;
     return items.map(item => ({
       ...item,
@@ -64,10 +75,54 @@ export function mountFacetFromNode(ctrl, instantSearch, el) {
     instantSearch.addWidgets([currentWidget]);
   };
 
+  // Local "contains" filter state (per facet)
+  let containsFilter = '';
+  const setContainsFilter = (s) => {
+    containsFilter = s.toLowerCase();
+    // re-render by remounting (simplest, since refinementList doesn't expose a live API)
+    remount();
+  };
+
+  // Adds a small input above the list for "contains" mode
+  const ensureContainsInput = () => {
+    if (searchMode !== 'contains') return;
+    const block = el.closest?.('.facet-block');
+    if (!block) return;
+    const header = block.querySelector('.facet-header');
+    let input = block.querySelector('.facet-search-input');
+    if (!input) {
+      input = document.createElement('input');
+      input.type = 'search';
+      input.className = 'form-control form-control-sm facet-search-input mb-2';
+      input.placeholder = 'Search in facet…';
+      // place it just below the header, before .facet-body
+      const body = block.querySelector('.facet-body');
+      body?.parentNode?.insertBefore(input, body);
+      input.addEventListener('input', (e) => setContainsFilter(e.target.value || ''));
+    }
+  };
+
   const mountList = () => {
     const sortBy = (sortMode === 'name' || sortMode === 'alpha')
       ? ['name:asc']
       : ['count:desc'];
+
+    let transformItems = (items) => applyLookup(items);
+
+    // "contains" mode → fast client-side substring filter
+    if (searchable && searchMode === 'contains') {
+      ensureContainsInput();
+      transformItems = (items) => {
+        const mapped = applyLookup(items);
+        if (!containsFilter) return mapped;
+        return mapped.filter(i =>
+          (i.label ?? i.value ?? '').toString().toLowerCase().includes(containsFilter)
+        );
+      };
+    }
+
+    // "prefix" mode → use InstantSearch built-in facet search UI
+    const useBuiltInSearch = searchable && searchMode === 'prefix';
 
     const base = {
       container: el,
@@ -75,9 +130,14 @@ export function mountFacetFromNode(ctrl, instantSearch, el) {
       limit,
       showMoreLimit,
       showMore: showMoreLimit > limit,
-      searchable,
       sortBy,
-      transformItems
+      transformItems,
+      ...(useBuiltInSearch
+        ? {
+            searchable: true,
+            searchablePlaceholder: 'Search in facet…',
+          }
+        : {})
     };
 
     currentWidget = (widgetName === 'Menu') ? menu(base) : refinementList(base);

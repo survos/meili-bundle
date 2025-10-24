@@ -1,123 +1,102 @@
-/*.ais-Hits-item {*/
-/*    width: calc(33% - 1rem);*/
-/*}*/
-.thumb-120{ width:120px; height:auto; }
-/* put once, e.g. app.css */
+/* Kneutral for any BS5 theme */
+
+/* Tighten metadata rows */
 .meta-grid{
     display:grid;
-    grid-template-columns:auto 1fr; /* label then elastic value */
+    grid-template-columns:auto 1fr;
     gap:.35rem .75rem;
-    min-width:0; /* allow children to shrink */
+    min-width:0;
 }
 .meta-key{ white-space:nowrap; }
 .meta-val{
     min-width:0;
-    overflow-wrap:anywhere;   /* breaks long tokens/URLs */
-    word-break:break-word;    /* legacy support */
+    overflow-wrap:anywhere;
+    word-break:break-word;
 }
 
+/* Multi-line clamp for overview */
 .description-clamp{
-    display:-webkit-box;            /* required */
-    -webkit-box-orient:vertical;    /* required */
-    -webkit-line-clamp:4;           /* number of lines */
-    overflow:hidden;                /* required */
-    max-width:100%;                 /* ensure it can shrink */
-    word-break:break-word;          /* help with long tokens */
+    display:-webkit-box;
+    -webkit-box-orient:vertical;
+    -webkit-line-clamp:4;
+    overflow:hidden;
+    max-width:100%;
+    word-break:break-word;
 }
-
-/* If your snippet contains block tags, make them inline so clamp works */
 .description-clamp > p,
 .description-clamp > div,
 .description-clamp > ul,
 .description-clamp > ol{
-    display:inline;
-    margin:0;
-    padding:0;
+    display:inline; margin:0; padding:0;
 }
-.description-clamp br{ display:none; } /* optional */
+.description-clamp br{ display:none; }
 
+/* Inline <mark> from highlighter should not pad */
+mark{ padding:0 !important; }
 
-mark {
-    padding: 0 !important;
+/* Responsive grid helpers (used by the hits container) */
+.grid-5{ width:calc(20% - 1rem) !important; }
+.grid-4{ width:calc(25% - 1rem) !important; }
+.grid-3{
+    width:calc(33.333% - 1rem) !important;
 }
-
-.grid-5 {
-    width: calc(20% - 1rem) !important;
+@media (max-width:1199.98px){
+    .grid-3{ width:calc(50% - 1rem) !important; }
 }
-
-.grid-4 {
-    width: calc(25% - 1rem) !important;
+@media (max-width:575.98px){
+    .grid-3{ width:calc(100% - 1rem) !important; }
 }
+.grid-2{ width:calc(50% - 1rem) !important; }
+.grid-1{ width:calc(100% - 1rem) !important; }
 
-.grid-3 {
-    width: calc(33% - 1rem) !important;
-
-    @media (max-width: 1199.98px) {
-        width: calc(50% - 1rem);
-    }
-
-    @media (max-width: 575.98px) {
-        width: calc(100% - 1rem);
-    }
+/* One/two-line truncation helpers */
+.line-limit-1,
+.line-limit-2{
+    display:-webkit-box;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
 }
+.line-limit-1{ -webkit-line-clamp:1; }
+.line-limit-2{ -webkit-line-clamp:2; }
 
-.grid-2 {
-    width: calc(50% - 1rem) !important;
-}
+/* Facet sidebar layout (optional, keep if you use the sidebar) */
+.insta-grid{ display:grid; grid-template-columns:320px minmax(0,1fr); gap:1rem; }
+@media (max-width:991.98px){ .insta-grid{ grid-template-columns:1fr; } }
+.insta-grid > main{ min-width:0; }
 
-.grid-1 {
-    width: calc(100% - 1rem) !important;
-}
-
-.icon-wrapper svg {
-    width: 1em;
-    height: 1em;
-    vertical-align: middle;
-}
-
-body {
-    background-color: skyblue;
+.facet-block{ margin-bottom:1.1rem; }
+.facet-header{ display:flex; align-items:center; gap:.5rem; }
+.facet-title{ font-weight:600; flex:1 1 auto; min-width:0; }
+.facet-actions{ display:inline-flex; gap:.25rem; margin-left:auto; }
+.facet-body{ margin-top:.5rem; }
+.facet-search-input {
+    width: 100%;
 }
 
-:root {
-    --bs-border-color: #dee2e6;
-    --bs-border-color-translucent: #dee2e6;
+/* Compact icon buttons (framework-neutral) */
+.btn-xxs{ padding:2px 4px; line-height:1; }
+.btn-icon svg{ width:16px; height:16px; vertical-align:-2px; }
+.facet-collapse svg{ width:16px; height:16px; transition:transform .15s ease; }
+.facet-collapse[aria-expanded="false"] svg{ transform:rotate(-90deg); }
+
+/* InstantSearch bits: make counts look like badges without theme coupling */
+.ais-RefinementList-label{ display:flex; align-items:center; gap:.5rem; }
+.ais-RefinementList-count{
+    display:inline-block;
+    padding:.125rem .375rem;
+    border-radius:.375rem;
+    font-size:.75rem;
+    font-weight:500;
+    background-color:rgba(0,0,0,.08);
+    color:rgba(0,0,0,.7);
+    margin-left:auto;
 }
+.ais-RefinementList-item{ padding:.25rem 0; }
 
-.line-limit-1 {
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
+/* Avoid clipped numbers in slider UIs */
+.ais-RangeSlider,
+.ais-RangeSlider .rheostat,
+.ais-RangeSlider .rheostat-background,
+.ais-RangeSlider .rheostat-progress{ overflow:visible !important; }
+.ais-RangeSlider{ padding-right:.5rem; }
 
-.line-limit-2 {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-/*/* sidebar layout */
-.insta-grid { display:grid; grid-template-columns:320px 1fr; gap:1rem; }
-.facet-block { margin-bottom: 1.1rem; }
-
-/* header: icon left, title tight, sort at right; body sits below and doesn't shift */
-.facet-header { display:flex; align-items:center; gap:.5rem; }
-.facet-collapse { flex: 0 0 auto; }
-.facet-collapse svg { width:14px; height:14px; transition: transform .15s ease; }
-.facet-collapse[aria-expanded="false"] svg { transform: rotate(-90deg); }
-.facet-title { font-weight:600; flex: 0 1 auto; }
-.facet-sort-icons { margin-left:auto; display:inline-flex; gap:.25rem; }
-.facet-body { margin-top:.5rem; }
-
-/* compact icon buttons */
-.btn-xxs { padding: 2px 4px; line-height: 1; }
-.btn-icon svg { width: 16px; height: 16px; vertical-align: -2px; }
-.btn-ghost { background: transparent; border: 0; color: var(--bs-secondary-color); }
-.btn-ghost[aria-pressed="true"] { color: var(--bs-primary); }
-
-/* refinement list polish */
-.ais-RefinementList-label { display:flex; align-items:center; gap:.5rem; }
-.ais-RefinementList-count { margin-left:.25rem; font-size:.8125rem; color: var(--bs-secondary-color); }
-.ais-RefinementList-showMore { background:none; border:0; padding:0; color: var(--bs-primary); }

@@ -25,10 +25,10 @@ class MeiliBaseCommand extends Command implements LoggerAwareInterface
     use LoggerAwareTrait;
     public function __construct(
         public readonly MeiliService $meili,
-        protected ResolvedEmbeddersProvider $embeddersProvider,
-        protected EntityManagerInterface $entityManager,
-        protected NormalizerInterface $normalizer,
-        protected MeiliPayloadBuilder $payloadBuilder,
+        protected ?ResolvedEmbeddersProvider $embeddersProvider=null,
+        protected ?EntityManagerInterface $entityManager=null,
+        protected ?NormalizerInterface $normalizer=null,
+        protected ?MeiliPayloadBuilder $payloadBuilder=null,
 //        protected ?LoggerInterface $logger=null,
     ) {
         parent::__construct();

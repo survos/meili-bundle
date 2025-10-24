@@ -10,6 +10,7 @@ use Survos\InspectionBundle\Services\InspectionService;
 use Survos\MeiliBundle\Api\Filter\MultiFieldSearchFilter;
 use Survos\MeiliBundle\Command\FastSyncIndexesCommand;
 use Survos\MeiliBundle\Command\IterateIndexesCommand;
+use Survos\MeiliBundle\Command\MeilEstimatorCommand;
 use Survos\MeiliBundle\Command\MeiliFlushFileCommand;
 use Survos\MeiliBundle\Command\MeiliSchemaCreateCommand;
 use Survos\MeiliBundle\Command\MeiliSchemaUpdateCommand;
@@ -103,6 +104,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                      IterateIndexesCommand::class,
                      MeiliSchemaCreateCommand::class,
                      MeiliSchemaUpdateCommand::class,
+                     MeilEstimatorCommand::class,
                      MeiliSchemaValidateCommand::class,
                      MeiliFlushFileCommand::class,
                      ListCommand::class, CreateCommand::class] as $class) {
@@ -170,6 +172,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->booleanNode('enabled')->defaultTrue()->end()
             ->scalarNode('host')->defaultValue('%env(default::MEILI_SERVER)%')->end()
             ->scalarNode('apiKey')->defaultValue('%env(default::MEILI_ADMIN_KEY)%')->end()
+            ->scalarNode('transport')->defaultValue('%env(default::MEILI_TRANSPORT)%')->end()
             ->scalarNode('searchKey')->defaultValue('%env(default::MEILI_SEARCH_KEY)%')->end()
             ->scalarNode('meiliPrefix')->defaultValue('%env(default::MEILI_PREFIX)%')->end()
             ->booleanNode('passLocale')->defaultValue(false)->end()

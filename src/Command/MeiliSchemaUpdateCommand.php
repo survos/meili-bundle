@@ -5,6 +5,8 @@ namespace Survos\MeiliBundle\Command;
 
 use Liquid\Template;
 use Meilisearch\Client;
+use Meilisearch\Contracts\CancelTasksQuery;
+use Meilisearch\Contracts\TasksQuery;
 use Survos\MeiliBundle\Meili\MeiliTaskStatus;
 use Survos\MeiliBundle\Meili\Task;
 use Survos\MeiliBundle\Service\MeiliService;
@@ -45,6 +47,9 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
         #[Option('Cancel tasks and delete index before applying')]
         bool $reset = false,
 
+        #[Option('Update the embedders', name: 'embed')]
+        bool $updateEmbedders = false,
+
         #[Option('Filter by index name')]
         ?string $index = null,
 
@@ -67,7 +72,6 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
                 $io->section(sprintf('Index "%s"', $name));
                 $index = $this->meili->getIndex($this->meili->getPrefixedIndexName($name));
                 $settings = $this->meili->getRawIndexSetting($name);
-                dd($settings, $name);
                 // is update different than create?
 //                $task = $index->updateSettings($settings['schema']);
 //                dump($task);
@@ -84,6 +88,7 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 
 
         foreach ($targets as $name) {
+
             $io->section(sprintf('Processing index "%s"', $name));
 //            $uid = $this->prefixed($name);
 
@@ -92,17 +97,42 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
             $embedders = $this->embeddersProvider->forMeili();
 //            $task = $index->updateEmbedders($embedders);
 
-            $index = $this->meili->getIndex($this->meili->getPrefixedIndexName($name), $settings['primaryKey']??'id');
-            $pending = $this->pendingTasks($name);
+
+            $prefixedName = $this->meili->getPrefixedIndexName($name);
+            $pending = $this->pendingTasks($prefixedName);
             if (!$reset && $pending > 0) {
                 $io->error(sprintf('Index "%s" has %d pending tasks. Re-run with --reset.', $index->getUid(), $pending));
                 return Command::FAILURE;
             }
 
             if ($reset) {
-                $io->warning('Reset: canceling tasks and deleting index…');
+                $io->warning('Reset: canceling tasks and deleting index… ' . $prefixedName);
+                $resp = $this->meili->getTasks($prefixedName,  MeiliTaskStatus::ACTIVE);
+                $tasks = $this->meili->getMeiliClient()->getTasks(
+                    new TasksQuery()->setIndexUids([$prefixedName])
+                        ->setStatuses(MeiliTaskStatus::ACTIVE)
+                );
+                dump($tasks);
+                foreach ($resp->getIterator() as $task) {
+                    $io->warning(sprintf("Cancelling %s %s", $task['taskUid'], $task['type']));
+                }
+                $cancelledTasks = $this->meili->getMeiliClient()->cancelTasks(new CancelTasksQuery()
+                    ->setIndexUids([$prefixedName])
+                    ->setStatuses(MeiliTaskStatus::ACTIVE)
+                );
+//                foreach ($resp['results'] ?? [] as $task) {
+//                    dd($task);
+//                }
+
 //                $this->cancelTasks($index->getUid(), $io);
-                $this->deleteIndexIfExists($index->getUid(), $io);
+                $this->deleteIndexIfExists($prefixedName, $io);
+//                $index = $this->meili->getIndex($prefixedName, $settings['primaryKey']??'id');
+//                dd($index, $index->getUid(), $index->getPrimaryKey());
+
+                $task = new Task($this->meili->getMeiliClient()->createIndex($prefixedName, ['primaryKey' => $settings['primaryKey']]));
+                $this->meili->waitForTask($task);
+
+                $index = $this->meili->getOrCreateIndex($prefixedName, $settings['primaryKey']??'id');
             }
 
 //            if (!$force) {
@@ -111,6 +141,7 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 //            }
 
             if ($force) {
+                $index = $this->meili->getOrCreateIndex($prefixedName, $settings['primaryKey']??'id');
                 $task = new Task($index->updateSettings($settings['schema']));
                 $io->writeln(sprintf('updateSettings taskUid=%s', (string)$task->taskUid));
             }
@@ -135,15 +166,25 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 
                 if ($embedderKeys) {
                     $embeddersForThisIndex = [];
+                    $templates = [];
                     foreach ($embedderKeys as $key) {
-                        $embeddersForThisIndex[$key] = $embedders[$key];
+                        $embeddersForThisIndex[$key] = $embedder = $embedders[$key];
+                        $templateFilename = $embedder['documentTemplate'];
+                        $embedder['documentTemplate'] = file_get_contents($templateFilename);
+                        $embeddersForThisIndex[$key]['documentTemplate'] = file_get_contents($templateFilename);
+//                        $content = file_get_contents($templateFilename);
+
+//                        $templates[$key]->parse($content);
+//                        dd($templates[$key]);
                     }
-                    dump($embeddersForThisIndex);
                     if ($cost) {
+                        if (!class_exists(Template::class)) {
+                            throw new \RuntimeException("composer req liquid/liquid");
+                        }
                         foreach ($embeddersForThisIndex as $embedderName => $embedder) {
+                            $templates[$embedderName] = new Template($templateFilename);
                             $totalTokens[$embedderName] = 0;
                             $templates[$embedderName] = new Template();
-                            $templates[$embedderName]->parse($embedder['documentTemplate']);
                         }
 
                         // iterate through the records, render the liquid template, and pass to totenizer estmiate
@@ -158,14 +199,17 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 //                            $data = $this->normalizer->normalize($e, 'array');
 //                            dump($data);
                             foreach ($embeddersForThisIndex as $embedderName => $embedder) {
-                                $text = $templates[$embedderName]->render(['doc' => $data]);
+                                $template = $templates[$embedderName];
+                                dump($data);
+                                $text = $template->render(['doc' => $data]);
+                                dd($templates, $embedderName, $template, $text);
 
                                 $provider = new EncoderProvider();
                                 $encoder = $provider->getForModel($embedder['model']); // or 'gpt-3.5-turbo'
                                 $tokens = $encoder->encode($text);
                                 $tokenCount = count($tokens);
                                 $totalTokens[$embedderName] += $tokenCount;
-                                dump($embedder['model'], $embedderName, $tokenCount);
+                                dd($embedder['model'], $embedderName, $tokenCount, $text);
                             }
                         }
                         dump($totalTokens);
@@ -174,7 +218,7 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
                         }
                     }
 
-                    if ($force) {
+                    if ($force && $updateEmbedders) {
                         $embeddersTask = new Task($index->updateEmbedders($embeddersForThisIndex));
                         $res  = $this->meili->waitForTask($embeddersTask);
                         if (!$embeddersTask->succeeded) {

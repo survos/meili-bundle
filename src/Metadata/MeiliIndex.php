@@ -17,7 +17,7 @@ final class MeiliIndex
     public function __construct(
         public ?string $name = null,
         public ?string $class = null,
-        public ?string $primaryKey = 'id',
+        public ?string $primaryKey = null,
         /** Base serializer groups for payload normalization */
 //        public ?array  $groups = null,
         public Fields|array   $persisted = [],

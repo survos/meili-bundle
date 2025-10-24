@@ -5,6 +5,8 @@ namespace Survos\MeiliBundle\Service;
 
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerAwareInterface;
+use Psr\Log\LoggerAwareTrait;
 use Psr\Log\LoggerInterface;
 use Survos\MeiliBundle\Entity\IndexInfo;
 use Survos\MeiliBundle\Message\UpdateIndexInfoMessage;
@@ -12,14 +14,14 @@ use Survos\MeiliBundle\Repository\IndexInfoRepository;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\ObjectMapper\ObjectMapperInterface;
 
-final class IndexSyncService
+final class IndexSyncService implements LoggerAwareInterface
 {
+    use LoggerAwareTrait;
     public function __construct(
         private readonly MeiliService $meili,
         private readonly EntityManagerInterface $em,
         private readonly IndexInfoRepository $repo,
-        private readonly ObjectMapperInterface $mapper,
-        private readonly LoggerInterface $logger,
+        private readonly ?ObjectMapperInterface $mapper=null,
     ) {}
 
     /**
@@ -34,33 +36,31 @@ final class IndexSyncService
     ): array {
         $now = new DateTimeImmutable();
 
-        $rows = $this->meili->listIndexes(); // [['uid'=>..., 'primaryKey'=>..., 'createdAt'=>..., 'updatedAt'=>..., 'numDocuments'=>...], ...]
-        $uids = array_map(static fn($i) => (string)$i['uid'], $rows);
+        $rows = $this->meili->getRawIndexSettings(); // [['uid'=>..., 'primaryKey'=>..., 'createdAt'=>..., 'updatedAt'=>..., 'numDocuments'=>...], ...]
+//        $uids = array_map(static fn($i) => (string)$i['uid'], $rows);
 
         $created = $updated = $unchanged = 0;
 
-        foreach ($rows as $row) {
-            $uid = (string)$row['uid'];
-
+        foreach ($rows as $uid =>$row) {
             // create-or-load by PK (uid)
             if (!$indexInfo = $this->repo->find($uid)) {
-                $indexInfo = new IndexInfo($uid, );
-            }
-            if ($indexInfo->lastSyncedAt === null) {
+                $indexInfo = new IndexInfo($uid, $row['primaryKey'], $row['locale']??null);
                 $this->em->persist($indexInfo);
             }
 
             $before = [
                 $indexInfo->primaryKey,
-                $indexInfo->numDocuments,
+                $indexInfo->documentCount,
                 $indexInfo->createdAt?->getTimestamp(),
                 $indexInfo->updatedAt?->getTimestamp(),
                 $indexInfo->locale,
-                $indexInfo->dataset,
             ];
+            $indexInfo->settings = $row['settings']; // what's passed to /settings
+            // use the facet attribute as a DTO
 
             // Map server payload → entity (we do NOT set uid; it's already set)
             $source = (object) $row;
+            dd($row);
             $this->mapper->map($source, $indexInfo);
 
             // Normalize date strings to DateTimeImmutable if needed

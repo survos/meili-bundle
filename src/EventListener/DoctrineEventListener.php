@@ -55,15 +55,30 @@ class DoctrineEventListener
     public function postFlush(PostFlushEventArgs $args): void
     {
         if (self::$dispatching || !$this->messageBus) {
+            dd(self::$dispatching, $this->messageBus);
             return;
         }
 
         self::$dispatching = true;
-        try {
             $this->dispatchPendingMessages();
+        try {
         } finally {
             self::$dispatching = false;
         }
+    }
+
+    private function getPrimaryKey(string $class): ?string
+    {
+        $indexes = $this->meiliService->indexedByClass()[$class];
+        foreach ($indexes as $index) {
+            return $index['primaryKey'];
+        }
+//        if ($index = $this->meiliService->indexedByClass()[$class][0]??null) {
+//            return $index['primaryKey'];
+//        }
+        assert(false, "Missing pk/index in $class");
+        return null;
+
     }
 
     private function dispatchPendingMessages(): void
@@ -90,11 +105,10 @@ class DoctrineEventListener
             if (class_exists(TagStamp::class)) {
                 $stamps[] = new TagStamp(new \ReflectionClass($entityClass)->getShortName());
             }
-            $stamps = [
-                //new TransportNamesStamp('meili')
-                //use jwage/amqp-transport
-                new AmqpStamp('meili'),
-            ];
+            if ($transport = $this->meiliService->getConfig()['transport']) {
+                $stamps[] = new TransportNamesStamp($transport);
+//                    new AmqpStamp('meili'),
+            }
 
             if ($fancyNewWay = false) {
                 $plan  = $this->meiliService->makePlan(
@@ -118,14 +132,15 @@ class DoctrineEventListener
                 $this->meiliService->dispatchBatchForPlan($plan, $chunk, reload: true);
 
             } else {
+                $message = new BatchIndexEntitiesMessage(
+                    $entityClass,
+                    $normalized,
+                    reload: false
+                );
+                    $this->messageBus->dispatch($message, $stamps);
                 try {
-                    $this->messageBus->dispatch(new BatchIndexEntitiesMessage(
-                        $entityClass,
-                        $normalized,
-                        reload: false
-                    ), $stamps);
                 } catch (\Exception $e) {
-                    dd($entityClass, $normalized, $e);
+                    dd($entityClass, $normalized[0], $e);
 
                 }
             }
@@ -133,7 +148,8 @@ class DoctrineEventListener
 
         // Batch remove operations by entity class
         foreach ($this->pendingRemoveOperations as $entityClass => $operations) {
-            $entityIds = array_column($operations, 'id');
+            $primaryKey = $this->getPrimaryKey($entityClass);
+            $entityIds = array_column($operations, $primaryKey);
 
             $this->logger?->info(sprintf(
                 "Dispatching batch remove message for %d %s entities",
@@ -174,7 +190,7 @@ class DoctrineEventListener
         }
 
         // normalization may be slow, so move this to the message handler
-        $id = $this->propertyAccessor->getValue($object, 'id');
+        $id = $this->propertyAccessor->getValue($object, $this->getPrimaryKey($object::class));
 
         // BUT the entity is already hydrated, so maybe it _is_ better to do it here.
 

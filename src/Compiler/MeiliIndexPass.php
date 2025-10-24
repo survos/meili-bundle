@@ -13,6 +13,9 @@ use Survos\MeiliBundle\Util\GroupFieldResolver;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\Finder\Finder;
+// use this in your compiler pass file
+use Doctrine\ORM\Mapping as ORM;
+
 
 final class MeiliIndexPass implements CompilerPassInterface
 {
@@ -136,7 +139,13 @@ final class MeiliIndexPass implements CompilerPassInterface
                             );
                         }
                     }
-
+                    if (!$cfg->primaryKey) {
+                        $idFields = $this->findIdentifierFields($class); // e.g. ['accessionNumber']
+                        if (count($idFields) !== 1) {
+                            throw new \RuntimeException(sprintf("%s needs a single primary key field tagged as #[ORM\Id].", $class));
+                        }
+                        $cfg->primaryKey = $idFields[0];
+                    }
                     $indexSettings[$class][$name] = [
                         'schema'     => $indexSchema,
                         'primaryKey' => $cfg->primaryKey,
@@ -334,5 +343,28 @@ final class MeiliIndexPass implements CompilerPassInterface
         $s = str_replace('_', ' ', $s);
         return ucfirst($s);
     }
+
+
+private function findIdentifierFields(string $entityClass): array
+{
+    $rc = new \ReflectionClass($entityClass);
+
+    // EmbeddedId?
+    foreach ($rc->getProperties() as $p) {
+        if ($p->getAttributes(ORM\EmbeddedId::class)) {
+            return [$p->getName()];
+        }
+    }
+
+    // Regular @Id fields (composite supported)
+    $ids = [];
+    foreach ($rc->getProperties() as $p) {
+        if ($p->getAttributes(ORM\Id::class)) {
+            $ids[] = $p->getName();
+        }
+    }
+
+    return $ids; // [] if not found (e.g., XML/YAML-mapped entities)
+}
 
 }

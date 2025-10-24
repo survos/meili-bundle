@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Entity;
 
+use Doctrine\DBAL\Types\Types;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
 use Doctrine\ORM\Mapping as ORM;
 
@@ -13,20 +14,28 @@ class IndexInfo
     #[ORM\Column]
     public readonly string $indexName;
 
-    #[ORM\Column]
-    public readonly string $pixieCode;
-
-    #[ORM\Column]
-    public readonly string $locale;
+    #[ORM\Column(nullable: true)]
+    private(set) readonly ?string $locale;
 
     #[ORM\Column(type: 'datetime', nullable: true)]
     public ?\DateTime $lastIndexed = null;
 
+    #[ORM\Column(type: 'datetime', nullable: true)]
+    public ?\DateTime $createdAt = null;
+    #[ORM\Column(type: 'datetime', nullable: true)]
+    public ?\DateTime $updatedAt = null;
+
     #[ORM\Column(type: 'integer')]
     public int $documentCount = 0;
 
+    #[ORM\Column(type: Types::JSON, options: ['jsonb' => true])]
+    public array $settings;
+
     #[ORM\Column(nullable: true)]
     public ?string $taskId = null;
+
+    #[ORM\Column()]
+    public string $primaryKey;
 
     #[ORM\Column(nullable: true)]
     public ?string $batchId = null;
@@ -34,10 +43,10 @@ class IndexInfo
     #[ORM\Column(type: 'string', length: 20, nullable: true)]
     public ?string $status = null; // queued, processing, succeeded, failed
 
-    public function __construct(string $indexName, string $pixieCode, string $locale)
+    public function __construct(string $indexName, string $primaryKey, ?string $locale=null)
     {
         $this->indexName = $indexName;
-        $this->pixieCode = $pixieCode;
+        $this->primaryKey = $primaryKey;
         $this->locale = $locale;
     }
 

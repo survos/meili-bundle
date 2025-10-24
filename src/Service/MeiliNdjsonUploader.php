@@ -46,7 +46,7 @@ final class MeiliNdjsonUploader
             $line = \json_encode($doc, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) . "\n";
             $len  = \strlen($line);
             // meili requirement, throw error during dev
-            assert(array_key_exists($primaryKey, $doc));
+            assert(array_key_exists($primaryKey, $doc), "missing $primaryKey key in " . join('|', array_keys($doc)));
 
             if ($len > $this->maxPayloadBytes) {
                 $flush();

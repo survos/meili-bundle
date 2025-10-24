@@ -3,6 +3,8 @@
 namespace Survos\MeiliBundle\Controller;
 
 use cebe\openapi\Reader;
+use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminRoute;
+use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Bridge\Twig\Attribute\Template;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -37,81 +39,64 @@ class SearchController extends AbstractController
     #[Route('/index/{indexName}', name: 'meili_insta', options: ['expose' => true])]
     #[Route('/embedder/{indexName}/{embedder}', name: 'meili_insta_embed', options: ['expose' => true])]
     #[Template('@SurvosMeili/insta.html.twig')]
-//    #[Template('@SurvosMeili/instant/instant.html.twig')]
     public function index(
-        Request $request, // for the locale, but we will need a better way!
-        string                       $indexName, //  = 'packagesPackage',
-        #[MapQueryParameter] ?string $embedder = null,
-        #[MapQueryParameter] bool    $useProxy = false,
-    ): Response|array
-    {
+        Request $request,
+        string $indexName,
+        ?string $embedder = null,
+        ?string $q = null,
+        bool $useProxy = false,
+    ): Response|array {
         $locale = $request->getLocale();
-        $template = $indexName . '.html.twig';
 
         if ($this->meiliService->passLocale) {
             $indexName .= "_$locale";
         }
-        if (0) {
-            $dummyServer = 'https://dummy.survos.com/api/docs.jsonopenapi';
-// realpath is needed for resolving references with relative Paths or URLs
-            $openapi = Reader::readFromJsonFile($dummyServer);
-            $openapi->resolveReferences();
-        }
 
-        // @todo: starting only
-        $settings = $this->meiliService->getIndexSetting($indexName);
-        $templateName = $settings['rawName']; // skip the prefix
-
-        // Entity, then _list_ of groups separated by _
-//        dd($openapi->components->schemas['Product.jsonld-product.read_product.details']);
-
-
-//        dd($openapi);
-//        if (!class_exists($indexName) && class_exists($appEntityClass = 'App\\Entity\\' . $indexName)) {
-//            $indexName = $appEntityClass;
-//        }
-//
-//        if (class_exists($indexName)) {
-//            $indexName = $this->meiliService->getPrefixedIndexName($indexName);
-//        }
-
-        $locale = 'en'; // @todo
+        // Meili settings (single source of truth)
         $index = $this->meiliService->getIndexEndpoint($indexName);
         $settings = $index->getSettings();
-        $sorting[] = ['value' => $indexName, 'label' => 'relevancy'];
-        foreach ($settings['sortableAttributes'] as $sortableAttribute) {
-            foreach (['asc', 'desc'] as $direction) {
+
+        // Template name derived from rawName (without prefix)
+        $raw = $this->meiliService->getIndexSetting($indexName);
+        $templateName = $raw['rawName'] ?? $indexName;
+
+        // Build sort options from sortableAttributes
+        $sorting = [];
+        $sorting[] = [
+            'label' => 'Relevance',
+            'value' => $indexName, // default mode
+        ];
+
+        foreach (($settings['sortableAttributes'] ?? []) as $attr) {
+            foreach (['asc', 'desc'] as $dir) {
                 $sorting[] = [
-                    'label' => sprintf("%s %s", $sortableAttribute, $direction),
-                    'value' => sprintf("%s:%s:%s", $indexName, $sortableAttribute, $direction)
+                    'label' => sprintf('%s %s', $attr, $dir),
+                    // instant-meilisearch understands indexUid:field:order here
+                    'value' => sprintf('%s:%s:%s', $indexName, $attr, $dir),
                 ];
             }
         }
-        $facets = $settings['filterableAttributes'];
-        $config = $this->meiliService->getIndexSetting($indexName);
-        // this is specific to our way of handling related, translated messages, soon to be removed.
-        $related = []; // $this->meiliService->getRelated($facets, $indexName, $locale);
-        // use proxy for translations or hidden
+
+        $indexConfig = $this->meiliService->getIndexSetting($indexName);
         $params = [
-            'server' =>
-                $useProxy
-                    ? $this->router->generate('meili_proxy', [],
-                    UrlGeneratorInterface::ABSOLUTE_URL)
-                    : $this->meiliService->getHost(),
+            'server' => $useProxy
+                ? $this->router->generate('meili_proxy', [], UrlGeneratorInterface::ABSOLUTE_URL)
+                : $this->meiliService->getHost(),
 
-            'apiKey' => $this->meiliService->getPublicApiKey(),
-            'indexName' => $indexName,
-
-            'indexConfig' => $this->meiliService->getIndexSetting($indexName),
-            'settings' => $config,
-
-            'facets' => $facets,
-            'sorting' => $sorting,
-            'endpoint' => null,
-            'embedder' => $embedder,
+            'apiKey'       => $this->meiliService->getPublicApiKey(),
+            'indexName'    => $indexName,
+            'indexConfig'  => $indexConfig,
+            'settings'     => $settings,
+            'primaryKey'   => $indexConfig['primaryKey'],
+            'q'            => $q,
+            'facets'       => $settings['filterableAttributes'] ?? [],
+            'sorting'      => $sorting,
+            'endpoint'     => null,
+            'embedder'     => $embedder,
             'templateName' => $templateName,
-            'related' => $related, // the facet lookups
+            'related'      => [],
         ];
+
         return $params;
     }
 
@@ -132,5 +117,48 @@ class SearchController extends AbstractController
         return new Response($template);
     }
 
+    #[AdminRoute(path: '/show/{indexName}/{pk}', name: 'meili_show_liquid')]
+    public function showIndex(
+        AdminContext $context,
+        string $indexName,
+    ): Response
+    {
+        $embedders = $this->meiliService->getConfig()['embedders'];
+        $indexSettings = $this->meiliService->getRawIndexSetting($indexName);
 
-}
+        $totalTokens = [];
+        foreach ($embedders as $index => $embedder) {
+            $template = new \Liquid\Template();
+            $template->parse(file_get_contents($embedder['template']));
+            $templates[$index] = $template;
+        }
+        $embedderKeys = $settings['embedders'] ?? [];
+        // serialize the doc first
+
+        $iterator = $this->entityManager->getRepository($settings['class'])->createQueryBuilder('e')->select('e')
+            ->setMaxResults(3)
+            ->getQuery()
+            ->toIterable();
+        foreach ($iterator as $e) {
+            // chicken and egg -- we want to get the data from meili, it's exact, but we don't want to add it if the embedder is active.
+            $data = $this->payloadBuilder->build($e, $settings['persisted']);
+            dump($data);
+            foreach ($embedderKeys as $embedderKey) {
+                $text = $templates[$embedderKey]->render(['doc' => $data]);
+                dd($embedderKey, $text);
+            }
+        }
+        dd($embedderKeys);
+
+        // configured
+        $settings = $this->meiliService->settings[$indexName];
+        // live
+        $index = $this->meiliService->getIndex($indexName, autoCreate: false);
+
+        return new Response();
+
+    }
+
+
+
+    }

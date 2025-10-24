@@ -1,0 +1,26 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{% block title %}Search Dashboard{% endblock %}
+
+{% block page_content %}
+
+
+    Design an EasyAdmin DashboardController for all our indexes, from the compiler pass data (the #[Meiliindex()] attribute data, plus
+
+
+
+    {{ _self }}
+    <ul>
+
+        {% for indexName, settings in settings %}
+            <li>
+                <a class="btn btn-primary"
+                   href="{{ path('meili_insta', {indexName: indexName}) }}" target="_blank">
+                    {{ ux_icon('mdi:search') }}
+                    {{ settings.rawName }}
+                </a>
+            </li>
+
+        {% endfor %}
+    </ul>
+{% endblock %}

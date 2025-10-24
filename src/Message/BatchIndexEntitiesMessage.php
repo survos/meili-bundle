@@ -21,7 +21,7 @@ class BatchIndexEntitiesMessage
         public readonly ?string $primaryKeyName=null, // for the database and meili.  But now can be different
         public readonly ?string $transport=null,
         public readonly ?string $locale=null,
-        public readonly ?string $indexName=null,
+        public ?string $indexName=null, // this is reset when it's missing or multiple indexes on a class
         public readonly ?bool $dry=null,
         public readonly ?bool $cost=null,
     ) {

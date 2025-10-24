@@ -7,6 +7,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Meilisearch\Endpoints\Indexes;
 use Psr\Log\LoggerInterface;
 use Survos\BabelBundle\Service\LocaleContext;
+use Survos\CoreBundle\Service\SurvosUtils;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
 use Survos\MeiliBundle\Service\MeiliNdjsonUploader;
 use Survos\MeiliBundle\Service\MeiliPayloadBuilder;
@@ -34,13 +35,19 @@ final class BatchIndexEntitiesMessageHandler
     {
         $locale = $message->locale ?: $this->localeContext?->getDefault();
 
-        $runner = function () use ($message) {
-            $this->apply($message);
-        };
+        $classIndexes = $this->meiliService->indexedByClass();
+        $indexes = $classIndexes[$message->entityClass]??[];
+        foreach ($indexes as $indexName => $index) {
+            $message->indexName = $indexName;
+            $runner = function () use ($message) {
+                $this->apply($message);
+            };
 
-        $this->localeContext
-            ? $this->localeContext->run($locale, $runner)
-            : $runner();
+            $this->localeContext
+                ? $this->localeContext->run($locale, $runner)
+                : $runner();
+        }
+
     }
 
     private function apply(BatchIndexEntitiesMessage $message): void
@@ -56,7 +63,6 @@ final class BatchIndexEntitiesMessageHandler
 //        dump($message->entityClass, $groups);
         $persisted = $indexSettings['persisted'];
         $primaryKey = $indexSettings['primaryKey'];
-
 
         if ($message->reload) {
             // Load → normalize → upload as NDJSON (chunked)
@@ -95,6 +101,8 @@ final class BatchIndexEntitiesMessageHandler
             $entity = $repo->find($id);
             if (!$entity) { continue; }
             $doc = $this->payloadBuilder->build($entity, $persisted);
+//            dd($doc, $persisted);
+            $doc = SurvosUtils::removeNullsAndEmptyArrays($doc);
             if (!\is_array($doc)) { continue; }
             yield $doc;
         }

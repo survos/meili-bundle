@@ -46,7 +46,8 @@
         "survos/js-twig-bundle": "^2.0",
         "survos/babel-bundle": "^2.0",
         "yethee/tiktoken": "^0.11.1",
-        "liquid/liquid": "^1.4"
+        "liquid/liquid": "^1.4",
+        "easycorp/easyadmin-bundle": "^4.26"
     },
     "autoload": {
         "psr-4": {

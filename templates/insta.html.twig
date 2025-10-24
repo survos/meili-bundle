@@ -1,181 +1,189 @@
+{# -----------------------------------------------------------------------------
+   File: templates/insta.html.twig
+   Version: MEILI-INSTA v3.5
+   Unique Note: [insta.html.twig::v3.5::search-above-results+multiplier-threshold::2025-10-17]
+   -----------------------------------------------------------------------------
+   CHANGELOG (v3.5):
+   - Search bar, stats, notice are ABOVE results (right column).
+   - Min score uses a MULTIPLIER textbox (e.g., 3 ⇒ 0.03). Fires on input & change.
+   - Keeps your embedder badges and never removes them.
+   - CANDIDATE FOR REVIEW: keep debug textarea visible by default?
+#}
 {% extends "base.html.twig" %}
 
 {% block stylesheets %}
-    {{ parent() }}
-    <style>
-        .insta-grid {
-            display: grid;
-            grid-template-columns: 320px 1fr;
-            gap: 1rem;
-        }
-
-        .facet-header {
-            display: flex;
-            align-items: baseline;
-            gap: .75rem;
-        }
-
-        .facet-title {
-            text-transform: none;
-            font-weight: 600;
-        }
-
-        .facet-sort {
-            margin-left: auto;
-        }
-    </style>
+  {{ parent() }}
+  <style>
+    .insta-grid { display: grid; grid-template-columns: 320px 1fr; gap: 1rem; }
+    .facet-header { display: flex; align-items: baseline; gap: .75rem; }
+    .facet-title { text-transform: none; font-weight: 600; }
+    .facet-actions { margin-left: auto; display: inline-flex; gap: .35rem; }
+  </style>
 {% endblock %}
 
 {% block body %}
-    {% set _sc = '@survos/meili-bundle/insta' %}
-    {% set _sc_modal = '@survos/meili-bundle/json' %}
+  <div class="content-header mb-3">
+    <span class="me-2">Index: <strong>{{ indexName }}</strong></span>
+    {# ai: NEVER GET RID OF THIS! You can make it prettier, but don't remove it. #}
+    Semantic:
+    {% for embedderName in indexConfig.embedders %}
+      <a class="badge text-bg-{{ embedderName == embedder ? 'primary' : 'secondary' }}"
+         href="{{ path('meili_insta_embed', { indexName:indexName, embedder:embedderName }) }}">
+        {{ embedderName == embedder ? '*' : '' }}{{ embedderName }}
+      </a>
+    {% endfor %}
+    {% if embedder|default(false) %}
+      <a class="ms-2 small" href="{{ path('meili_insta', { indexName: indexName }) }}">Switch to regular keyword search</a>
+    {% endif %}
+  </div>
 
-    {% set globals = {
-        serverUrl: server,
-        serverApiKey: apiKey,
-        indexName: indexName,
-        _sc_modal: _sc_modal,
-        debug: app.request.get('debug', false) ? true : false
-    } %}
+  {% set _sc = '@survos/meili-bundle/insta' %}
+  {% set _sc_modal = '@survos/meili-bundle/json' %}
 
-    {% set icons = {
-        json: ux_icon('si:json-duotone'),
-        bug: ux_icon('tabler:bug'),
-        wikidata: ux_icon('openmoji:wikidata'),
-        website: ux_icon('fluent-mdl2:website'),
-        facebook: ux_icon('mdi:facebook'),
-    } %}
+  {% set globals = {
+    serverUrl: server,
+    serverApiKey: apiKey,
+    indexName: indexName,
+    _sc_modal: '@survos/meili-bundle/json',
+    debug: app.request.get('debug', false) ? true : false
+  } %}
 
-    {% set templateUrl = path('meili_template', { templateName: templateName }) %}
+  {% set icons = {
+    json: ux_icon('si:json-duotone'),
+    bug: ux_icon('tabler:bug'),
+    wikidata: ux_icon('openmoji:wikidata'),
+    website: ux_icon('fluent-mdl2:website'),
+    facebook: ux_icon('mdi:facebook'),
+  } %}
 
-    <div
-            {{ stimulus_controller(_sc, {
-                serverUrl: server,
-                serverApiKey: apiKey,
-                indexName: indexName,
-                embedderName: embedder,
-                hitClass: app.request.get('class', 'grid-' ~ app.request.get('grid')|default(2)),
-                sortingJson: sorting|default([])|json_encode,
-                globalsJson: globals|json_encode,
-                iconsJson: icons|json_encode,
-                configJson: indexConfig|json_encode,
-                templateUrl: templateUrl
-            }) }}
-            class="container-fluid py-4"
-    >
-        <div
-                {{ stimulus_controller(_sc_modal, {
-                    serverUrl: server,
-                    serverApiKey: apiKey,
-                    indexName: indexName,
-                    globalsJson: globals|json_encode
-                }) }}
-        >
-            {{ include('@SurvosMeili/components/_modal.html.twig', { _sc_modal: _sc_modal }) }}
+  {% set templateUrl = path('meili_template', { templateName: templateName }) %}
 
-            <div class="insta-grid">
-                <aside {{ stimulus_target(_sc, 'refinementList') }}>
+  <div
+    {{ stimulus_controller(_sc, {
+      serverUrl: server,
+      serverApiKey: apiKey,
+      indexName: indexName,
+      embedderName: embedder,
+      hitClass: app.request.get('class', 'grid-' ~ app.request.get('grid')|default(2)),
+      sortingJson: sorting|default([])|json_encode,
+      globalsJson: globals|json_encode,
+      iconsJson: icons|json_encode,
+      configJson: indexConfig|json_encode,
+      templateUrl: templateUrl,
+      q: q,
+      scoreThreshold: app.request.get('minScore')|default(0)
+    }) }}
+    class="container-fluid py-4">
 
-                    {# Render each facet as: header row (title + sort select) + mount div #}
-                    {% for name, conf in indexConfig.facets %}
-                        <div class="facet-block mb-5" data-facet-block>
-                            <div class="facet-header">
-                                <h3 class="facet-title h6 m-0">{{ conf.label ?? name }}</h3>
+    <div {{ stimulus_controller(_sc_modal, { serverUrl: server, serverApiKey: apiKey, indexName: indexName, globalsJson: globals|json_encode }) }}>
+      {{ include('@SurvosMeili/components/_modal.html.twig', { _sc_modal: _sc_modal }) }}
 
-                                {% set widget = conf.widget ?? conf.type ?? 'RefinementList' %}
-                                {% if widget in ['RefinementList','Menu'] %}
-                                    {% set initialSort = conf.sortMode|default('count') %}
-                                    <span class="facet-actions" data-attribute="{{ name }}">
-      <button type="button"
-              class="btn btn-ghost btn-icon btn-xxs facet-sort-toggle"
-              title="Toggle sort (count ⇆ name)"
-              data-sort-toggle
-              data-attribute="{{ name }}"
-              data-mode="{{ initialSort }}"
-              aria-pressed="{{ initialSort == 'name' ? 'true' : 'false' }}">
-        {# show an icon hint; letters-case when name, numbers when count #}
-          {{ initialSort in ['name','alpha'] ? ux_icon('tabler:letters-case')|raw : ux_icon('tabler:numbers')|raw }}
-      </button>
-
-      <button class="facet-collapse btn btn-ghost btn-xxs p-0"
-              type="button"
-              data-collapse-control
-              data-attribute="{{ name }}"
-              aria-expanded="{{ (conf.collapsed is same as(true)) ? 'false' : 'true' }}"
-              title="Collapse/Expand">
-        {{ ux_icon('tabler:chevron-down')|raw }}
-      </button>
-    </span>
-                                {% else %}
-                                    <span class="facet-actions">
-      <button class="facet-collapse btn btn-ghost btn-xxs p-0"
-              type="button"
-              data-collapse-control
-              data-attribute="{{ name }}"
-              aria-expanded="{{ (conf.collapsed is same as(true)) ? 'false' : 'true' }}"
-              title="Collapse/Expand">
-        {{ ux_icon('tabler:chevron-down')|raw }}
-      </button>
-    </span>
-                                {% endif %}
-                            </div>
-
-                            <div class="facet-body mt-2">
-                                <div
-                                        data-attribute="{{ name }}"
-                                        data-widget="{{ conf.widget ?? conf.type ?? 'RefinementList' }}"
-                                        {% if conf.sortMode is defined %} data-sort-mode="{{ conf.sortMode }}"{% endif %}
-                                        {% if conf.searchable is same as(true) %} data-searchable="true"{% elseif conf.searchable is same as(false) %} data-searchable="false"{% endif %}
-                                        {% if conf.limit is defined %} data-limit="{{ conf.limit }}"{% endif %}
-                                        {% if conf.showMoreLimit is defined %} data-show-more-limit="{{ conf.showMoreLimit }}"{% endif %}
-                                        {% if conf.lookup is defined and conf.lookup is iterable %} data-lookup='{{ conf.lookup|json_encode }}'{% endif %}
-
-                                        {# Range options (used when widget is RangeSlider) #}
-                                        {% if widget == 'RangeSlider' %}
-                                            {% if conf.step is defined %} data-step="{{ conf.step }}"{% endif %}
-                                            {% if conf.min is defined %} data-min="{{ conf.min }}"{% endif %}
-                                            {% if conf.max is defined %} data-max="{{ conf.max }}"{% endif %}
-                                            {% if conf.pips is defined %} data-pips="{{ conf.pips ? 'true' : 'false' }}"{% endif %}
-                                            {% if conf.tooltips is defined %} data-tooltips='{{ conf.tooltips|json_encode }}'{% endif %}
-                                        {% endif %}
-                                ></div>
-                            </div>
-                        </div>
-                    {% endfor %}
-                </aside>
-
-                <main>
-
-                    {% if embedder|default(false) %}
-                        <div class="semantic-toolbar d-flex align-items-center gap-2 mb-3">
-                            <span class="badge text-bg-secondary">{{ embedder }}</span>
-                            <label class="small text-muted" for="semantic-range">Semantic</label>
-                            {% set initialSemantic = (app.request.get('semantic') ?? 30) %}
-                            <input
-                                    {{ stimulus_action(_sc, 'semantic', 'change') }}
-                                    type="range"
-                                    min="0" max="100" step="1"
-                                    value="{{ initialSemantic }}"
-                                    style="width: 180px;"
-                            >
-                            <output {{ stimulus_target(_sc, 'semanticOutput') }} class="small text-muted">{{ initialSemantic }}%</output>
-
-                            {# Sort-by sits right here #}
-                            <div class="ms-3" {{ stimulus_target(_sc, 'sortBy') }}></div>
-                        </div>
-                    {% endif %}
-
-                    <div class="mb-3 d-flex gap-2 align-items-center">
-                        <div class="flex-grow-1" {{ stimulus_target(_sc, 'searchBox') }}></div>
-                        <div {{ stimulus_target(_sc, 'reset') }}></div>
-                    </div>
-                    <div class="mb-2 small text-muted" {{ stimulus_target(_sc, 'stats') }}></div>
-                    <div class="mt-4" {{ stimulus_target(_sc, 'sort') }}></div>
-
-                    <div {{ stimulus_target(_sc, 'hits') }}></div>
-                    <div class="mt-4" {{ stimulus_target(_sc, 'pagination') }}></div>
-                </main>
+      <div class="insta-grid">
+        <aside {{ stimulus_target(_sc, 'refinementList') }}>
+          {% for name, conf in indexConfig.facets %}
+            {% set widget = conf.widget ?? conf.type ?? 'RefinementList' %}
+            <div class="facet-block mb-5" data-facet-block>
+              <div class="facet-header">
+                <h3 class="facet-title h6 m-0">{{ conf.label ?? name }}</h3>
+                <span class="facet-actions">
+                  <button class="facet-collapse btn btn-ghost btn-xxs p-0"
+                          type="button"
+                          data-collapse-control
+                          data-attribute="{{ name }}"
+                          aria-expanded="{{ (conf.collapsed is same as(true)) ? 'false' : 'true' }}"
+                          title="Collapse/Expand">
+                    {{ ux_icon('tabler:chevron-down')|raw }}
+                  </button>
+                </span>
+              </div>
+              <div class="facet-body mt-2">
+                <div
+                  data-attribute="{{ name }}"
+                  data-search-mode="contains"
+                  data-widget="{{ widget }}"
+                  {% if conf.sortMode is defined %} data-sort-mode="{{ conf.sortMode }}"{% endif %}
+                  {% if conf.searchable is same as(true) %} data-searchable="true"{% elseif conf.searchable is same as(false) %} data-searchable="false"{% endif %}
+                  {% if conf.limit is defined %} data-limit="{{ conf.limit }}"{% endif %}
+                  {% if conf.showMoreLimit is defined %} data-show-more-limit="{{ conf.showMoreLimit }}"{% endif %}
+                  {% if conf.lookup is defined and conf.lookup is iterable %} data-lookup='{{ conf.lookup|json_encode }}'{% endif %}
+                  {% if widget == 'RangeSlider' %}
+                    {% if conf.step is defined %} data-step="{{ conf.step }}"{% endif %}
+                    {% if conf.min is defined %} data-min="{{ conf.min }}"{% endif %}
+                    {% if conf.max is defined %} data-max="{{ conf.max }}"{% endif %}
+                    {% if conf.pips is defined %} data-pips="{{ conf.pips ? 'true' : 'false' }}"{% endif %}
+                    {% if conf.tooltips is defined %} data-tooltips='{{ conf.tooltips|json_encode }}'{% endif %}
+                  {% endif %}>
+                </div>
+              </div>
             </div>
-        </div>
+          {% endfor %}
+        </aside>
+
+        <main>
+          {% if embedder|default(false) %}
+            <div class="semantic-toolbar d-flex align-items-center gap-2 mb-3">
+              <span class="text-muted small">Semantic search</span>
+
+              <label class="small text-muted ms-2" for="semantic-range">Weight</label>
+              {% set initialSemantic = (app.request.get('semantic') ?? 30) %}
+              <input
+                {{ stimulus_action(_sc, 'semantic', 'change') }}
+                {{ stimulus_target(_sc, 'semanticSlider') }}
+                id="semantic-range"
+                type="range" min="0" max="100" step="1"
+                value="{{ initialSemantic }}"
+                style="width: 180px;">
+              <output {{ stimulus_target(_sc, 'semanticOutput') }} class="small text-muted">{{ initialSemantic }}%</output>
+
+              {# Min score MULTIPLIER textbox. Example: 3 => 0.03; 9 => 0.09 #}
+              <label class="small text-muted ms-3" for="min-score-mult">Min score ×0.01</label>
+              <input
+                id="min-score-mult"
+                type="number" min="0" max="100" step="1"
+                value="{{ (app.request.get('minScore', 0) * 100)|round(0, 'floor') }}"
+                class="form-control form-control-sm"
+                style="width: 110px;"
+                {{ stimulus_target(_sc, 'scoreMultiplier') }}
+                {{ stimulus_action(_sc, 'setMinScoreMultiplier', 'input') }}
+                {{ stimulus_action(_sc, 'setMinScoreMultiplier', 'change') }}>
+
+              {# CANDIDATE FOR REVIEW: keep legacy decimal input hidden? #}
+              <input type="hidden"
+                {{ stimulus_target(_sc, 'scoreThreshold') }}
+                value="{{ app.request.get('minScore', 0) }}">
+
+              <div class="ms-3" {{ stimulus_target(_sc, 'sortBy') }}></div>
+            </div>
+          {% endif %}
+
+          {# Search row: input + manual Search button (ABOVE RESULTS) #}
+          <div class="mb-3 d-flex gap-2 align-items-center">
+            <div class="flex-grow-1" {{ stimulus_target(_sc, 'searchBox') }}></div>
+
+            <button type="button"
+                    class="btn btn-primary"
+                    title="Run AI search (Enter ↵)"
+                    {{ stimulus_target(_sc, 'submit') }}
+                    {{ stimulus_action(_sc, 'submit', 'click') }}>
+              Search ↵
+            </button>
+
+            <div {{ stimulus_target(_sc, 'reset') }}></div>
+          </div>
+
+          <div class="mb-2 small text-muted" {{ stimulus_target(_sc, 'stats') }}></div>
+          <div class="mb-2" {{ stimulus_target(_sc, 'notice') }}></div>
+
+          <div {{ stimulus_target(_sc, 'hits') }}></div>
+          <div class="mt-4" {{ stimulus_target(_sc, 'pagination') }}></div>
+
+          {# CANDIDATE FOR REVIEW: keep debug textarea visible? could tuck behind a <details> #}
+          <div class="mb-3">
+            <label class="form-label small text-muted">Outgoing /multi-search payload</label>
+            <textarea {{ stimulus_target(_sc, 'debug') }} class="form-control" rows="8" spellcheck="false"></textarea>
+          </div>
+        </main>
+      </div>
     </div>
+  </div>
 {% endblock %}

@@ -3,6 +3,41 @@
 /* ---- Layout ---- */
 
 /* Desktop grid: sidebar 320 px + flexible main; single column on mobile */
+
+/* Add to your custom styles */
+.ais-RefinementList-checkbox,
+.ais-RefinementList-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ais-RefinementList-count {
+  background-color: var(--tblr-secondary);
+  color: var(--tblr-secondary-fg, #fff);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-left: auto;
+}
+
+.ais-RefinementList-item {
+  padding: 0.25rem 0;
+}
+
+.ais-RangeSlider .rheostat {
+  overflow: visible;
+}
+
+.ais-RangeSlider .rheostat-background {
+  background-color: var(--tblr-border-color);
+  border: none;
+}
+
+.ais-RangeSlider .rheostat-progress {
+  background-color: var(--tblr-primary);
+}
 .insta-grid {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);

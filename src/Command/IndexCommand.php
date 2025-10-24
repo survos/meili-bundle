@@ -40,7 +40,7 @@ class IndexCommand extends MeiliBaseCommand
 
     public function __construct(
         protected ParameterBagInterface $bag,
-        protected EntityManagerInterface $entityManager,
+        protected ?EntityManagerInterface $entityManager,
         private MessageBusInterface $messageBus,
         private SettingsService $settingsService,
         private MeiliService $meiliService,
@@ -51,7 +51,7 @@ class IndexCommand extends MeiliBaseCommand
         protected ResolvedEmbeddersProvider $resolvedEmbeddersProvider,
         private ?BabelLocaleScope $localeScope = null, // optional (no-op if Babel not installed)
     ) {
-        parent::__construct($meiliService,$resolvedEmbeddersProvider);
+        parent::__construct($meiliService,$resolvedEmbeddersProvider, $entityManager);
     }
 
     /**

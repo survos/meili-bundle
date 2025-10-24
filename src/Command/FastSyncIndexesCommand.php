@@ -15,7 +15,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Messenger\MessageBusInterface;
 
-#[AsCommand('meili:fast-sync', 'Fetch /indexes once, upsert minimal fields, and enqueue updates as needed')]
+#[AsCommand('meili:fast-sync', 'Fetch /indexes once (/stats), upsert minimal fields, and enqueue updates as needed')]
 final class FastSyncIndexesCommand
 {
     public function __construct(
