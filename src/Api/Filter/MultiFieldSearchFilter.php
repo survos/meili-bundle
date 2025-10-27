@@ -20,7 +20,7 @@ use ApiPlatform\Exception\InvalidArgumentException;
  * All specified properties type must be string.
  * @package App\Filter
  */
-class MultiFieldSearchFilter extends AbstractFilter implements FilterInterface
+class MultiFieldSearchFilter # extends AbstractFilter implements FilterInterface
 {
     /**
      * Add configuration parameter
@@ -33,7 +33,7 @@ class MultiFieldSearchFilter extends AbstractFilter implements FilterInterface
                                 ?NameConverterInterface $nameConverter = null,
                                 private string         $searchParameterName = 'search')
     {
-        parent::__construct($managerRegistry, $logger, $properties, $nameConverter);
+//        parent::__construct($managerRegistry, $logger, $properties, $nameConverter);
     }
 
 

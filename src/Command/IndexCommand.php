@@ -45,10 +45,11 @@ class IndexCommand extends MeiliBaseCommand
         private SettingsService $settingsService,
         private MeiliService $meiliService,
         protected ?LoggerInterface $logger,
-        #[Autowire('%kernel.enabled_locales%')] private array $enabledLocales = [],
-        #[Autowire('%kernel.default_locale%')] private string $defaultLocale = 'en',
         private TextFieldResolver $textFieldResolver,
         protected ResolvedEmbeddersProvider $resolvedEmbeddersProvider,
+
+        #[Autowire('%kernel.enabled_locales%')] private array $enabledLocales = [],
+        #[Autowire('%kernel.default_locale%')] private string $defaultLocale = 'en',
         private ?BabelLocaleScope $localeScope = null, // optional (no-op if Babel not installed)
     ) {
         parent::__construct($meiliService,$resolvedEmbeddersProvider, $entityManager);

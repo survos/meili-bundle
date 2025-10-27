@@ -69,7 +69,10 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->tag('doctrine.event_listener', ['event' => 'prePersist'])
             ->tag('doctrine.event_listener', ['event' => 'postPersist']);
 
-        foreach ([SettingsService::class, MeiliPayloadBuilder::class, AbstractSearchFilter::class, MultiFieldSearchFilter::class] as $class) {
+        foreach ([SettingsService::class, MeiliPayloadBuilder::class,
+// these are API Platform classes that don't gracefully autowire.
+//                     AbstractSearchFilter::class, MultiFieldSearchFilter::class
+                 ] as $class) {
             $builder->autowire($class)
                 ->setPublic(true);
         }

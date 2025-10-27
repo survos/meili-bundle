@@ -22,7 +22,7 @@ use Symfony\Component\Serializer\NameConverter\NameConverterInterface;
  * @experimental
  *
  */
-abstract class AbstractSearchFilter implements FilterInterface
+abstract class AbstractSearchFilter # implements FilterInterface
 {
     use UtilTrait { getNestedFieldPath as protected; }
 

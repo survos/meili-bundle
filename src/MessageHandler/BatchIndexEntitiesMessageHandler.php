@@ -21,13 +21,13 @@ final class BatchIndexEntitiesMessageHandler
 {
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
+        private MeiliPayloadBuilder $payloadBuilder,
         private readonly SettingsService        $settingsService,
         private readonly NormalizerInterface    $normalizer,
         private readonly MeiliService           $meiliService,
         private readonly MeiliNdjsonUploader    $uploader,
         private readonly ?LocaleContext         $localeContext=null,
         private readonly ?LoggerInterface       $logger = null,
-        private MeiliPayloadBuilder $payloadBuilder,
     ) {}
 
     #[AsMessageHandler]
