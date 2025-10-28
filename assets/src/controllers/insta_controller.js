@@ -261,6 +261,9 @@ export default class extends Controller {
     };
   }
 
+// -----------------------------------------------------------------------------
+// File: assets/src/controllers/insta_controller.js  (section: _startSearch header)
+// -----------------------------------------------------------------------------
   async _startSearch(initialUiState = null) {
     const ui = initialUiState ?? {
       [this.indexNameValue]: {
@@ -281,10 +284,17 @@ export default class extends Controller {
 
     await this._prefetchGlobalFacets().catch(() => {});
 
+    // -------------------------------------------------------------
+    // NEW LOGIC: compute whether search-as-you-type should be active
+    // -------------------------------------------------------------
+    const isSemantic = this.hasEmbedderNameValue && this.semanticEnabledValue;
+    // prefer data-value from Twig; fallback to !isSemantic
+    const searchAsYouType = (this.hasSearchAsYouTypeValue ? !!this.searchAsYouTypeValue : !isSemantic);
+
     const widgets = [
       searchBox({
         container: this.searchBoxTarget,
-        searchAsYouType: false,
+        searchAsYouType, // true when no embedder; false when semantic
         placeholder: `${this.indexNameValue} on ${stripProtocol(this.serverUrlValue)} ${this.qValue}`,
         autofocus: false
       }),
@@ -414,19 +424,32 @@ export default class extends Controller {
       } catch {}
     });
 
-    // Track input to enable Search button; Enter submits via widget's form
-    try {
-      const input = this.searchBoxTarget.querySelector('input[type="search"], input[type="text"]');
-      if (input) {
-        const updatePending = () => {
-          this._pendingQuery = input.value;
-          this._setSubmitEnabled(!!this._pendingQuery.trim());
-        };
-        input.addEventListener('input', updatePending);
-        input.addEventListener('change', updatePending);
-        updatePending();
+    // -----------------------------------------------------------------------------
+// File: assets/src/controllers/insta_controller.js  (section: end of _startSearch)
+// -----------------------------------------------------------------------------
+// manual-submit vs instant typing logic
+    if (!searchAsYouType) {
+      // Track input to enable Search button; Enter submits via widget’s form
+      try {
+        const input = this.searchBoxTarget.querySelector('input[type="search"], input[type="text"]');
+        if (input) {
+          const updatePending = () => {
+            this._pendingQuery = input.value;
+            this._setSubmitEnabled(!!this._pendingQuery.trim());
+          };
+          input.addEventListener('input', updatePending);
+          input.addEventListener('change', updatePending);
+          updatePending();
+        }
+      } catch {}
+    } else {
+      // Hide/disable manual Search button when typing is instant
+      this._setSubmitEnabled(false);
+      if (this.hasSubmitTarget) {
+        this.submitTarget.style.display = 'none';
       }
-    } catch {}
+    }
+
   }
 
   _setSubmitEnabled(on) {

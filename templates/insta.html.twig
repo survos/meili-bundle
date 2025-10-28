@@ -71,6 +71,7 @@
       configJson: indexConfig|json_encode,
       templateUrl: templateUrl,
       q: q,
+      searchAsYouType: searchAsYouType ? true : false,
       scoreThreshold: app.request.get('minScore')|default(0)
     }) }}
     class="container-fluid py-4">
@@ -157,14 +158,17 @@
           {% endif %}
 
           {# Search row: input + manual Search button (ABOVE RESULTS) #}
+          {# Search row #}
           <div class="mb-3 d-flex gap-2 align-items-center">
             <div class="flex-grow-1" {{ stimulus_target(_sc, 'searchBox') }}></div>
 
+            {# Only show the explicit Search button when NOT search-as-you-type #}
             <button type="button"
                     class="btn btn-primary"
-                    title="Run AI search (Enter ↵)"
+                    title="Run search (Enter ↵)"
                     {{ stimulus_target(_sc, 'submit') }}
-                    {{ stimulus_action(_sc, 'submit', 'click') }}>
+                    {{ stimulus_action(_sc, 'submit', 'click') }}
+                    style="{{ searchAsYouType ? 'display:none' : '' }}">
               Search ↵
             </button>
 
