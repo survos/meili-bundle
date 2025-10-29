@@ -24,6 +24,7 @@ use Survos\MeiliBundle\Command\ListCommand;
 use Survos\MeiliBundle\Command\SettingsCommand;
 use Survos\MeiliBundle\Controller\MeiliAdminController;
 use Survos\MeiliBundle\Controller\MeiliController;
+use Survos\MeiliBundle\Controller\MeiliProxyController;
 use Survos\MeiliBundle\Controller\SearchController;
 use Survos\MeiliBundle\EventListener\DoctrineEventListener;
 use Survos\MeiliBundle\Filter\MeiliSearch\AbstractSearchFilter;
@@ -136,6 +137,14 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         }
 
         foreach ([MeiliAdminController::class] as $class) {
+            $builder->autowire($class)
+                ->addTag('container.service_subscriber')
+                ->addTag('controller.service_arguments')
+                ->setAutoconfigured(true)
+                ->setPublic(true);
+        }
+
+        foreach ([MeiliProxyController::class] as $class) {
             $builder->autowire($class)
                 ->addTag('container.service_subscriber')
                 ->addTag('controller.service_arguments')
