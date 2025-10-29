@@ -66,6 +66,7 @@ class SearchController extends AbstractController
         }
 
         $indexConfig = $this->meiliService->getIndexSetting($indexName);
+        $stats = $index->stats();
 
         $params = [
             'server'           => $useProxy
@@ -83,6 +84,7 @@ class SearchController extends AbstractController
             'embedder'         => $embedder,
             'templateName'     => $templateName,
             'related'          => [],
+            'indexStats' => $stats,
             // NEW: turn off type-as-you-type when an embedder is active
             'searchAsYouType'  => $embedder === null,
         ];

@@ -1,0 +1,35 @@
+{# A tiny, framework-free header bar that the bundle owns. #}
+{% set embedders = indexConfig.embedders|default([]) %}
+<div class="meili-bar">
+  <div class="meili-bar-left">
+    {% if indexName %}
+      <span class="meili-chip">
+        Index: <strong>{{ indexName }}</strong>
+      </span>
+    {% endif %}
+
+    {% if indexStats and indexStats.numberOfDocuments is defined %}
+      <span class="meili-chip" title="Documents in index">
+        Docs: {{ indexStats.numberOfDocuments|number_format(0, '.', ',') }}
+      </span>
+    {% endif %}
+  </div>
+
+  <div class="meili-bar-right">
+    {% if embedders|length > 0 %}
+      <span class="meili-chip-label">Semantic:</span>
+      {% for name in embedders %}
+        <a class="meili-badge {{ name == embedder ? 'is-active' : '' }}"
+           href="{{ path('meili_insta_embed', { indexName: indexName, embedder: name }) }}">
+          {{ name == embedder ? '★ ' : '' }}{{ name }}
+        </a>
+      {% endfor %}
+      {% if embedder %}
+        <a class="meili-link ms-2"
+           href="{{ path('meili_insta', { indexName: indexName }) }}">
+          Switch to keyword
+        </a>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>

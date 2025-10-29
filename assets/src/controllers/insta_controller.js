@@ -1,6 +1,9 @@
 // -----------------------------------------------------------------------------
 // File: assets/src/controllers/insta_controller.js
-// Version: MEILI-INSTA v4.3 (sentinel highlights + focused debug)
+// Version: MEILI-INSTA v4.6
+//  - Fix: translate Algolia-style facetFilters / numericFilters -> Meilisearch `filter`
+//  - Keep: facets array normalization + fallback from config/schema
+//  - Keep: highlight conversion, hybrid/threshold handling, debug hooks
 // -----------------------------------------------------------------------------
 
 import { Controller } from '@hotwired/stimulus';
@@ -10,11 +13,9 @@ import { instantMeiliSearch } from '@meilisearch/instant-meilisearch';
 
 // AI: NEVER ELIMINATE THIS, it is very important
 import Twig from 'twig';
-// AI: DO NOT DO THIS, IT WON'T WORK!
-// import Twig from 'twig/dist/twig.min.js';
 
 import '../debug/fetch_tap.js';
-
+import { createDebug } from '../debug/debug.js';
 import {
   searchBox,
   infiniteHits,
@@ -42,7 +43,6 @@ try {
 installTwigAPI({ Routing, StimAttrs });
 
 // Debug logger (enable with: localStorage.debug = 'insta:*,wire:*,hl:*,view:*')
-import createDebug from 'debug';
 const logInsta = createDebug('insta:core');
 const logWire  = createDebug('wire:meili');
 const logHL    = createDebug('hl:convert');
@@ -143,6 +143,68 @@ export default class extends Controller {
     const ct = res.headers.get('content-type') || '';
     const data = ct.includes('application/json') ? await res.json() : await res.text();
     this.template = Twig.twig({ data });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helpers: convert Algolia-esque filters -> Meilisearch filter string
+  // ---------------------------------------------------------------------------
+  _facetTermToMeili(term) {
+    // Supports "-attr:value" -> attr != "value"
+    let neg = false;
+    let t = String(term);
+    if (t.startsWith('-')) { neg = true; t = t.slice(1); }
+    const idx = t.indexOf(':');
+    if (idx < 0) return null;
+    const attr = t.slice(0, idx).trim();
+    const val  = t.slice(idx + 1).trim();
+    if (!attr) return null;
+    const op = neg ? '!=' : '=';
+    return `${attr} ${op} ${JSON.stringify(val)}`;
+  }
+
+  _buildMeiliFilterFromParams(p) {
+    // Accepts Algolia-like:
+    //  - facetFilters: ["director:Kubrick", ["genres:Comedy","genres:Drama"], "-keywords:crime"]
+    //  - numericFilters: ["releaseYear >= 2000", ["runtime < 120","voteCount >= 100"]]
+    const andParts = [];
+
+    const { facetFilters, numericFilters, filters } = p || {};
+
+    if (Array.isArray(facetFilters) && facetFilters.length) {
+      const ff = facetFilters.map(group => {
+        if (Array.isArray(group)) {
+          const orParts = group
+            .map(t => this._facetTermToMeili(t))
+            .filter(Boolean);
+          return orParts.length ? `(${orParts.join(' OR ')})` : null;
+        } else {
+          const one = this._facetTermToMeili(group);
+          return one || null;
+        }
+      }).filter(Boolean);
+      if (ff.length) andParts.push(ff.join(' AND '));
+    }
+
+    if (Array.isArray(numericFilters) && numericFilters.length) {
+      const nf = numericFilters.map(group => {
+        if (Array.isArray(group)) {
+          const orParts = group.map(String).map(s => s.trim()).filter(Boolean);
+          return orParts.length ? `(${orParts.join(' OR ')})` : null;
+        } else {
+          const one = String(group).trim();
+          return one || null;
+        }
+      }).filter(Boolean);
+      if (nf.length) andParts.push(nf.join(' AND '));
+    }
+
+    // If `filters` (Algolia boolean syntax string) is provided by caller, prefer it last
+    if (typeof filters === 'string' && filters.trim().length) {
+      andParts.push(filters.trim());
+    }
+
+    if (!andParts.length) return null;
+    return andParts.join(' AND ');
   }
 
   // ---------------------------------------------------------------------------
@@ -282,12 +344,51 @@ export default class extends Controller {
           showRankingScoreDetails: true,
         };
 
-        if (p.filter)               out.filter = p.filter;
+        // Normalize params that Meilisearch expects in specific shapes
         if (p.sort)                 out.sort = p.sort;
         if (p.distinct)             out.distinct = p.distinct;
         if (p.matchingStrategy)     out.matchingStrategy = p.matchingStrategy;
-        if (p.attributesToSearchOn) out.attributesToSearchOn = p.attributesToSearchOn;
-        if (p.facets)               out.facets = p.facets;
+
+        if (p.attributesToSearchOn) {
+          out.attributesToSearchOn = Array.isArray(p.attributesToSearchOn)
+            ? p.attributesToSearchOn
+            : [p.attributesToSearchOn];
+        }
+
+        // Build `filter` from facetFilters / numericFilters / filters when no direct `filter` present
+        if (p.filter) {
+          out.filter = p.filter;
+        } else {
+          const built = this._buildMeiliFilterFromParams(p);
+          if (built) out.filter = built;
+        }
+
+        // --- FACETS HANDLING ---
+        // Prefer what InstantSearch provides; otherwise fallback to config/schema
+        let facetsParam = p.facets;
+        if (facetsParam == null) {
+          const schemaFacets = this.config?.schema?.filterableAttributes || [];
+          const configuredFacets = Array.isArray(this.config?.facets)
+            ? this.config.facets.map(f => f.attribute)
+            : Object.keys(this.config?.facets || {});
+          const dedup = Array.from(new Set([...(schemaFacets || []), ...(configuredFacets || [])]))
+            .filter(Boolean);
+          facetsParam = dedup.length ? dedup : null;
+          if (!p.facets && facetsParam) {
+            logWire('facets fallback from config/schema → %o', facetsParam);
+          }
+        }
+        if (facetsParam != null) {
+          out.facets = Array.isArray(facetsParam) ? facetsParam : [String(facetsParam)];
+        }
+
+        // Optional: coerce single strings to arrays if caller set them oddly
+        if (p.attributesToRetrieve && !Array.isArray(p.attributesToRetrieve)) {
+          out.attributesToRetrieve = [String(p.attributesToRetrieve)];
+        }
+        if (p.attributesToHighlight && !Array.isArray(p.attributesToHighlight)) {
+          out.attributesToHighlight = [String(p.attributesToHighlight)];
+        }
 
         if (shouldHybrid) {
           out.hybrid = { embedder: this.embedderNameValue, semanticRatio: ratio };
@@ -302,7 +403,9 @@ export default class extends Controller {
           highlightPostTag: out.highlightPostTag,
           showRankingScore: out.showRankingScore,
           rankingScoreThreshold: out.rankingScoreThreshold,
-          hybrid: out.hybrid
+          hybrid: out.hybrid,
+          facets: out.facets,
+          filter: out.filter
         });
 
         return out;
@@ -433,7 +536,7 @@ export default class extends Controller {
         container: this.resetTarget,
         clearsQuery: false,
         templates: { reset: 'Clear refinements' },
-        escapeHTML: false,           // ← allow highlight HTML through
+        escapeHTML: false,
         cssClasses: { button: 'btn btn-link p-0', disabledButton: 'text-muted' }
       })] : []),
 
@@ -454,7 +557,7 @@ export default class extends Controller {
 
       ...(this.hasHitsTarget ? [infiniteHits({
         container: this.hitsTarget,
-        escapeHTML: false,           // ← allow highlight HTML through
+        escapeHTML: false,
         cssClasses: {
           item: this.hitClassValue,
           loadMore: 'btn btn-primary',
@@ -479,7 +582,6 @@ export default class extends Controller {
             const body = this.template ? this.template.render(ctx)
               : `<pre>${escapeHtml(JSON.stringify(hit, null, 2))}</pre>`;
 
-            // DEBUG what Twig produced
             logView('twig body (first 500 chars) → %o', body?.slice?.(0, 500) ?? body);
 
             return `<div class="insta-hit" data-score="${Number(hit?._rankingScore) || ''}">${body}</div>`;
@@ -501,7 +603,6 @@ export default class extends Controller {
     is.addWidgets(widgets);
     is.start();
 
-    // After each render, inspect the first hit node's final DOM
     is.on('render', () => {
       try {
         const first = this.hitsTarget?.querySelector?.('.insta-hit');
@@ -520,7 +621,6 @@ export default class extends Controller {
       }
     });
 
-    // manual submit wiring
     const wireManualSubmit = () => {
       const input = this.searchBoxTarget?.querySelector?.('input[type="search"], input[type="text"]');
       if (!input) return;

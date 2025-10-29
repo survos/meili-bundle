@@ -1,27 +1,23 @@
 /* ===== Highlight styles (InstantSearch/Meili-agnostic) ===== */
-
 mark.ais-Highlight,
 em.ais-Highlight {
     background: linear-gradient(transparent 60%, rgba(255, 234, 0, 0.55) 0);
     border-radius: .15rem;
-
     font-style: inherit;
     font-weight: 600;
     color: inherit;
-
-    /* space handling */
-    padding: 0 .08em;          /* a hint of inner space */
-    margin: 0 .03em;           /* restore lost inter-word spacing */
     line-height: inherit;
-
     word-break: break-word;
     overflow-wrap: anywhere;
+
+    /* Force tighter spacing - may look cramped */
+    letter-spacing: -0.02em;
 }
 
-mark.ais-Highlight,
-em.ais-Highlight {
-    margin-inline: clamp(0.02em, 0.25ch, 0.15em);
-}
+/*mark.ais-Highlight,*/
+/*em.ais-Highlight {*/
+/*    margin-inline: clamp(0.02em, 0.25ch, 0.15em);*/
+/*}*/
 
 /* Optional: subtle outline on dark backgrounds */
 @media (prefers-color-scheme: dark) {

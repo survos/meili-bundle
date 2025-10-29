@@ -27,6 +27,7 @@
     },
     "importmap": {
       "twig": "^1.17.1",
+      "debug": "^4.4.3",
       "stimulus-attributes": "^1.0.1",
       "fos-routing": "^0.0.6",
       "flag-icons": "^7.5",

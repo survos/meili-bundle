@@ -1,0 +1,40 @@
+{# SurvosMeiliBundle default base layout (override in app at
+   templates/bundles/SurvosMeiliBundle/base.html.twig) #}
+<!DOCTYPE html>
+<html lang="{{ app.request.locale|default('en') }}">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    {% block head_meta %}{% endblock %}
+    <title>{% block title %}Meili Demo{% endblock %}</title>
+
+    {# Bundle CSS only; apps can add more by overriding this block #}
+    {% block stylesheets %}
+      <link rel="stylesheet" href="{{ asset('bundles/survosmeili/meili.css') }}">
+    {% endblock %}
+  </head>
+  <body>
+    <header class="meili-header">
+      {% block header %}
+        {# Small, optional menu; safe even if variables are missing #}
+        {% include '@SurvosMeili/components/_meili_nav.html.twig' ignore missing with {
+          indexName: indexName|default(null),
+          embedder: embedder|default(null),
+          indexConfig: indexConfig|default({}),
+          indexStats: indexStats|default(null)
+        } %}
+      {% endblock %}
+    </header>
+
+    <main class="meili-main">
+      {% block body %}{% endblock %}
+    </main>
+
+    {% block footer %}{% endblock %}
+
+    {# Keep JS minimal. If your Stimulus controllers use importmap, the app can still call importmap('app') in its own layout. #}
+    {% block javascripts %}
+      {% block importmap %}{{ importmap('app') }}{% endblock %}
+    {% endblock %}
+  </body>
+</html>

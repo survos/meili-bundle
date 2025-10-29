@@ -1,39 +1,21 @@
 {# -----------------------------------------------------------------------------
    File: templates/insta.html.twig
-   Version: MEILI-INSTA v3.5
-   Unique Note: [insta.html.twig::v3.5::search-above-results+multiplier-threshold::2025-10-17]
-   -----------------------------------------------------------------------------
-   CHANGELOG (v3.5):
-   - Search bar, stats, notice are ABOVE results (right column).
-   - Min score uses a MULTIPLIER textbox (e.g., 3 ⇒ 0.03). Fires on input & change.
-   - Keeps your embedder badges and never removes them.
-   - CANDIDATE FOR REVIEW: keep debug textarea visible by default?
+   Version: MEILI-INSTA v4.7
+   Notes:
+   - Bundle-friendly base (no framework requirement); app may override bundle base.
+   - Preserves critical globals & icons blocks (DO NOT REMOVE).
+   - Grid columns are driven by indexConfig.ui.columns (fallback to ?cols= / default 3).
+   - Full InstantSearch UI (SearchBox, Stats, Reset, Hits, Pagination, SortBy, Configure).
 #}
-{% extends "base.html.twig" %}
+{% extends "@SurvosMeili/base.html.twig" %}
 
-{% block page_header  %}
-  <div class="content-header mb-3">
-    <span class="me-2">Index: <strong>{{ indexName }}</strong></span>
-    {# ai: NEVER GET RID OF THIS! You can make it prettier, but don't remove it. #}
-    Semantic:
-    {% for embedderName in indexConfig.embedders %}
-      <a class="badge text-bg-{{ embedderName == embedder ? 'primary' : 'secondary' }}"
-         href="{{ path('meili_insta_embed', { indexName:indexName, embedder:embedderName }) }}">
-        {{ embedderName == embedder ? '*' : '' }}{{ embedderName }}
-      </a>
-    {% endfor %}
-    {% if embedder|default(false) %}
-      <a class="ms-2 small" href="{{ path('meili_insta', { indexName: indexName }) }}">Switch to regular keyword search</a>
-    {% endif %}
-  </div>
-
-
-{% endblock %}
+{% block title %}{{ indexName }} InstaSearch{% endblock %}
 
 {% block stylesheets %}
   {{ parent() }}
   <style>
     .insta-grid { display: grid; grid-template-columns: 320px 1fr; gap: 1rem; }
+    @media (max-width: 900px) { .insta-grid { grid-template-columns: 1fr; } }
     .facet-header { display: flex; align-items: baseline; gap: .75rem; }
     .facet-title { text-transform: none; font-weight: 600; }
     .facet-actions { margin-left: auto; display: inline-flex; gap: .35rem; }
@@ -42,9 +24,7 @@
 
 {% block body %}
 
-  {% set _sc = '@survos/meili-bundle/insta' %}
-  {% set _sc_modal = '@survos/meili-bundle/json' %}
-
+  {# === Keep these blocks intact (critical for controllers/templates) === #}
   {% set globals = {
     serverUrl: server,
     serverApiKey: apiKey,
@@ -61,6 +41,15 @@
     facebook: ux_icon('mdi:facebook'),
   } %}
 
+  {# Columns priority: indexConfig.ui.columns -> request ?cols= -> 3 #}
+  {% set cols =
+    (indexConfig.ui.columns is defined and indexConfig.ui.columns ? indexConfig.ui.columns
+      : (app.request.get('cols') ?? 3)
+    )
+  %}
+
+  {% set _sc = '@survos/meili-bundle/insta' %}
+  {% set _sc_modal = '@survos/meili-bundle/json' %}
   {% set templateUrl = path('meili_template', { templateName: templateName }) %}
 
   <div
@@ -68,12 +57,15 @@
       serverUrl: server,
       serverApiKey: apiKey,
       indexName: indexName,
+
       embedderName: embedder,
       hitClass: app.request.get('class', 'grid-' ~ app.request.get('grid')|default(2)),
+
       sortingJson: sorting|default([])|json_encode,
       globalsJson: globals|json_encode,
       iconsJson: icons|json_encode,
       configJson: indexConfig|json_encode,
+
       templateUrl: templateUrl,
       q: q,
       searchAsYouType: searchAsYouType ? true : false,
@@ -85,7 +77,8 @@
       {{ include('@SurvosMeili/components/_modal.html.twig', { _sc_modal: _sc_modal }) }}
 
       <div class="insta-grid">
-        <aside {{ stimulus_target(_sc, 'refinementList') }}>
+        {# ---------- Facets (sidebar) ---------- #}
+        <aside aria-label="Filters" {{ stimulus_target(_sc, 'refinementList') }}>
           {% for name, conf in indexConfig.facets %}
             {% set widget = conf.widget ?? conf.type ?? 'RefinementList' %}
             <div class="facet-block mb-5" data-facet-block>
@@ -105,7 +98,7 @@
               <div class="facet-body mt-2">
                 <div
                   data-attribute="{{ name }}"
-                  data-search-mode="contains"
+                  data-search-mode="{{ conf.searchMode|default('contains') }}"
                   data-widget="{{ widget }}"
                   {% if conf.sortMode is defined %} data-sort-mode="{{ conf.sortMode }}"{% endif %}
                   {% if conf.searchable is same as(true) %} data-searchable="true"{% elseif conf.searchable is same as(false) %} data-searchable="false"{% endif %}
@@ -125,6 +118,7 @@
           {% endfor %}
         </aside>
 
+        {# ---------- Main (search, hits) ---------- #}
         <main>
           {% if embedder|default(false) %}
             <div class="semantic-toolbar d-flex align-items-center gap-2 mb-3">
@@ -141,7 +135,6 @@
                 style="width: 180px;">
               <output {{ stimulus_target(_sc, 'semanticOutput') }} class="small text-muted">{{ initialSemantic }}%</output>
 
-              {# Min score MULTIPLIER textbox. Example: 3 => 0.03; 9 => 0.09 #}
               <label class="small text-muted ms-3" for="min-score-mult">Min score ×0.01</label>
               <input
                 id="min-score-mult"
@@ -153,7 +146,6 @@
                 {{ stimulus_action(_sc, 'setMinScoreMultiplier', 'input') }}
                 {{ stimulus_action(_sc, 'setMinScoreMultiplier', 'change') }}>
 
-              {# CANDIDATE FOR REVIEW: keep legacy decimal input hidden? #}
               <input type="hidden"
                 {{ stimulus_target(_sc, 'scoreThreshold') }}
                 value="{{ app.request.get('minScore', 0) }}">
@@ -162,12 +154,10 @@
             </div>
           {% endif %}
 
-          {# Search row: input + manual Search button (ABOVE RESULTS) #}
-          {# Search row #}
+          {# Search row: input + manual Search button (above results) #}
           <div class="mb-3 d-flex gap-2 align-items-center">
             <div class="flex-grow-1" {{ stimulus_target(_sc, 'searchBox') }}></div>
 
-            {# Only show the explicit Search button when NOT search-as-you-type #}
             <button type="button"
                     class="btn btn-primary"
                     title="Run search (Enter ↵)"
@@ -183,10 +173,14 @@
           <div class="mb-2 small text-muted" {{ stimulus_target(_sc, 'stats') }}></div>
           <div class="mb-2" {{ stimulus_target(_sc, 'notice') }}></div>
 
-          <div {{ stimulus_target(_sc, 'hits') }}></div>
+          {# Hits list; pass columns via CSS custom property #}
+          <div
+            {{ stimulus_target(_sc, 'hits') }}
+            style="--cols: {{ cols|e('html_attr') }};">
+          </div>
+
           <div class="mt-4" {{ stimulus_target(_sc, 'pagination') }}></div>
 
-          {# CANDIDATE FOR REVIEW: keep debug textarea visible? could tuck behind a <details> #}
           <div class="mb-3">
             <label class="form-label small text-muted">Outgoing /multi-search payload</label>
             <textarea {{ stimulus_target(_sc, 'debug') }} class="form-control" rows="8" spellcheck="false"></textarea>
