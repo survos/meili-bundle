@@ -148,6 +148,22 @@ export default class extends Controller {
   // ---------------------------------------------------------------------------
   // Helpers: convert Algolia-esque filters -> Meilisearch filter string
   // ---------------------------------------------------------------------------
+  // put this above buildQueries (e.g., near _facetTermToMeili)
+  _normalizeFacets(val) {
+    if (val == null) return null;
+    if (Array.isArray(val)) return val.map(String);
+    if (typeof val === 'string') {
+      // handle JSON-encoded arrays like '["a","b"]' or stray single names
+      try {
+        const parsed = JSON.parse(val);
+        if (Array.isArray(parsed)) return parsed.map(String);
+      } catch {}
+      return [val];
+    }
+    // handle odd callers passing objects/numbers
+    return [String(val)];
+  }
+
   _facetTermToMeili(term) {
     // Supports "-attr:value" -> attr != "value"
     let neg = false;
@@ -365,21 +381,25 @@ export default class extends Controller {
 
         // --- FACETS HANDLING ---
         // Prefer what InstantSearch provides; otherwise fallback to config/schema
-        let facetsParam = p.facets;
+// --- FACETS HANDLING ---
+        let facetsParam = p.facets ?? r.facets ?? null;
+
         if (facetsParam == null) {
           const schemaFacets = this.config?.schema?.filterableAttributes || [];
           const configuredFacets = Array.isArray(this.config?.facets)
-            ? this.config.facets.map(f => f.attribute)
-            : Object.keys(this.config?.facets || {});
+              ? this.config.facets.map(f => f.attribute)
+              : Object.keys(this.config?.facets || {});
           const dedup = Array.from(new Set([...(schemaFacets || []), ...(configuredFacets || [])]))
-            .filter(Boolean);
+              .filter(Boolean);
           facetsParam = dedup.length ? dedup : null;
-          if (!p.facets && facetsParam) {
+          if (!p.facets && !r.facets && facetsParam) {
             logWire('facets fallback from config/schema → %o', facetsParam);
           }
         }
-        if (facetsParam != null) {
-          out.facets = Array.isArray(facetsParam) ? facetsParam : [String(facetsParam)];
+
+        const normalizedFacets = this._normalizeFacets(facetsParam);
+        if (normalizedFacets && normalizedFacets.length) {
+          out.facets = normalizedFacets;
         }
 
         // Optional: coerce single strings to arrays if caller set them oddly
@@ -430,7 +450,15 @@ export default class extends Controller {
         const headers = { 'Content-Type': 'application/json' };
         if (this.serverApiKeyValue) headers.Authorization = `Bearer ${this.serverApiKeyValue}`;
 
+        // last-chance safety: ensure every query has facets as an array if present
+        for (const q of queries) {
+          if (q.hasOwnProperty('facets') && !Array.isArray(q.facets)) {
+            q.facets = this._normalizeFacets(q.facets) ?? undefined;
+          }
+        }
+
         const body = { queries };
+
         window.__meiliLastMulti = { url: multiUrl, body };
         logWire('WIRE → %s %o', multiUrl, body);
 
