@@ -1,4 +1,49 @@
-/* Kneutral for any BS5 theme */
+/* ===== Highlight styles (InstantSearch/Meili-agnostic) ===== */
+
+mark.ais-Highlight,
+em.ais-Highlight {
+    background: linear-gradient(transparent 60%, rgba(255, 234, 0, 0.55) 0);
+    border-radius: .15rem;
+
+    font-style: inherit;
+    font-weight: 600;
+    color: inherit;
+
+    /* space handling */
+    padding: 0 .08em;          /* a hint of inner space */
+    margin: 0 .03em;           /* restore lost inter-word spacing */
+    line-height: inherit;
+
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+mark.ais-Highlight,
+em.ais-Highlight {
+    margin-inline: clamp(0.02em, 0.25ch, 0.15em);
+}
+
+/* Optional: subtle outline on dark backgrounds */
+@media (prefers-color-scheme: dark) {
+    mark.ais-Highlight,
+    em.ais-Highlight {
+        background: linear-gradient(transparent 60%, rgba(255, 214, 10, 0.45) 0);
+        text-shadow:
+                0 0 0.01px currentColor,
+                0 0 0.01px currentColor; /* sharpen light text in some renderers */
+    }
+}
+
+/* If you ever switch back to Algolia’s default em tag without class */
+em.ais-Highlight,
+em.ais-Snippet { /* parity with InstantSearch defaults */
+    font-style: normal; /* don’t italicize highlights */
+}
+
+/* Keep your existing reset for inline mark padding */
+mark { padding: 0 !important; }
+
+/* ===== Your existing layout helpers (unchanged) ===== */
 
 /* Tighten metadata rows */
 .meta-grid{
@@ -31,15 +76,10 @@
 }
 .description-clamp br{ display:none; }
 
-/* Inline <mark> from highlighter should not pad */
-mark{ padding:0 !important; }
-
 /* Responsive grid helpers (used by the hits container) */
 .grid-5{ width:calc(20% - 1rem) !important; }
 .grid-4{ width:calc(25% - 1rem) !important; }
-.grid-3{
-    width:calc(33.333% - 1rem) !important;
-}
+.grid-3{ width:calc(33.333% - 1rem) !important; }
 @media (max-width:1199.98px){
     .grid-3{ width:calc(50% - 1rem) !important; }
 }
@@ -69,9 +109,7 @@ mark{ padding:0 !important; }
 .facet-title{ font-weight:600; flex:1 1 auto; min-width:0; }
 .facet-actions{ display:inline-flex; gap:.25rem; margin-left:auto; }
 .facet-body{ margin-top:.5rem; }
-.facet-search-input {
-    width: 100%;
-}
+.facet-search-input { width: 100%; }
 
 /* Compact icon buttons (framework-neutral) */
 .btn-xxs{ padding:2px 4px; line-height:1; }
@@ -99,4 +137,3 @@ mark{ padding:0 !important; }
 .ais-RangeSlider .rheostat-background,
 .ais-RangeSlider .rheostat-progress{ overflow:visible !important; }
 .ais-RangeSlider{ padding-right:.5rem; }
-

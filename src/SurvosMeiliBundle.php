@@ -189,6 +189,17 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->scalarNode('meiliPrefix')->defaultValue('%env(default::MEILI_PREFIX)%')->end()
             ->booleanNode('passLocale')->defaultValue(false)->end()
             ->integerNode('maxValuesPerFacet')->defaultValue(1000)->end()
+//            ->arrayNode('tools')->defaultValue([
+//                'riccox' => 'http://localhost:24900/',
+//            ])->end()
+            ->arrayNode('tools')
+                    ->arrayPrototype()
+                        ->children()
+                            ->scalarNode('label')->isRequired()->cannotBeEmpty()->end()      // e.g. 'openAi'
+                            ->scalarNode('url')->isRequired()->cannotBeEmpty()->end()       // e.g. 'text-embedding-3-small'
+                        ->end()
+                    ->end()
+                ->end()
             ->arrayNode('embedders')
                     ->useAttributeAsKey('name')
                     ->arrayPrototype()

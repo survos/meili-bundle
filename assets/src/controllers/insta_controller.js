@@ -1,16 +1,20 @@
 // -----------------------------------------------------------------------------
 // File: assets/src/controllers/insta_controller.js
-// Version: MEILI-INSTA v3.9
-// Note: leveled logging via loglevel; enable via getLogger('insta').setLevel('trace')
+// Version: MEILI-INSTA v4.3 (sentinel highlights + focused debug)
 // -----------------------------------------------------------------------------
+
 import { Controller } from '@hotwired/stimulus';
 import * as StimAttrs from 'stimulus-attributes';
 import instantsearch from 'instantsearch.js';
 import { instantMeiliSearch } from '@meilisearch/instant-meilisearch';
+
+// AI: NEVER ELIMINATE THIS, it is very important
 import Twig from 'twig';
+// AI: DO NOT DO THIS, IT WON'T WORK!
+// import Twig from 'twig/dist/twig.min.js';
 
 import '../debug/fetch_tap.js';
-import '../debug/fetch_rewrite_single.js';
+
 import {
   searchBox,
   infiniteHits,
@@ -26,10 +30,7 @@ import { installTwigAPI } from './insta_twig.js';
 import { safeParse, stripProtocol, escapeHtml, normalizeConfig } from './insta_helpers.js';
 import { mountFacetFromNode } from './insta_facets.js';
 
-// ---- leveled logger
-import log from 'loglevel';
-const LOG = log.getLogger('insta'); // control with getLogger('insta').setLevel('trace')
-
+// Optional routes
 let Routing = null;
 try {
   const module = await import('fos-routing');
@@ -37,39 +38,34 @@ try {
   const RoutingDataModule = await import('/js/fos_js_routes.js');
   const RoutingData = RoutingDataModule.default;
   Routing.setData(RoutingData);
-} catch (e) {
-  LOG.debug('Routing not available', e?.message ?? e);
-}
-
+} catch { /* ignore */ }
 installTwigAPI({ Routing, StimAttrs });
 
-const DBG = (...a) => LOG.debug(...a); // keep a shorthand
+// Debug logger (enable with: localStorage.debug = 'insta:*,wire:*,hl:*,view:*')
+import createDebug from 'debug';
+const logInsta = createDebug('insta:core');
+const logWire  = createDebug('wire:meili');
+const logHL    = createDebug('hl:convert');
+const logView  = createDebug('view:render');
 
 export default class extends Controller {
   static targets = [
-    'searchBox',
-    'hits',
-    'reset',
-    'pagination',
-    'refinementList',
-    'stats',
-    'semanticSlider',
-    'semanticOutput',
-    'sortBy',
-    'debug',
-    'submit',
-    'scoreThreshold',
-    'scoreMultiplier',
-    'notice'
+    'searchBox', 'hits', 'reset', 'pagination', 'refinementList', 'stats',
+    'semanticSlider', 'semanticOutput', 'sortBy', 'debug', 'submit',
+    'scoreThreshold', 'scoreMultiplier', 'notice'
   ];
 
   static values = {
     serverUrl: String,
     serverApiKey: String,
     indexName: String,
+
+    // Hybrid
     embedderName: String,
     semanticEnabled: { type: Boolean, default: true },
     semanticRatio: Number,
+
+    // UI
     templateUrl: String,
     userLocale: { type: String, default: 'en' },
     q: { type: String, default: '' },
@@ -78,12 +74,16 @@ export default class extends Controller {
     iconsJson: { type: String, default: '{}' },
     sortingJson: { type: String, default: '[]' },
     configJson: { type: String, default: '{}' },
+
+    // Server-side score threshold
     scoreThreshold: { type: Number, default: 0 },
+
+    // Typing behavior
     searchAsYouType: { type: Boolean, default: true }
   };
 
   initialize() {
-    LOG.info('initialize()', {
+    logInsta('initialize %o', {
       index: this.indexNameValue,
       url: this.serverUrlValue,
       embedder: this.embedderNameValue,
@@ -99,12 +99,11 @@ export default class extends Controller {
     this.sorting = safeParse(this.sortingJsonValue, []);
     this.config  = normalizeConfig(safeParse(this.configJsonValue, {}));
 
+    // HUD
     this._globalFacetCounts = {};
     this.search = null;
-
     this._pendingQuery = (this.qValue || '').trim();
 
-    // response telemetry
     this._lastServerEstimated = null;
     this._lastServerPageCount = null;
     this._lastPageScoreMin = null;
@@ -118,157 +117,284 @@ export default class extends Controller {
         showRankingScoreDetails: true
       }
     };
-
-    LOG.debug('initialize:config', {
-      sorting: this.sorting,
-      config: this.config
-    });
   }
 
-  // -----------------------------------------------------------------------------
   async connect() {
-    LOG.info('connect()');
     await this._loadTemplate();
 
-    const isSemantic = this._isSemantic();
-    LOG.debug('connect:isSemantic', isSemantic);
-
-    if (isSemantic) {
-      const eff = this._effectiveThreshold();
-      if (!(eff > 0)) {
-        LOG.info('threshold: seeding default 0.01 (×1)');
-        this._setThresholdDecimal(0.01);
-      }
-    }
-
-    if (isSemantic) {
+    if (this._isSemantic()) {
+      if (!(this._effectiveThreshold() > 0)) this._setThresholdDecimal(0.01); // Tac default
       const percent = this.hasSemanticSliderTarget ? Number(this.semanticSliderTarget.value) || 30 : 30;
-      const ratio = Math.max(0, Math.min(100, percent)) / 100;
-      this.semanticRatioValue = ratio;
-
-      this._meiliOptions.meiliSearchParams.hybrid = {
-        embedder: this.embedderNameValue,
-        semanticRatio: ratio
-      };
-      LOG.debug('hybrid:init', this._meiliOptions.meiliSearchParams.hybrid);
+      this.semanticRatioValue = Math.max(0, Math.min(100, percent)) / 100;
     }
 
     await this._startSearch();
   }
 
   disconnect() {
-    LOG.info('disconnect()');
-    try { this.search?.dispose(); } catch (e) { LOG.warn('dispose error', e); }
+    try { this.search?.dispose(); } catch { /* ignore */ }
     this.search = null;
   }
 
   async _loadTemplate() {
     if (!this.templateUrlValue) return;
-    LOG.info('loading Twig template', this.templateUrlValue);
     const res = await fetch(this.templateUrlValue);
     if (!res.ok) throw new Error(`Template HTTP ${res.status}: ${res.statusText}`);
     const ct = res.headers.get('content-type') || '';
     const data = ct.includes('application/json') ? await res.json() : await res.text();
     this.template = Twig.twig({ data });
-    LOG.debug('template loaded');
   }
 
-  // -----------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // Custom client (multi-search) with robust _formatted → _highlightResult
+  // ---------------------------------------------------------------------------
   _createClient() {
-    LOG.info('_createClient()');
+    // Sentinels prevent Meili from touching real tags
+    const SENTINEL_PRE  = '__ais-highlight__';
+    const SENTINEL_POST = '__/ais-highlight__';
+
     const { searchClient } = instantMeiliSearch(
       this.serverUrlValue,
       this.serverApiKeyValue,
       this._meiliOptions
     );
 
-    const writeDebug = (obj) => {
-      if (!this.hasDebugTarget) return;
-      try { this.debugTarget.value = JSON.stringify(obj, null, 2); }
-      catch { this.debugTarget.value = '[debug serialization error]'; }
+    const toAlgoliaResult = (meiliResult, queryShape) => {
+      const q = queryShape || {};
+      const limit =
+        Number.isFinite(+q.limit) ? +q.limit
+        : Number.isFinite(+meiliResult?.limit) ? +meiliResult.limit
+        : 20;
+
+      const MARK_OPEN = '<mark class="ais-Highlight">';
+      const MARK_CLOSE = '</mark>';
+
+      // decode & swap on a primitive
+      const decodeAndSwap = (s) => {
+        const el = document.createElement('textarea');
+        el.innerHTML = String(s);
+        const decoded = el.value;
+        const swapped = decoded
+          .replaceAll(SENTINEL_PRE, MARK_OPEN)
+          .replaceAll(SENTINEL_POST, MARK_CLOSE);
+        return swapped;
+      };
+
+      // normalize any _formatted value into Algolia-style { value } (or array)
+      const toHighlightEntry = (v) => {
+        if (v == null) return null;
+
+        if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+          return { value: decodeAndSwap(v) };
+        }
+
+        if (Array.isArray(v)) {
+          const arr = v.map(entry => {
+            if (entry == null) return null;
+            if (typeof entry === 'string' || typeof entry === 'number' || typeof entry === 'boolean') {
+              return { value: decodeAndSwap(entry) };
+            }
+            try { return { value: decodeAndSwap(JSON.stringify(entry)) }; }
+            catch { return null; }
+          }).filter(Boolean);
+          return arr.length ? arr : null;
+        }
+
+        try { return { value: decodeAndSwap(JSON.stringify(v)) }; }
+        catch { return null; }
+      };
+
+      // debug: peek at raw _formatted from Meili (first 2 hits)
+      const sampleFormatted = (meiliResult?.hits || []).slice(0, 2).map(h => h?._formatted ?? null);
+      logHL('raw _formatted (first 2): %o', sampleFormatted);
+
+      const hits = (meiliResult?.hits || []).map((hit, idx) => {
+        if (hit && hit._formatted && typeof hit._formatted === 'object') {
+          const h = {};
+          for (const [k, v] of Object.entries(hit._formatted)) {
+            const entry = toHighlightEntry(v);
+            if (entry) h[k] = entry;
+          }
+          hit._highlightResult = h;
+
+          const anyVal = h?.title?.value ?? h?.name?.value ?? h?.headline?.value ?? null;
+          if (idx < 2) {
+            logHL(
+              'post-conversion contains <mark>? %o  escaped &lt;mark? %o  value=%o',
+              typeof anyVal === 'string' && anyVal.includes('<mark'),
+              typeof anyVal === 'string' && anyVal.includes('&lt;mark'),
+              anyVal
+            );
+          }
+          delete hit._formatted;
+        } else if (idx < 2) {
+          logHL('no _formatted on hit %d', idx);
+        }
+
+        if (hit && hit._rankingScore != null) {
+          hit._rankingScore = Number(hit._rankingScore);
+        }
+        return hit;
+      });
+
+      const nbHits = Number.isFinite(+meiliResult?.estimatedTotalHits)
+        ? +meiliResult.estimatedTotalHits
+        : hits.length;
+
+      return {
+        hits,
+        nbHits,
+        nbPages: Math.max(1, Math.ceil(nbHits / limit)),
+        hitsPerPage: limit,
+        processingTimeMS: Number.isFinite(+meiliResult?.processingTimeMs)
+          ? +meiliResult.processingTimeMs
+          : 0,
+        query: meiliResult?.query ?? q.q ?? '',
+        facets: meiliResult?.facetDistribution ?? {},
+      };
     };
+
+    const buildQueries = (requests, shouldHybrid, ratio, threshold) => {
+      return requests.map(r => {
+        const p  = r.params || {};
+        const hp = (p.hitsPerPage ?? p.limit ?? 20) | 0;
+        const pg = Number.isFinite(+p.page) ? (+p.page) : 0;
+        const off = p.hasOwnProperty('offset') ? (+p.offset || 0) : (pg * (hp || 20));
+
+        const out = {
+          indexUid: r.indexName ?? r.indexUid ?? r.index ?? this.indexNameValue,
+          q:        r.q ?? p.q ?? p.query ?? '',
+          limit:    Math.max(1, hp || 20),
+          offset:   Math.max(0, off),
+
+          // Highlights + retrieval of _formatted
+          attributesToRetrieve: Array.isArray(p.attributesToRetrieve) && p.attributesToRetrieve.length
+            ? p.attributesToRetrieve
+            : ['*', '_formatted'],
+          attributesToHighlight: Array.isArray(p.attributesToHighlight) && p.attributesToHighlight.length
+            ? p.attributesToHighlight
+            : ['*'],
+          highlightPreTag:  SENTINEL_PRE,
+          highlightPostTag: SENTINEL_POST,
+
+          // Scores
+          showRankingScore: true,
+          showRankingScoreDetails: true,
+        };
+
+        if (p.filter)               out.filter = p.filter;
+        if (p.sort)                 out.sort = p.sort;
+        if (p.distinct)             out.distinct = p.distinct;
+        if (p.matchingStrategy)     out.matchingStrategy = p.matchingStrategy;
+        if (p.attributesToSearchOn) out.attributesToSearchOn = p.attributesToSearchOn;
+        if (p.facets)               out.facets = p.facets;
+
+        if (shouldHybrid) {
+          out.hybrid = { embedder: this.embedderNameValue, semanticRatio: ratio };
+          if (threshold > 0) out.rankingScoreThreshold = threshold;
+        }
+
+        logWire('buildQueries → %o', {
+          indexUid: out.indexUid, q: out.q,
+          attributesToRetrieve: out.attributesToRetrieve,
+          attributesToHighlight: out.attributesToHighlight,
+          highlightPreTag: out.highlightPreTag,
+          highlightPostTag: out.highlightPostTag,
+          showRankingScore: out.showRankingScore,
+          rankingScoreThreshold: out.rankingScoreThreshold,
+          hybrid: out.hybrid
+        });
+
+        return out;
+      });
+    };
+
+    const base = (this.serverUrlValue || '').replace(/\/+$/,'');
+    const multiUrl = `${base}/multi-search`;
 
     return {
       ...searchClient,
-      search: (requests, ...rest) => {
+
+      search: async (requests) => {
         const reqs = Array.isArray(requests) ? requests : [requests];
+
         const shouldHybrid = this._isSemantic();
         const ratio = (typeof this.semanticRatioValue === 'number') ? this.semanticRatioValue : 0.30;
-        const thr = this._effectiveThreshold();
+        const thr   = this._effectiveThreshold();
 
-        const patched = reqs.map(r => {
-          const copy = { ...r };
-          copy.params = { ...(r.params || {}) };
+        const queries = buildQueries(reqs, shouldHybrid, ratio, thr);
 
-          if (copy.params.query && !copy.q) copy.q = copy.params.query;
+        const headers = { 'Content-Type': 'application/json' };
+        if (this.serverApiKeyValue) headers.Authorization = `Bearer ${this.serverApiKeyValue}`;
 
-          copy.showRankingScore = true;
-          copy.showRankingScoreDetails = true;
-          copy.params.showRankingScore = true;
-          copy.params.showRankingScoreDetails = true;
+        const body = { queries };
+        window.__meiliLastMulti = { url: multiUrl, body };
+        logWire('WIRE → %s %o', multiUrl, body);
 
-          if (shouldHybrid) {
-            const h = { embedder: this.embedderNameValue, semanticRatio: ratio };
-            copy.hybrid = h;
-            copy.params.hybrid = h;
-          } else {
-            delete copy.hybrid;
-            delete copy.params.hybrid;
-          }
+        let raw, ok = true, status = 0, errText = '';
+        try {
+          const res = await fetch(multiUrl, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body)
+          });
+          status = res.status;
+          ok     = res.ok;
+          raw    = ok ? await res.json() : null;
+          if (!ok) { try { errText = await res.text(); } catch {} }
+        } catch (e) {
+          ok = false; errText = String(e?.message ?? e);
+        }
 
-          copy.rankingScoreThreshold = thr;
-          copy.params.rankingScoreThreshold = thr;
+        if (ok) {
+          logWire('WIRE ← %o', raw);
+        } else {
+          logWire('WIRE ← ERROR status=%o err=%o', status, errText);
+        }
 
-          copy.highlightPreTag = '__ais-highlight__';
-          copy.highlightPostTag = '__ais-highlight__';
-          copy.params.highlightPreTag = '__ais-highlight__';
-          copy.params.highlightPostTag = '__ais-highlight__';
+        let multiJson = null;
+        if (ok && raw) {
+          if (Array.isArray(raw?.results)) multiJson = raw;
+          else if (Array.isArray(raw?.hits)) multiJson = { results: [ raw ] };
+          else multiJson = { results: [ raw ] };
+        }
 
-          return copy;
-        });
+        if (!ok || !multiJson || !Array.isArray(multiJson.results)) {
+          logWire('search fail: status=%o err=%o', status, errText);
+          const empty = { hits: [], nbHits: 0, page: 0, nbPages: 1, hitsPerPage: 20, processingTimeMS: 0, query: '' };
+          this._lastServerEstimated = 0;
+          this._lastServerPageCount = 0;
+          this._lastPageScoreMin = null;
+          this._lastPageScoreMax = null;
+          return { results: [ empty ] };
+        }
 
-        // Console + textarea: exact body we send to /multi-search
-        LOG.trace('→ /multi-search', { queries: patched });
-        writeDebug({ queries: patched });
+        const algResults = multiJson.results.map((r, i) => toAlgoliaResult(r, queries[i]));
 
-        return searchClient.search(patched, ...rest).then(resp => {
-          try {
-            const r0 = resp?.results?.[0] || null;
-            this._lastServerEstimated = r0?.estimatedTotalHits ?? null;
-            this._lastServerPageCount = Array.isArray(r0?.hits) ? r0.hits.length : null;
+        try {
+          const r0 = algResults[0] || {};
+          const hits = Array.isArray(r0.hits) ? r0.hits : [];
+          const scores = hits.map(h => Number(h?._rankingScore))
+            .filter(Number.isFinite)
+            .sort((a,b)=>a-b);
+          this._lastServerEstimated = r0.nbHits ?? null;
+          this._lastServerPageCount = hits.length;
+          this._lastPageScoreMin = scores[0] ?? null;
+          this._lastPageScoreMax = scores[scores.length - 1] ?? null;
+        } catch {
+          this._lastServerEstimated = null;
+          this._lastServerPageCount = null;
+          this._lastPageScoreMin = null;
+          this._lastPageScoreMax = null;
+        }
 
-            if (Array.isArray(r0?.hits)) {
-              const scores = r0.hits
-                .map(h => Number(h?._rankingScore))
-                .filter(Number.isFinite)
-                .sort((a,b)=>a-b);
-              this._lastPageScoreMin = scores[0] ?? null;
-              this._lastPageScoreMax = scores[scores.length-1] ?? null;
-            } else {
-              this._lastPageScoreMin = this._lastPageScoreMax = null;
-            }
-
-            LOG.trace('← /multi-search', {
-              estimatedTotalHits: this._lastServerEstimated,
-              pageHits: this._lastServerPageCount,
-              scoreMin: this._lastPageScoreMin,
-              scoreMax: this._lastPageScoreMax
-            });
-          } catch (e) {
-            LOG.warn('response parse error', e);
-          }
-          return resp;
-        }).catch(err => {
-          LOG.error('/multi-search failed', err);
-          throw err;
-        });
+        return { results: algResults };
       }
     };
   }
 
-  // -----------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   async _startSearch(initialUiState = null) {
-    LOG.info('_startSearch()');
     const ui = initialUiState ?? {
       [this.indexNameValue]: {
         query: (this.qValue || '').trim() || undefined
@@ -286,13 +412,12 @@ export default class extends Controller {
     this.search = is;
     window.search = is;
 
-    await this._prefetchGlobalFacets().catch(e => LOG.debug('prefetch facets skipped', e?.message ?? e));
+    await this._prefetchGlobalFacets().catch(() => {});
 
     const semantic = this._isSemantic();
     const searchAsYouType = this.hasSearchAsYouTypeValue
       ? !!this.searchAsYouTypeValue
       : !semantic;
-    LOG.info('typing mode', { searchAsYouType, semantic });
 
     const widgets = [
       searchBox({
@@ -308,6 +433,7 @@ export default class extends Controller {
         container: this.resetTarget,
         clearsQuery: false,
         templates: { reset: 'Clear refinements' },
+        escapeHTML: false,           // ← allow highlight HTML through
         cssClasses: { button: 'btn btn-link p-0', disabledButton: 'text-muted' }
       })] : []),
 
@@ -328,41 +454,34 @@ export default class extends Controller {
 
       ...(this.hasHitsTarget ? [infiniteHits({
         container: this.hitsTarget,
+        escapeHTML: false,           // ← allow highlight HTML through
         cssClasses: {
           item: this.hitClassValue,
           loadMore: 'btn btn-primary',
           disabledLoadMore: 'btn btn-secondary disabled'
         },
         transformItems: (items) => {
-          const thr = this._effectiveThreshold();
-          if (thr <= 0) {
-            this._lastClientKeptCount = items.length;
-            LOG.trace('transformItems pass-through', { count: items.length, thr });
-            return items;
-          }
-          const kept = [];
-          for (const it of items) {
-            const s = Number(it?._rankingScore);
-            if (Number.isFinite(s) && s >= thr) kept.push(it);
-          }
-          this._lastClientKeptCount = kept.length;
-          LOG.trace('transformItems filtered', { input: items.length, kept: kept.length, thr });
-          return kept;
+          this._lastClientKeptCount = items.length;
+          return items;
         },
         templates: {
           item: (hit) => {
-            const body = this.template
-              ? this.template.render({
-                  hit,
-                  _config: this.config,
-                  _score: hit._rankingScore,
-                  _scoreDetails: hit._rankingScoreDetails,
-                  icons: this.icons,
-                  globals: this.globals,
-                  hints: (this.config?.hints || {}),
-                  view: (this.config?.view || {})
-                })
+            const ctx = {
+              hit,
+              _config: this.config,
+              _score: hit._rankingScore,
+              _scoreDetails: hit._rankingScoreDetails,
+              icons: this.icons,
+              globals: this.globals,
+              hints: (this.config?.hints || {}),
+              view: (this.config?.view || {})
+            };
+            const body = this.template ? this.template.render(ctx)
               : `<pre>${escapeHtml(JSON.stringify(hit, null, 2))}</pre>`;
+
+            // DEBUG what Twig produced
+            logView('twig body (first 500 chars) → %o', body?.slice?.(0, 500) ?? body);
+
             return `<div class="insta-hit" data-score="${Number(hit?._rankingScore) || ''}">${body}</div>`;
           },
           empty: () => `<div class="text-muted">No results.</div>`
@@ -381,9 +500,15 @@ export default class extends Controller {
 
     is.addWidgets(widgets);
     is.start();
-    LOG.info('instantsearch started');
 
+    // After each render, inspect the first hit node's final DOM
     is.on('render', () => {
+      try {
+        const first = this.hitsTarget?.querySelector?.('.insta-hit');
+        if (first) {
+          logView('DOM .insta-hit innerHTML (first 500 chars) → %o', first.innerHTML.slice(0, 500));
+        }
+      } catch {}
       const thr = this._effectiveThreshold();
       const total = this._lastServerEstimated ?? null;
       const kept = this._lastClientKeptCount ?? null;
@@ -393,9 +518,9 @@ export default class extends Controller {
           : `Found <strong>${total}</strong>.`;
         this.noticeTarget.innerHTML = `<div class="small text-muted">${msg}</div>`;
       }
-      LOG.trace('render HUD', { thr, total, kept });
     });
 
+    // manual submit wiring
     const wireManualSubmit = () => {
       const input = this.searchBoxTarget?.querySelector?.('input[type="search"], input[type="text"]');
       if (!input) return;
@@ -404,9 +529,7 @@ export default class extends Controller {
         this._pendingQuery = input.value ?? '';
         const trimmed = this._pendingQuery.trim();
 
-        if (!searchAsYouType) {
-          this._setSubmitEnabled(trimmed.length > 0);
-        }
+        if (!searchAsYouType) this._setSubmitEnabled(trimmed.length > 0);
 
         if (trimmed.length === 0) {
           try {
@@ -416,7 +539,6 @@ export default class extends Controller {
               ...state,
               [key]: { ...(state[key] || {}), query: undefined, page: 1 }
             });
-            LOG.debug('cleared → landing state');
           } catch {
             try { this.search?.refresh(); } catch {}
           }
@@ -430,12 +552,11 @@ export default class extends Controller {
 
     if (!searchAsYouType) {
       wireManualSubmit();
-      LOG.info('manual-submit mode wired');
+      if (this.hasSubmitTarget) this.submitTarget.style.display = '';
     } else {
       this._setSubmitEnabled(false);
       if (this.hasSubmitTarget) this.submitTarget.style.display = 'none';
       wireManualSubmit();
-      LOG.info('search-as-you-type mode wired');
     }
   }
 
@@ -443,7 +564,6 @@ export default class extends Controller {
     if (!this.hasSubmitTarget) return;
     this.submitTarget.disabled = !on;
     this.submitTarget.classList.toggle('disabled', !on);
-    LOG.trace('submit enabled?', on);
   }
 
   submit(event) {
@@ -455,36 +575,13 @@ export default class extends Controller {
     } catch {}
     q = (q || '').trim();
     if (!q) return;
-
     try {
       const state = this.search.getUiState() || {};
       const key = this.indexNameValue;
       this.search.setUiState({ ...state, [key]: { ...(state[key] || {}), query: q, page: 1 } });
-      LOG.info('manual submit', { q });
     } catch {
       try { this.search?.refresh(); } catch {}
     }
-  }
-
-  setMinScore(event) {
-    let raw = (event?.currentTarget?.value ?? '').trim();
-    let v = Number(raw);
-    if (!Number.isFinite(v) || v < 0) v = 0;
-    if (v > 1) v = 1;
-    this._setThresholdDecimal(v);
-    LOG.info('threshold set (decimal)', v);
-    try { this.search?.refresh(); } catch {}
-  }
-
-  setMinScoreMultiplier(event) {
-    const raw = (event?.currentTarget?.value ?? '').trim();
-    let m = Number(raw);
-    if (!Number.isFinite(m) || m < 0) m = 0;
-    if (m > 100) m = 100;
-    const v = m / 100;
-    this._setThresholdDecimal(v);
-    LOG.info('threshold set (multiplier)', m, '=>', v);
-    try { this.search?.refresh(); } catch {}
   }
 
   async _prefetchGlobalFacets() {
@@ -502,11 +599,7 @@ export default class extends Controller {
 
       const res = await index.search('', { facets, hitsPerPage: 0, limit: 0 });
       this._globalFacetCounts = res.facetDistribution || {};
-      LOG.debug('prefetch facets ok', Object.keys(this._globalFacetCounts));
-    } catch (e) {
-      LOG.debug('prefetch facets failed', e?.message ?? e);
-      throw e;
-    }
+    } catch { /* ignore */ }
   }
 
   _currentQuery() {
@@ -531,34 +624,22 @@ export default class extends Controller {
     if (this.semanticRatioValue !== ratio) {
       this.semanticRatioValue = ratio;
       if (this.hasSemanticOutputTarget) this.semanticOutputTarget.textContent = `${Math.round(clamped)}%`;
-      LOG.info('semantic ratio ->', ratio);
       try { this.search?.refresh(); } catch {}
     }
   }
 
   _isSemantic() {
-    const on = this.hasEmbedderNameValue && this.semanticEnabledValue;
-    LOG.trace('_isSemantic()', on);
-    return on;
+    return this.hasEmbedderNameValue && this.semanticEnabledValue;
   }
 
   _effectiveThreshold() {
     if (this.hasScoreMultiplierTarget) {
       const mult = Number(String(this.scoreMultiplierTarget.value ?? '').trim());
-      if (Number.isFinite(mult) && mult > 0) {
-        const v = Math.min(1, mult / 100);
-        LOG.trace('_effectiveThreshold via multiplier', mult, '=>', v);
-        return v;
-      }
+      if (Number.isFinite(mult) && mult > 0) return Math.min(1, mult / 100);
     }
     const dec = Number(this.scoreThresholdValue);
-    if (Number.isFinite(dec) && dec > 0) {
-      LOG.trace('_effectiveThreshold via decimal', dec);
-      return dec;
-    }
-    const v = this._isSemantic() ? 0.01 : 0;
-    LOG.trace('_effectiveThreshold default', v);
-    return v;
+    if (Number.isFinite(dec) && dec > 0) return dec;
+    return this._isSemantic() ? 0.01 : 0;
   }
 
   _setThresholdDecimal(decimalValue) {
@@ -566,6 +647,5 @@ export default class extends Controller {
     this.scoreThresholdValue = v;
     if (this.hasScoreThresholdTarget) this.scoreThresholdTarget.value = String(v);
     if (this.hasScoreMultiplierTarget) this.scoreMultiplierTarget.value = String(Math.round(v * 100));
-    LOG.debug('threshold synced', { decimal: v, multiplier: Math.round(v*100) });
   }
 }

@@ -44,7 +44,12 @@ class SearchController extends AbstractController
         }
 
         $index    = $this->meiliService->getIndexEndpoint($indexName);
-        $settings = $index->getSettings();
+        try {
+            $settings = $index->getSettings();
+        } catch (\Exception $exception) {
+            dump($index);
+            dd($exception, $indexName, $this->meiliService->getMeiliClient());
+        }
 
         $raw          = $this->meiliService->getIndexSetting($indexName);
         $templateName = $raw['rawName'] ?? $indexName;

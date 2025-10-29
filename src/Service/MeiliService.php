@@ -111,6 +111,7 @@ class MeiliService
     }
 
     public bool $passLocale { get => $this->config['passLocale'] ?? false; }
+    public array $tools { get => $this->config['tools']; }
 
     public function setConfig(array $config): void
     {

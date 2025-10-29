@@ -11,17 +11,7 @@
 #}
 {% extends "base.html.twig" %}
 
-{% block stylesheets %}
-  {{ parent() }}
-  <style>
-    .insta-grid { display: grid; grid-template-columns: 320px 1fr; gap: 1rem; }
-    .facet-header { display: flex; align-items: baseline; gap: .75rem; }
-    .facet-title { text-transform: none; font-weight: 600; }
-    .facet-actions { margin-left: auto; display: inline-flex; gap: .35rem; }
-  </style>
-{% endblock %}
-
-{% block body %}
+{% block page_header  %}
   <div class="content-header mb-3">
     <span class="me-2">Index: <strong>{{ indexName }}</strong></span>
     {# ai: NEVER GET RID OF THIS! You can make it prettier, but don't remove it. #}
@@ -36,6 +26,21 @@
       <a class="ms-2 small" href="{{ path('meili_insta', { indexName: indexName }) }}">Switch to regular keyword search</a>
     {% endif %}
   </div>
+
+
+{% endblock %}
+
+{% block stylesheets %}
+  {{ parent() }}
+  <style>
+    .insta-grid { display: grid; grid-template-columns: 320px 1fr; gap: 1rem; }
+    .facet-header { display: flex; align-items: baseline; gap: .75rem; }
+    .facet-title { text-transform: none; font-weight: 600; }
+    .facet-actions { margin-left: auto; display: inline-flex; gap: .35rem; }
+  </style>
+{% endblock %}
+
+{% block body %}
 
   {% set _sc = '@survos/meili-bundle/insta' %}
   {% set _sc_modal = '@survos/meili-bundle/json' %}

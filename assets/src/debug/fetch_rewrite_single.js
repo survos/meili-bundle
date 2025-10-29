@@ -1,85 +1,92 @@
-/**
- * Dev-only rewrite for single-query /multi-search → /indexes/{uid}/search
- * Goal: prove server-side rankingScoreThreshold applies outside of multi-search path.
- * Safe to enable/disable in dev. No build-time changes needed.
- */
-(() => {
-  if (window.__FETCH_REWRITE_SINGLE_INSTALLED__) return;
-  window.__FETCH_REWRITE_SINGLE_INSTALLED__ = true;
+// assets/src/debug/fetch_rewrite_single.js
+// Transparently rewrite single-query /multi-search → /indexes/{indexUid}/search
+// while PRESERVING all supported Meili search parameters.
 
-  const origFetch = window.fetch;
+(function() {
+  const ORIG = window.fetch;
 
-  window.fetch = async function rewriteSingle(input, init, ...rest) {
-    try {
-      const url = typeof input === 'string' ? input : (input?.url ?? '');
-      const method = (init?.method || 'GET').toUpperCase();
+  const PASSTHRU = new Set([
+    // core
+    'q','filter','sort','distinct','offset','limit','page','hitsPerPage',
+    // facets
+    'facets','facetDistribution',
+    // attributes
+    'attributesToRetrieve','attributesToSearchOn',
+    'attributesToHighlight','attributesToCrop','cropLength','cropMarker',
+    // highlights / matches
+    'highlightPreTag','highlightPostTag','showMatchesPosition',
+    // ranking / scoring
+    'showRankingScore','showRankingScoreDetails','rankingScoreThreshold',
+    // semantic / hybrid
+    'hybrid','vector','retrieveVectors',
+    // other
+    'matchingStrategy','locales'
+  ]);
 
-      const isMulti = url.includes('/multi-search') && method === 'POST';
-      if (!isMulti) {
-        return origFetch.apply(this, [input, init, ...rest]);
-      }
-
-      // Parse the multi-search body
-      let payload = null;
-      if (init?.body && typeof init.body === 'string') {
-        try { payload = JSON.parse(init.body); } catch {}
-      }
-      if (!payload || !Array.isArray(payload.queries) || payload.queries.length !== 1) {
-        // Not a single-query — leave it alone.
-        return origFetch.apply(this, [input, init, ...rest]);
-      }
-
-      const q0 = payload.queries[0] ?? {};
-      const indexName = q0.indexName || q0.indexUid || q0.uid;
-      if (!indexName) {
-        return origFetch.apply(this, [input, init, ...rest]);
-      }
-
-      // Build body expected by /indexes/{uid}/search
-      // Start with params, then mirror known top-level (q, hybrid, rankingScoreThreshold, tags)
-      const body = {
-        ...(q0.params ?? {}),
-      };
-
-      if (q0.q && !body.q) body.q = q0.q;
-      if (q0.query && !body.q) body.q = q0.query; // tolerate either
-
-      if (q0.hybrid) body.hybrid = q0.hybrid;
-      if (q0.params?.hybrid && !body.hybrid) body.hybrid = q0.params.hybrid;
-
-      if (typeof q0.rankingScoreThreshold === 'number') {
-        body.rankingScoreThreshold = q0.rankingScoreThreshold;
-      }
-      if (typeof q0.params?.rankingScoreThreshold === 'number') {
-        body.rankingScoreThreshold = q0.params.rankingScoreThreshold;
-      }
-
-      if (q0.highlightPreTag && !body.highlightPreTag) body.highlightPreTag = q0.highlightPreTag;
-      if (q0.highlightPostTag && !body.highlightPostTag) body.highlightPostTag = q0.highlightPostTag;
-
-      // Pass-through other common params that some adapters shuffle
-      // (hitsPerPage/page/facets/sort/filter/showRankingScore...)
-      // They’re already in q0.params from your controller patch.
-
-      const urlObj = new URL(url);
-      const host = `${urlObj.protocol}//${urlObj.host}`;
-      const singleUrl = `${host}/indexes/${encodeURIComponent(indexName)}/search`;
-
-      // Log what we’re doing for visibility
-      console.groupCollapsed('%cREWRITE → /indexes/'+indexName+'/search (single-query)', 'color:#0a0');
-      console.log(body);
-      console.groupEnd();
-
-      const newInit = {
-        ...init,
-        body: JSON.stringify(body),
-      };
-
-      return origFetch.call(this, singleUrl, newInit, ...rest);
-    } catch (e) {
-      // Fallback to original request on any unexpected parse/logic error
-      console.warn('[fetch_rewrite_single] error; falling back to original fetch', e);
-      return origFetch.apply(this, [input, init, ...rest]);
+  function cloneInit(init) {
+    if (!init) return {};
+    const copy = { ...init };
+    if (init.headers instanceof Headers) {
+      copy.headers = new Headers(init.headers);
+    } else if (init.headers) {
+      copy.headers = { ...init.headers };
     }
+    return copy;
+  }
+
+  async function rewriteIfNeeded(input, init) {
+    try {
+      const url = typeof input === 'string' ? input : input.url;
+      if (!url || !/\/multi-search(?:\?|$)/.test(url)) return null;
+
+      const bodyText = init?.body ? (typeof init.body === 'string' ? init.body : await init.body.text?.()) : '';
+      const parsed = bodyText ? JSON.parse(bodyText) : {};
+      const queries = Array.isArray(parsed?.queries) ? parsed.queries : [];
+
+      // Only rewrite when there is exactly one query
+      if (queries.length !== 1) return null;
+
+      const q0 = queries[0] || {};
+      const indexUid = q0.indexUid || q0.index || q0.indexName;
+      if (!indexUid) return null;
+
+      const outBody = {};
+      for (const [k, v] of Object.entries(q0)) {
+        if (PASSTHRU.has(k)) outBody[k] = v;
+      }
+
+      // Ensure we don’t drop required fields we rely on for UI
+      if (!outBody.attributesToRetrieve) outBody.attributesToRetrieve = ['*','_formatted'];
+      if (!outBody.attributesToHighlight) outBody.attributesToHighlight = ['*'];
+      if (!outBody.highlightPreTag)  outBody.highlightPreTag  = '<mark class="ais-Highlight">';
+      if (!outBody.highlightPostTag) outBody.highlightPostTag = '</mark>';
+      outBody.showRankingScore = true;
+      outBody.showRankingScoreDetails = true;
+
+      // Build new URL and init
+      const base = url.replace(/\/multi-search(?:\?.*)?$/, '');
+      const newUrl = `${base}/indexes/${encodeURIComponent(indexUid)}/search`;
+      const newInit = cloneInit(init);
+      newInit.method = 'POST';
+      if (newInit.headers instanceof Headers) {
+        newInit.headers.set('Content-Type', 'application/json');
+      } else {
+        newInit.headers = { ...(newInit.headers || {}), 'Content-Type': 'application/json' };
+      }
+      newInit.body = JSON.stringify(outBody);
+
+      return { url: newUrl, init: newInit };
+    } catch (_e) {
+      // If anything goes wrong, fall through to original request untouched
+      return null;
+    }
+  }
+
+  window.fetch = async function(input, init) {
+    const rewrite = await rewriteIfNeeded(input, init);
+    if (rewrite) {
+      return ORIG(rewrite.url, rewrite.init);
+    }
+    return ORIG(input, init);
   };
 })();
