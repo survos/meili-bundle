@@ -63,16 +63,38 @@ class MeiliController extends AbstractController
 
             }
         }
-//        $rawInfo = $indexApi->fetchRawInfo(); // NOT a task
+        $rawInfo = $indexApi->fetchRawInfo(); // NOT a task
+        $stats = $indexApi->stats();
+        $facetCounts = [];
+
+        foreach ($settings['facets'] as $fieldName => $details) {
+
+            $params = ['limit' => 0,
+                'facets' => [$fieldName]];
+            $data = $indexApi->rawSearch("", $params);
+//        dd($data, indexName: $indexName, tableName: $tableName, fieldName: $fieldName, params: $params, dist: $data['facetDistribution'][$fieldName]);
+
+            $facetDistributionCounts = $data['facetDistribution'][$fieldName]??[];
+//        $translations = $projectService->getNonObjectTranslations($project->getCode(), $field->getCoreCode(), $locale); // , '=');
+            $counts = [];
+            foreach ($facetDistributionCounts as $label => $count) {
+                $counts[] = [
+                    'label' => $label,
+                    'count' => $count
+                ];
+            }
+            $facetCounts[$fieldName] = $counts;
+        }
 
 //        $info = $this->meiliService->getMeiliClient()->getRawIndex($actualIndexName);
 
         return $this->render('@SurvosMeili/index/show.html.twig', [
             'indexName' => $indexName,
-//            'rawInfo' => $rawInfo,
+            'facetCounts' => $facetCounts,
+            'rawInfo' => $rawInfo,
+            'stats' => $stats,
             'settings' => $settings,
             'adminContext' => $context,
-
         ]);
     }
 

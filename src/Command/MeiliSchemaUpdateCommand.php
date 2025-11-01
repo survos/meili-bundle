@@ -7,6 +7,7 @@ use Liquid\Template;
 use Meilisearch\Client;
 use Meilisearch\Contracts\CancelTasksQuery;
 use Meilisearch\Contracts\TasksQuery;
+use Survos\CoreBundle\Service\SurvosUtils;
 use Survos\MeiliBundle\Meili\MeiliTaskStatus;
 use Survos\MeiliBundle\Meili\Task;
 use Survos\MeiliBundle\Service\MeiliService;
@@ -172,6 +173,7 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
                         $templateFilename = $embedder['documentTemplate'];
                         $embedder['documentTemplate'] = file_get_contents($templateFilename);
                         $embeddersForThisIndex[$key]['documentTemplate'] = file_get_contents($templateFilename);
+
 //                        $content = file_get_contents($templateFilename);
 
 //                        $templates[$key]->parse($content);
@@ -184,7 +186,6 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
                         foreach ($embeddersForThisIndex as $embedderName => $embedder) {
                             $templates[$embedderName] = new Template($templateFilename);
                             $totalTokens[$embedderName] = 0;
-                            $templates[$embedderName] = new Template();
                         }
 
                         // iterate through the records, render the liquid template, and pass to totenizer estmiate
@@ -199,10 +200,10 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 //                            $data = $this->normalizer->normalize($e, 'array');
 //                            dump($data);
                             foreach ($embeddersForThisIndex as $embedderName => $embedder) {
+                                SurvosUtils::assertKeyExists($embedderName, $templates);
                                 $template = $templates[$embedderName];
-                                dump($data);
                                 $text = $template->render(['doc' => $data]);
-                                dd($templates, $embedderName, $template, $text);
+                                dd($text);
 
                                 $provider = new EncoderProvider();
                                 $encoder = $provider->getForModel($embedder['model']); // or 'gpt-3.5-turbo'

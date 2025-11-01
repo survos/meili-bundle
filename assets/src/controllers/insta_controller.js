@@ -1,37 +1,30 @@
-// -----------------------------------------------------------------------------
-// File: assets/src/controllers/insta_controller.js
-// Version: MEILI-INSTA v4.6
-//  - Fix: translate Algolia-style facetFilters / numericFilters -> Meilisearch `filter`
-//  - Keep: facets array normalization + fallback from config/schema
-//  - Keep: highlight conversion, hybrid/threshold handling, debug hooks
-// -----------------------------------------------------------------------------
+/**
+ * File: assets/src/controllers/insta_controller.js
+ * Version: MEILI-INSTA v6.4.2
+ *
+ * Keys:
+ *  - Instant Meilisearch adapter is the only source of truth.
+ *  - Seed `meiliSearchParams.facets` before creating the client.
+ *  - keepZeroFacets=true so facets render on first paint.
+ *  - FIX: robust parsing of data-limit / data-show-more-limit ("" -> undefined, not 0).
+ *  - FIX: showReset=true on main SearchBox
+ *  - FIX: hide zero-count facet values via transformItems
+ *  - FIX: swap __ais-highlight__ markers to <mark class="ais-Highlight"> for display
+ */
 
 import { Controller } from '@hotwired/stimulus';
 import * as StimAttrs from 'stimulus-attributes';
 import instantsearch from 'instantsearch.js';
 import { instantMeiliSearch } from '@meilisearch/instant-meilisearch';
+import { MeiliSearch } from 'meilisearch';
+import { runMeiliSanity } from '../debug/meili_sanity.js';
 
-// AI: NEVER ELIMINATE THIS, it is very important
+// We only need withHideZero from helpers; the rest we implement locally here.
+import { withHideZero } from './insta_helpers.js';
+
+// AI: NEVER ELIMINATE OR MODIFY THESE LINES!, they are very important
 import Twig from 'twig';
-
-import '../debug/fetch_tap.js';
-import { createDebug } from '../debug/debug.js';
-import {
-  searchBox,
-  infiniteHits,
-  stats,
-  pagination,
-  clearRefinements,
-  hitsPerPage,
-  sortBy,
-  configure
-} from 'instantsearch.js/es/widgets';
-
 import { installTwigAPI } from './insta_twig.js';
-import { safeParse, stripProtocol, escapeHtml, normalizeConfig } from './insta_helpers.js';
-import { mountFacetFromNode } from './insta_facets.js';
-
-// Optional routes
 let Routing = null;
 try {
   const module = await import('fos-routing');
@@ -39,33 +32,86 @@ try {
   const RoutingDataModule = await import('/js/fos_js_routes.js');
   const RoutingData = RoutingDataModule.default;
   Routing.setData(RoutingData);
-} catch { /* ignore */ }
+} catch { /* optional */ }
 installTwigAPI({ Routing, StimAttrs });
+// END OF IMPORTANT CODE
 
-// Debug logger (enable with: localStorage.debug = 'insta:*,wire:*,hl:*,view:*')
-const logInsta = createDebug('insta:core');
-const logWire  = createDebug('wire:meili');
-const logHL    = createDebug('hl:convert');
-const logView  = createDebug('view:render');
+import '../debug/fetch_tap.js';
+import { createDebug } from '../debug/debug.js';
+import {
+  searchBox,
+  infiniteHits,
+  stats,
+  clearRefinements,
+  hitsPerPage,
+  sortBy,
+  configure,
+  refinementList,
+  rangeSlider
+} from 'instantsearch.js/es/widgets';
 
+// --- local tiny helpers that were previously imported ---
+const safeParse = (json, fallback) => {
+  try { return json ? JSON.parse(json) : fallback; } catch { return fallback; }
+};
+const stripProtocol = (url) => String(url || '').replace(/^https?:\/\//i, '');
+const escapeHtml = (s) => String(s ?? '').replaceAll(/&/g,'&amp;').replaceAll(/</g,'&lt;').replaceAll(/>/g,'&gt;');
+const normalizeConfig = (cfg) => cfg || {};
+
+const logInsta  = createDebug('insta:core');
+const logView   = createDebug('view:render');
+const logFacets = createDebug('insta:facets');
+const hard = (...a) => console.warn('[INSTA]', ...a);
+
+const HLPRE  = '__ais-highlight__';
+const HLPOST = '__/ais-highlight__';
+
+// ---------- highlight helpers ----------
+function swapMarkersToHtml(s) {
+  const txt = String(s ?? '');
+  return txt.replaceAll(HLPRE, '<mark class="ais-Highlight">')
+            .replaceAll(HLPOST, '</mark>');
+}
+function buildHighlightResultFromFormatted(formatted) {
+  const out = {};
+  for (const [key, val] of Object.entries(formatted || {})) {
+    if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') {
+      out[key] = { value: swapMarkersToHtml(val) };
+    } else if (Array.isArray(val)) {
+      out[key] = val.map(v =>
+        (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')
+          ? { value: swapMarkersToHtml(v) }
+          : { value: swapMarkersToHtml(JSON.stringify(v)) }
+      );
+    } else {
+      out[key] = { value: swapMarkersToHtml(JSON.stringify(val)) };
+    }
+  }
+  return out;
+}
+const j = (v) => { try { return JSON.stringify(v, null, 2); } catch { return String(v); } };
+
+// Parse numeric data-attrs: empty -> undefined, invalid -> undefined
+function parseDataNumber(value) {
+  if (value === undefined || value === null) return undefined;
+  const trimmed = String(value).trim();
+  if (trimmed === '') return undefined;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+// ---------- controller ----------
 export default class extends Controller {
   static targets = [
-    'searchBox', 'hits', 'reset', 'pagination', 'refinementList', 'stats',
-    'semanticSlider', 'semanticOutput', 'sortBy', 'debug', 'submit',
-    'scoreThreshold', 'scoreMultiplier', 'notice'
+    'searchBox','hits','reset','refinementList','stats',
+    'sortBy','debug','notice','pagination',
+    'semanticSlider','semanticOutput','scoreMultiplier','scoreThreshold'
   ];
 
   static values = {
     serverUrl: String,
     serverApiKey: String,
     indexName: String,
-
-    // Hybrid
-    embedderName: String,
-    semanticEnabled: { type: Boolean, default: true },
-    semanticRatio: Number,
-
-    // UI
     templateUrl: String,
     userLocale: { type: String, default: 'en' },
     q: { type: String, default: '' },
@@ -74,67 +120,78 @@ export default class extends Controller {
     iconsJson: { type: String, default: '{}' },
     sortingJson: { type: String, default: '[]' },
     configJson: { type: String, default: '{}' },
-
-    // Server-side score threshold
-    scoreThreshold: { type: Number, default: 0 },
-
-    // Typing behavior
-    searchAsYouType: { type: Boolean, default: true }
+    searchAsYouType: { type: Boolean, default: true },
+    sanity: { type: Boolean, default: false }
   };
 
   initialize() {
-    logInsta('initialize %o', {
+    // Version banner (so our logs match)
+    hard('MEILI-INSTA v6.4.2 boot', {
       index: this.indexNameValue,
-      url: this.serverUrlValue,
-      embedder: this.embedderNameValue,
-      semanticEnabled: this.semanticEnabledValue
+      url: this.serverUrlValue
     });
 
-    this.globals = safeParse(this.globalsJsonValue, {});
-    if (!this.globals._sc_modal) this.globals._sc_modal = '@survos/meili-bundle/json';
+    try { if (!localStorage.getItem('debug')) { localStorage.setItem('debug', 'insta:*'); } } catch {}
 
-    this.icons  = safeParse(this.iconsJsonValue, {});
+    this.globals = safeParse(this.globalsJsonValue, {});
+    this.icons   = safeParse(this.iconsJsonValue, {});
     window.__survosIconsMap = this.icons || {};
 
     this.sorting = safeParse(this.sortingJsonValue, []);
     this.config  = normalizeConfig(safeParse(this.configJsonValue, {}));
 
-    // HUD
-    this._globalFacetCounts = {};
-    this.search = null;
-    this._pendingQuery = (this.qValue || '').trim();
+    this.template = null;
+    this._facetAttrs = [];
 
-    this._lastServerEstimated = null;
-    this._lastServerPageCount = null;
-    this._lastPageScoreMin = null;
-    this._lastPageScoreMax = null;
-    this._lastClientKeptCount = null;
+    // diagnostics throttling
+    this._facetRenderChecks = 0;
+    this._facetWarnedOnce = false;
+    this._lastFacetKeys = [];
 
+    // Single truth: seed adapter; we fill facets in connect()
     this._meiliOptions = {
+      primaryKey: undefined,
+      keepZeroFacets: true,
       meiliSearchParams: {
-        keepZeroFacets: false,
+        keepZeroFacets: true,
         showRankingScore: true,
-        showRankingScoreDetails: true
+        showRankingScoreDetails: true,
+        highlightPreTag:  HLPRE,
+        highlightPostTag: HLPOST
       }
     };
+
+    this._setMeiliParams = null;
   }
 
   async connect() {
     await this._loadTemplate();
 
-    if (this._isSemantic()) {
-      if (!(this._effectiveThreshold() > 0)) this._setThresholdDecimal(0.01); // Tac default
-      const percent = this.hasSemanticSliderTarget ? Number(this.semanticSliderTarget.value) || 30 : 30;
-      this.semanticRatioValue = Math.max(0, Math.min(100, percent)) / 100;
+    // 1) Collect facet attributes from DOM
+    this._facetAttrs = this._collectFacetAttributes();
+    logFacets('facet attributes (requested) → %o', this._facetAttrs);
+    hard('facet attrs requested', this._facetAttrs);
+
+    // 2) Seed adapter facets before creating client
+    if (Array.isArray(this._facetAttrs) && this._facetAttrs.length) {
+      this._meiliOptions.meiliSearchParams.facets = this._facetAttrs;
     }
+    this._meiliOptions.keepZeroFacets = true;
 
+    // 3) Start UI
     await this._startSearch();
+
+    // 4) Non-blocking sanity
+    const host = this.serverUrlValue;
+    const apiKey = this.serverApiKeyValue || null;
+    const indexUid = this.indexNameValue;
+    window.meiliSanity = () => runMeiliSanity({ host, apiKey, indexUid, query: '' });
+    if (this.sanityValue || localStorage.getItem('meili:debug') === '1') {
+      runMeiliSanity({ host, apiKey, indexUid, query: '' }).catch(() => {});
+    }
   }
 
-  disconnect() {
-    try { this.search?.dispose(); } catch { /* ignore */ }
-    this.search = null;
-  }
+  disconnect() { try { this.search?.dispose(); } catch {} this.search = null; }
 
   async _loadTemplate() {
     if (!this.templateUrlValue) return;
@@ -142,394 +199,24 @@ export default class extends Controller {
     if (!res.ok) throw new Error(`Template HTTP ${res.status}: ${res.statusText}`);
     const ct = res.headers.get('content-type') || '';
     const data = ct.includes('application/json') ? await res.json() : await res.text();
+    if (!Twig || typeof Twig.twig !== 'function') throw new Error('Twig.twig() not available; ensure browser build of "twig" is used.');
     this.template = Twig.twig({ data });
   }
 
-  // ---------------------------------------------------------------------------
-  // Helpers: convert Algolia-esque filters -> Meilisearch filter string
-  // ---------------------------------------------------------------------------
-  // put this above buildQueries (e.g., near _facetTermToMeili)
-  _normalizeFacets(val) {
-    if (val == null) return null;
-    if (Array.isArray(val)) return val.map(String);
-    if (typeof val === 'string') {
-      // handle JSON-encoded arrays like '["a","b"]' or stray single names
-      try {
-        const parsed = JSON.parse(val);
-        if (Array.isArray(parsed)) return parsed.map(String);
-      } catch {}
-      return [val];
-    }
-    // handle odd callers passing objects/numbers
-    return [String(val)];
-  }
-
-  _facetTermToMeili(term) {
-    // Supports "-attr:value" -> attr != "value"
-    let neg = false;
-    let t = String(term);
-    if (t.startsWith('-')) { neg = true; t = t.slice(1); }
-    const idx = t.indexOf(':');
-    if (idx < 0) return null;
-    const attr = t.slice(0, idx).trim();
-    const val  = t.slice(idx + 1).trim();
-    if (!attr) return null;
-    const op = neg ? '!=' : '=';
-    return `${attr} ${op} ${JSON.stringify(val)}`;
-  }
-
-  _buildMeiliFilterFromParams(p) {
-    // Accepts Algolia-like:
-    //  - facetFilters: ["director:Kubrick", ["genres:Comedy","genres:Drama"], "-keywords:crime"]
-    //  - numericFilters: ["releaseYear >= 2000", ["runtime < 120","voteCount >= 100"]]
-    const andParts = [];
-
-    const { facetFilters, numericFilters, filters } = p || {};
-
-    if (Array.isArray(facetFilters) && facetFilters.length) {
-      const ff = facetFilters.map(group => {
-        if (Array.isArray(group)) {
-          const orParts = group
-            .map(t => this._facetTermToMeili(t))
-            .filter(Boolean);
-          return orParts.length ? `(${orParts.join(' OR ')})` : null;
-        } else {
-          const one = this._facetTermToMeili(group);
-          return one || null;
-        }
-      }).filter(Boolean);
-      if (ff.length) andParts.push(ff.join(' AND '));
-    }
-
-    if (Array.isArray(numericFilters) && numericFilters.length) {
-      const nf = numericFilters.map(group => {
-        if (Array.isArray(group)) {
-          const orParts = group.map(String).map(s => s.trim()).filter(Boolean);
-          return orParts.length ? `(${orParts.join(' OR ')})` : null;
-        } else {
-          const one = String(group).trim();
-          return one || null;
-        }
-      }).filter(Boolean);
-      if (nf.length) andParts.push(nf.join(' AND '));
-    }
-
-    // If `filters` (Algolia boolean syntax string) is provided by caller, prefer it last
-    if (typeof filters === 'string' && filters.trim().length) {
-      andParts.push(filters.trim());
-    }
-
-    if (!andParts.length) return null;
-    return andParts.join(' AND ');
-  }
-
-  // ---------------------------------------------------------------------------
-  // Custom client (multi-search) with robust _formatted → _highlightResult
-  // ---------------------------------------------------------------------------
   _createClient() {
-    // Sentinels prevent Meili from touching real tags
-    const SENTINEL_PRE  = '__ais-highlight__';
-    const SENTINEL_POST = '__/ais-highlight__';
-
-    const { searchClient } = instantMeiliSearch(
+    const { searchClient, setMeiliSearchParams } = instantMeiliSearch(
       this.serverUrlValue,
-      this.serverApiKeyValue,
+      this.serverApiKeyValue || undefined,
       this._meiliOptions
     );
-
-    const toAlgoliaResult = (meiliResult, queryShape) => {
-      const q = queryShape || {};
-      const limit =
-        Number.isFinite(+q.limit) ? +q.limit
-        : Number.isFinite(+meiliResult?.limit) ? +meiliResult.limit
-        : 20;
-
-      const MARK_OPEN = '<mark class="ais-Highlight">';
-      const MARK_CLOSE = '</mark>';
-
-      // decode & swap on a primitive
-      const decodeAndSwap = (s) => {
-        const el = document.createElement('textarea');
-        el.innerHTML = String(s);
-        const decoded = el.value;
-        const swapped = decoded
-          .replaceAll(SENTINEL_PRE, MARK_OPEN)
-          .replaceAll(SENTINEL_POST, MARK_CLOSE);
-        return swapped;
-      };
-
-      // normalize any _formatted value into Algolia-style { value } (or array)
-      const toHighlightEntry = (v) => {
-        if (v == null) return null;
-
-        if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
-          return { value: decodeAndSwap(v) };
-        }
-
-        if (Array.isArray(v)) {
-          const arr = v.map(entry => {
-            if (entry == null) return null;
-            if (typeof entry === 'string' || typeof entry === 'number' || typeof entry === 'boolean') {
-              return { value: decodeAndSwap(entry) };
-            }
-            try { return { value: decodeAndSwap(JSON.stringify(entry)) }; }
-            catch { return null; }
-          }).filter(Boolean);
-          return arr.length ? arr : null;
-        }
-
-        try { return { value: decodeAndSwap(JSON.stringify(v)) }; }
-        catch { return null; }
-      };
-
-      // debug: peek at raw _formatted from Meili (first 2 hits)
-      const sampleFormatted = (meiliResult?.hits || []).slice(0, 2).map(h => h?._formatted ?? null);
-      logHL('raw _formatted (first 2): %o', sampleFormatted);
-
-      const hits = (meiliResult?.hits || []).map((hit, idx) => {
-        if (hit && hit._formatted && typeof hit._formatted === 'object') {
-          const h = {};
-          for (const [k, v] of Object.entries(hit._formatted)) {
-            const entry = toHighlightEntry(v);
-            if (entry) h[k] = entry;
-          }
-          hit._highlightResult = h;
-
-          const anyVal = h?.title?.value ?? h?.name?.value ?? h?.headline?.value ?? null;
-          if (idx < 2) {
-            logHL(
-              'post-conversion contains <mark>? %o  escaped &lt;mark? %o  value=%o',
-              typeof anyVal === 'string' && anyVal.includes('<mark'),
-              typeof anyVal === 'string' && anyVal.includes('&lt;mark'),
-              anyVal
-            );
-          }
-          delete hit._formatted;
-        } else if (idx < 2) {
-          logHL('no _formatted on hit %d', idx);
-        }
-
-        if (hit && hit._rankingScore != null) {
-          hit._rankingScore = Number(hit._rankingScore);
-        }
-        return hit;
-      });
-
-      const nbHits = Number.isFinite(+meiliResult?.estimatedTotalHits)
-        ? +meiliResult.estimatedTotalHits
-        : hits.length;
-
-      return {
-        hits,
-        nbHits,
-        nbPages: Math.max(1, Math.ceil(nbHits / limit)),
-        hitsPerPage: limit,
-        processingTimeMS: Number.isFinite(+meiliResult?.processingTimeMs)
-          ? +meiliResult.processingTimeMs
-          : 0,
-        query: meiliResult?.query ?? q.q ?? '',
-        facets: meiliResult?.facetDistribution ?? {},
-      };
-    };
-
-    const buildQueries = (requests, shouldHybrid, ratio, threshold) => {
-      return requests.map(r => {
-        const p  = r.params || {};
-        const hp = (p.hitsPerPage ?? p.limit ?? 20) | 0;
-        const pg = Number.isFinite(+p.page) ? (+p.page) : 0;
-        const off = p.hasOwnProperty('offset') ? (+p.offset || 0) : (pg * (hp || 20));
-
-        const out = {
-          indexUid: r.indexName ?? r.indexUid ?? r.index ?? this.indexNameValue,
-          q:        r.q ?? p.q ?? p.query ?? '',
-          limit:    Math.max(1, hp || 20),
-          offset:   Math.max(0, off),
-
-          // Highlights + retrieval of _formatted
-          attributesToRetrieve: Array.isArray(p.attributesToRetrieve) && p.attributesToRetrieve.length
-            ? p.attributesToRetrieve
-            : ['*', '_formatted'],
-          attributesToHighlight: Array.isArray(p.attributesToHighlight) && p.attributesToHighlight.length
-            ? p.attributesToHighlight
-            : ['*'],
-          highlightPreTag:  SENTINEL_PRE,
-          highlightPostTag: SENTINEL_POST,
-
-          // Scores
-          showRankingScore: true,
-          showRankingScoreDetails: true,
-        };
-
-        // Normalize params that Meilisearch expects in specific shapes
-        if (p.sort)                 out.sort = p.sort;
-        if (p.distinct)             out.distinct = p.distinct;
-        if (p.matchingStrategy)     out.matchingStrategy = p.matchingStrategy;
-
-        if (p.attributesToSearchOn) {
-          out.attributesToSearchOn = Array.isArray(p.attributesToSearchOn)
-            ? p.attributesToSearchOn
-            : [p.attributesToSearchOn];
-        }
-
-        // Build `filter` from facetFilters / numericFilters / filters when no direct `filter` present
-        if (p.filter) {
-          out.filter = p.filter;
-        } else {
-          const built = this._buildMeiliFilterFromParams(p);
-          if (built) out.filter = built;
-        }
-
-        // --- FACETS HANDLING ---
-        // Prefer what InstantSearch provides; otherwise fallback to config/schema
-// --- FACETS HANDLING ---
-        let facetsParam = p.facets ?? r.facets ?? null;
-
-        if (facetsParam == null) {
-          const schemaFacets = this.config?.schema?.filterableAttributes || [];
-          const configuredFacets = Array.isArray(this.config?.facets)
-              ? this.config.facets.map(f => f.attribute)
-              : Object.keys(this.config?.facets || {});
-          const dedup = Array.from(new Set([...(schemaFacets || []), ...(configuredFacets || [])]))
-              .filter(Boolean);
-          facetsParam = dedup.length ? dedup : null;
-          if (!p.facets && !r.facets && facetsParam) {
-            logWire('facets fallback from config/schema → %o', facetsParam);
-          }
-        }
-
-        const normalizedFacets = this._normalizeFacets(facetsParam);
-        if (normalizedFacets && normalizedFacets.length) {
-          out.facets = normalizedFacets;
-        }
-
-        // Optional: coerce single strings to arrays if caller set them oddly
-        if (p.attributesToRetrieve && !Array.isArray(p.attributesToRetrieve)) {
-          out.attributesToRetrieve = [String(p.attributesToRetrieve)];
-        }
-        if (p.attributesToHighlight && !Array.isArray(p.attributesToHighlight)) {
-          out.attributesToHighlight = [String(p.attributesToHighlight)];
-        }
-
-        if (shouldHybrid) {
-          out.hybrid = { embedder: this.embedderNameValue, semanticRatio: ratio };
-          if (threshold > 0) out.rankingScoreThreshold = threshold;
-        }
-
-        logWire('buildQueries → %o', {
-          indexUid: out.indexUid, q: out.q,
-          attributesToRetrieve: out.attributesToRetrieve,
-          attributesToHighlight: out.attributesToHighlight,
-          highlightPreTag: out.highlightPreTag,
-          highlightPostTag: out.highlightPostTag,
-          showRankingScore: out.showRankingScore,
-          rankingScoreThreshold: out.rankingScoreThreshold,
-          hybrid: out.hybrid,
-          facets: out.facets,
-          filter: out.filter
-        });
-
-        return out;
-      });
-    };
-
-    const base = (this.serverUrlValue || '').replace(/\/+$/,'');
-    const multiUrl = `${base}/multi-search`;
-
-    return {
-      ...searchClient,
-
-      search: async (requests) => {
-        const reqs = Array.isArray(requests) ? requests : [requests];
-
-        const shouldHybrid = this._isSemantic();
-        const ratio = (typeof this.semanticRatioValue === 'number') ? this.semanticRatioValue : 0.30;
-        const thr   = this._effectiveThreshold();
-
-        const queries = buildQueries(reqs, shouldHybrid, ratio, thr);
-
-        const headers = { 'Content-Type': 'application/json' };
-        if (this.serverApiKeyValue) headers.Authorization = `Bearer ${this.serverApiKeyValue}`;
-
-        // last-chance safety: ensure every query has facets as an array if present
-        for (const q of queries) {
-          if (q.hasOwnProperty('facets') && !Array.isArray(q.facets)) {
-            q.facets = this._normalizeFacets(q.facets) ?? undefined;
-          }
-        }
-
-        const body = { queries };
-
-        window.__meiliLastMulti = { url: multiUrl, body };
-        logWire('WIRE → %s %o', multiUrl, body);
-
-        let raw, ok = true, status = 0, errText = '';
-        try {
-          const res = await fetch(multiUrl, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(body)
-          });
-          status = res.status;
-          ok     = res.ok;
-          raw    = ok ? await res.json() : null;
-          if (!ok) { try { errText = await res.text(); } catch {} }
-        } catch (e) {
-          ok = false; errText = String(e?.message ?? e);
-        }
-
-        if (ok) {
-          logWire('WIRE ← %o', raw);
-        } else {
-          logWire('WIRE ← ERROR status=%o err=%o', status, errText);
-        }
-
-        let multiJson = null;
-        if (ok && raw) {
-          if (Array.isArray(raw?.results)) multiJson = raw;
-          else if (Array.isArray(raw?.hits)) multiJson = { results: [ raw ] };
-          else multiJson = { results: [ raw ] };
-        }
-
-        if (!ok || !multiJson || !Array.isArray(multiJson.results)) {
-          logWire('search fail: status=%o err=%o', status, errText);
-          const empty = { hits: [], nbHits: 0, page: 0, nbPages: 1, hitsPerPage: 20, processingTimeMS: 0, query: '' };
-          this._lastServerEstimated = 0;
-          this._lastServerPageCount = 0;
-          this._lastPageScoreMin = null;
-          this._lastPageScoreMax = null;
-          return { results: [ empty ] };
-        }
-
-        const algResults = multiJson.results.map((r, i) => toAlgoliaResult(r, queries[i]));
-
-        try {
-          const r0 = algResults[0] || {};
-          const hits = Array.isArray(r0.hits) ? r0.hits : [];
-          const scores = hits.map(h => Number(h?._rankingScore))
-            .filter(Number.isFinite)
-            .sort((a,b)=>a-b);
-          this._lastServerEstimated = r0.nbHits ?? null;
-          this._lastServerPageCount = hits.length;
-          this._lastPageScoreMin = scores[0] ?? null;
-          this._lastPageScoreMax = scores[scores.length - 1] ?? null;
-        } catch {
-          this._lastServerEstimated = null;
-          this._lastServerPageCount = null;
-          this._lastPageScoreMin = null;
-          this._lastPageScoreMax = null;
-        }
-
-        return { results: algResults };
-      }
-    };
+    this._setMeiliParams = setMeiliSearchParams;
+    return searchClient;
   }
 
-  // ---------------------------------------------------------------------------
+  // ---------- SEARCH UI ----------
   async _startSearch(initialUiState = null) {
     const ui = initialUiState ?? {
-      [this.indexNameValue]: {
-        query: (this.qValue || '').trim() || undefined
-      }
+      [this.indexNameValue]: { query: (this.qValue || '').trim() || undefined }
     };
 
     const is = instantsearch({
@@ -543,19 +230,22 @@ export default class extends Controller {
     this.search = is;
     window.search = is;
 
-    await this._prefetchGlobalFacets().catch(() => {});
-
-    const semantic = this._isSemantic();
-    const searchAsYouType = this.hasSearchAsYouTypeValue
-      ? !!this.searchAsYouTypeValue
-      : !semantic;
-
     const widgets = [
+      configure({
+        facets: this._facetAttrs,
+        attributesToHighlight: ['*'],
+        highlightPreTag:  HLPRE,
+        highlightPostTag: HLPOST
+      }),
+
+      // MAIN SearchBox — showReset to get the "×"
       searchBox({
         container: this.searchBoxTarget,
-        searchAsYouType,
+        searchAsYouType: this.hasSearchAsYouTypeValue ? !!this.searchAsYouTypeValue : true,
         placeholder: `${this.indexNameValue} on ${stripProtocol(this.serverUrlValue)} ${this.qValue}`,
-        autofocus: false
+        autofocus: false,
+        showReset: true,
+        showSubmit: true
       }),
 
       ...(this.hasStatsTarget ? [stats({ container: this.statsTarget })] : []),
@@ -564,8 +254,7 @@ export default class extends Controller {
         container: this.resetTarget,
         clearsQuery: false,
         templates: { reset: 'Clear refinements' },
-        escapeHTML: false,
-        cssClasses: { button: 'btn btn-link p-0', disabledButton: 'text-muted' }
+        escapeHTML: false
       })] : []),
 
       hitsPerPage({
@@ -577,203 +266,216 @@ export default class extends Controller {
         ]
       }),
 
-      configure({
-        showRankingScore: true,
-        hitsPerPage: 20,
-        rankingScoreThreshold: this._effectiveThreshold()
-      }),
-
       ...(this.hasHitsTarget ? [infiniteHits({
         container: this.hitsTarget,
         escapeHTML: false,
         cssClasses: {
-          item: this.hitClassValue,
+          item: this.hitClassValue || 'grid-3',
           loadMore: 'btn btn-primary',
           disabledLoadMore: 'btn btn-secondary disabled'
         },
-        transformItems: (items) => {
-          this._lastClientKeptCount = items.length;
-          return items;
-        },
+        transformItems: (items) => items.map(h => {
+          // Convert Meili markers into HTML before rendering
+          if (h && h._formatted && typeof h._formatted === 'object') {
+            h._highlightResult = buildHighlightResultFromFormatted(h._formatted);
+            for (const [k, v] of Object.entries(h._formatted)) {
+              if (typeof v === 'string' && typeof h[k] === 'string') {
+                h[k] = swapMarkersToHtml(v);
+              }
+            }
+          }
+          return h;
+        }),
         templates: {
           item: (hit) => {
-            const ctx = {
-              hit,
-              _config: this.config,
-              _score: hit._rankingScore,
-              _scoreDetails: hit._rankingScoreDetails,
-              icons: this.icons,
-              globals: this.globals,
-              hints: (this.config?.hints || {}),
-              view: (this.config?.view || {})
-            };
-            const body = this.template ? this.template.render(ctx)
-              : `<pre>${escapeHtml(JSON.stringify(hit, null, 2))}</pre>`;
-
-            logView('twig body (first 500 chars) → %o', body?.slice?.(0, 500) ?? body);
-
-            return `<div class="insta-hit" data-score="${Number(hit?._rankingScore) || ''}">${body}</div>`;
+            const ctx = { hit, icons: this.icons, globals: this.globals, _config: this.config };
+            const body = this.template ? this.template.render(ctx) : `<pre>${escapeHtml(JSON.stringify(hit, null, 2))}</pre>`;
+            logView('rendered hit (first 400) → %o', body?.slice?.(0, 400) ?? body);
+            return `<div class="insta-hit">${body}</div>`;
           },
           empty: () => `<div class="text-muted">No results.</div>`
         }
-      })] : []),
-
-      ...(this.hasPaginationTarget ? [pagination({ container: this.paginationTarget })] : [])
+      })] : [])
     ];
 
     if (this.hasSortByTarget) {
       widgets.push(sortBy({ container: this.sortByTarget, items: this.sorting }));
     }
 
-    const nodes = this.refinementListTarget?.querySelectorAll?.('[data-attribute][data-widget]') || [];
-    nodes.forEach(el => mountFacetFromNode(this, is, el));
+    // Mount facet widgets declared in the template
+    const facetNodes = this.refinementListTarget?.querySelectorAll?.('[data-attribute][data-widget]') || [];
+    facetNodes.forEach(el => {
+      if (el.dataset.mounted === '1') return;
+      this._mountFacetFromNode(is, el);
+    });
+
+    this._wireFacetCollapsers();
 
     is.addWidgets(widgets);
     is.start();
 
     is.on('render', () => {
       try {
-        const first = this.hitsTarget?.querySelector?.('.insta-hit');
-        if (first) {
-          logView('DOM .insta-hit innerHTML (first 500 chars) → %o', first.innerHTML.slice(0, 500));
-        }
-      } catch {}
-      const thr = this._effectiveThreshold();
-      const total = this._lastServerEstimated ?? null;
-      const kept = this._lastClientKeptCount ?? null;
-      if (this.hasNoticeTarget && total != null) {
-        const msg = thr > 0
-          ? `Showing <strong>${kept ?? 0}</strong> (min ×${Math.round(thr * 100)}) of <strong>${total}</strong> found.`
-          : `Found <strong>${total}</strong>.`;
-        this.noticeTarget.innerHTML = `<div class="small text-muted">${msg}</div>`;
+        this._facetRenderChecks++;
+        this._logFacetDiagnostics(is.helper, this._facetAttrs);
+        this._updateDebug(is.helper);
+      } catch (e) {
+        logFacets('render hook error → %o', e?.message || e);
+        hard('render hook error', e?.message || e);
       }
     });
+  }
 
-    const wireManualSubmit = () => {
-      const input = this.searchBoxTarget?.querySelector?.('input[type="search"], input[type="text"]');
-      if (!input) return;
+  // ---------- FACET WIDGETS ----------
+  _facetSort(mode) {
+    const m = String(mode || '').toLowerCase();
+    if (m === 'count') return ['isRefined', 'count:desc', 'name:asc'];
+    if (m === 'alpha') return ['isRefined', 'name:asc'];
+    return ['isRefined', 'count:desc', 'name:asc'];
+  }
 
-      const updatePending = () => {
-        this._pendingQuery = input.value ?? '';
-        const trimmed = this._pendingQuery.trim();
+  _mountRefinementList(is, el, attribute) {
+    // Treat empty strings as undefined; enforce sane minimums
+    let limit = parseDataNumber(el.dataset.limit);
+    let showMoreLimit = parseDataNumber(el.dataset.showMoreLimit);
 
-        if (!searchAsYouType) this._setSubmitEnabled(trimmed.length > 0);
+    if (!Number.isFinite(limit) || limit <= 0) limit = 10;
+    if (!Number.isFinite(showMoreLimit) || showMoreLimit <= limit) {
+      showMoreLimit = Math.max(limit + 10, limit * 2);
+    }
 
-        if (trimmed.length === 0) {
-          try {
-            const state = this.search.getUiState() || {};
-            const key = this.indexNameValue;
-            this.search.setUiState({
-              ...state,
-              [key]: { ...(state[key] || {}), query: undefined, page: 1 }
-            });
-          } catch {
-            try { this.search?.refresh(); } catch {}
-          }
-        }
-      };
-
-      input.addEventListener('input', updatePending);
-      input.addEventListener('change', updatePending);
-      updatePending();
+    const options = {
+      container: el,
+      attribute,
+      searchable: el.dataset.searchable !== 'false',
+      searchablePlaceholder: `Search ${attribute}…`,
+      sortBy: this._facetSort(el.dataset.sortMode),
+      limit,
+      showMore: true,
+      showMoreLimit,
+      // Hide zero-count values *without* losing keepZeroFacets behavior
+      transformItems: (items) => withHideZero({}, true).transformItems?.(items) ?? items
     };
 
-    if (!searchAsYouType) {
-      wireManualSubmit();
-      if (this.hasSubmitTarget) this.submitTarget.style.display = '';
-    } else {
-      this._setSubmitEnabled(false);
-      if (this.hasSubmitTarget) this.submitTarget.style.display = 'none';
-      wireManualSubmit();
-    }
+    is.addWidgets([ refinementList(options) ]);
+    el.dataset.mounted = '1';
+    logFacets('mounted refinementList %o (limit=%o showMoreLimit=%o sort=%o searchable=%o)',
+      attribute, limit, showMoreLimit, options.sortBy, options.searchable);
   }
 
-  _setSubmitEnabled(on) {
-    if (!this.hasSubmitTarget) return;
-    this.submitTarget.disabled = !on;
-    this.submitTarget.classList.toggle('disabled', !on);
+  _mountRangeSlider(is, el, attribute) {
+    const min = parseDataNumber(el.dataset.min);
+    const max = parseDataNumber(el.dataset.max);
+    const step = parseDataNumber(el.dataset.step);
+
+    const opts = {
+      container: el,
+      attribute,
+      ...(Number.isFinite(min) ? { min } : {}),
+      ...(Number.isFinite(max) ? { max } : {}),
+      ...(Number.isFinite(step) ? { step } : {}),
+      tooltips: (el.dataset.tooltips ? safeParse(el.dataset.tooltips, true) : true),
+      pips: el.dataset.pips === 'true',
+      searchOnChange: false
+    };
+    is.addWidgets([ rangeSlider(opts) ]);
+    el.dataset.mounted = '1';
+    logFacets('mounted rangeSlider(drop-only) %o', attribute);
   }
 
-  submit(event) {
-    event?.preventDefault?.();
-    let q = this._pendingQuery;
+  _mountFacetFromNode(is, el) {
+    const attribute = (el?.dataset?.attribute || '').trim();
+    const widget    = (el?.dataset?.widget    || '').trim() || 'RefinementList';
+    if (!attribute) return;
+
+    if (widget.toLowerCase() === 'refinementlist') return this._mountRefinementList(is, el, attribute);
+    if (widget.toLowerCase() === 'rangeslider')    return this._mountRangeSlider(is, el, attribute);
+
+    logFacets('facet widget "%s" for %o not recognized; skipping', widget, attribute);
+  }
+
+  _collectFacetAttributes() {
+    const nodes = this.refinementListTarget?.querySelectorAll?.('[data-attribute][data-widget]') || [];
+    const attrs = Array.from(nodes).map(el => (el.dataset.attribute || '').trim()).filter(Boolean);
+    return Array.from(new Set(attrs));
+  }
+
+  _wireFacetCollapsers() {
+    const root = this.refinementListTarget;
+    if (!root) return;
+    const buttons = root.querySelectorAll('[data-collapse-control]');
+    buttons.forEach(btn => {
+      if (btn.dataset.bound === '1') return;
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const attribute = btn.getAttribute('data-attribute') || '';
+        const block = btn.closest('[data-facet-block]');
+        const body  = block?.querySelector('.facet-body');
+        if (!body) return;
+        const expanded = (btn.getAttribute('aria-expanded') || 'true') === 'true';
+        const next = !expanded;
+        btn.setAttribute('aria-expanded', String(next));
+        body.style.display = next ? '' : 'none';
+        logFacets('facet "%s" collapsed=%o', attribute, !next);
+      });
+      btn.dataset.bound = '1';
+    });
+  }
+
+  // ---------- DEBUG ----------
+  _updateDebug(helper) {
+    if (!this.hasDebugTarget || !helper) return;
+    const st = helper.state;
+    const dbg = {
+      tag: 'INSTA_HELPER_STATE',
+      index: st.index,
+      query: st.query || '',
+      page: st.page,
+      hitsPerPage: st.hitsPerPage,
+      attributesToHighlight: st.attributesToHighlight || ['*'],
+      highlightPreTag: st.highlightPreTag,
+      highlightPostTag: st.highlightPostTag,
+      numericRefinements: Object.fromEntries(
+        Object.entries(st.numericRefinements || {}).map(([attr, ops]) => [
+          attr,
+          Object.fromEntries(Object.entries(ops || {}).map(([op, vals]) => [op, vals]))
+        ])
+      ),
+      facetsRefinements: st.facetsRefinements || {},
+      disjunctiveFacetsRefinements: st.disjunctiveFacetsRefinements || {}
+    };
+    this.debugTarget.value = j(dbg);
+  }
+
+  _logFacetDiagnostics(helper, requestedAttrs) {
     try {
-      const input = this.searchBoxTarget.querySelector('input[type="search"], input[type="text"]');
-      if (input) q = input.value;
-    } catch {}
-    q = (q || '').trim();
-    if (!q) return;
-    try {
-      const state = this.search.getUiState() || {};
-      const key = this.indexNameValue;
-      this.search.setUiState({ ...state, [key]: { ...(state[key] || {}), query: q, page: 1 } });
-    } catch {
-      try { this.search?.refresh(); } catch {}
+      const lr = helper?.lastResults;
+      const raw0 = lr?._rawResults?.[0] || {};
+      const dist = raw0.facets || raw0.facetDistribution || lr?.facets || {};
+      const gotKeys = Object.keys(dist || {});
+      const missing = (requestedAttrs || []).filter(a => !gotKeys.includes(a));
+      const changed = gotKeys.join('|') !== this._lastFacetKeys.join('|');
+      this._lastFacetKeys = gotKeys;
+
+      logFacets('requested=%o, got=%o (checks=%o)', requestedAttrs, gotKeys, this._facetRenderChecks);
+      hard('facet diag', { requested: requestedAttrs, got: gotKeys });
+
+      if (missing.length && this._facetRenderChecks < 2) return;
+
+      if (missing.length) {
+        if (!this._facetWarnedOnce || changed) {
+          const msg = `Missing facet distributions for: ${missing.join(', ')}. Ensure filterableAttributes are set.`;
+          logFacets('WARNING: %s', msg);
+          hard('WARNING', msg);
+          this._facetWarnedOnce = true;
+        }
+      } else if (gotKeys.length) {
+        if (this._facetWarnedOnce && changed) hard('facet diagnostics recovered with keys', gotKeys);
+        this._facetWarnedOnce = false;
+      }
+    } catch (e) {
+      logFacets('facet diagnostics failed → %o', e?.message || e);
+      hard('facet diag error', e?.message || e);
     }
-  }
-
-  async _prefetchGlobalFacets() {
-    try {
-      const { Meilisearch } = await import('meilisearch');
-      const client = new Meilisearch({ host: this.serverUrlValue, apiKey: this.serverApiKeyValue || undefined });
-      const index = client.index(this.indexNameValue);
-
-      const schemaFacets = this.config?.schema?.filterableAttributes || [];
-      const configuredFacets = Array.isArray(this.config?.facets)
-        ? this.config.facets.map(f => f.attribute)
-        : Object.keys(this.config?.facets || {});
-      const facets = schemaFacets.length ? schemaFacets : configuredFacets;
-      if (!facets.length) return;
-
-      const res = await index.search('', { facets, hitsPerPage: 0, limit: 0 });
-      this._globalFacetCounts = res.facetDistribution || {};
-    } catch { /* ignore */ }
-  }
-
-  _currentQuery() {
-    try {
-      const ui = this.search?.getUiState?.() || {};
-      const key = this.indexNameValue;
-      const q = ui?.[key]?.query;
-      if (typeof q === 'string') return q;
-    } catch {}
-    const input = this.searchBoxTarget?.querySelector?.('input[type="search"], input[type="text"]');
-    if (input?.value) return input.value.trim();
-    return (this.qValue || '').trim();
-  }
-
-  async semantic(event) {
-    event?.preventDefault?.();
-    if (!this._isSemantic()) return;
-    const el = this.hasSemanticSliderTarget ? this.semanticSliderTarget : (event?.currentTarget ?? null);
-    const percent = Number(el?.value ?? 0) || 0;
-    const clamped = Math.max(0, Math.min(100, percent));
-    const ratio = clamped / 100;
-    if (this.semanticRatioValue !== ratio) {
-      this.semanticRatioValue = ratio;
-      if (this.hasSemanticOutputTarget) this.semanticOutputTarget.textContent = `${Math.round(clamped)}%`;
-      try { this.search?.refresh(); } catch {}
-    }
-  }
-
-  _isSemantic() {
-    return this.hasEmbedderNameValue && this.semanticEnabledValue;
-  }
-
-  _effectiveThreshold() {
-    if (this.hasScoreMultiplierTarget) {
-      const mult = Number(String(this.scoreMultiplierTarget.value ?? '').trim());
-      if (Number.isFinite(mult) && mult > 0) return Math.min(1, mult / 100);
-    }
-    const dec = Number(this.scoreThresholdValue);
-    if (Number.isFinite(dec) && dec > 0) return dec;
-    return this._isSemantic() ? 0.01 : 0;
-  }
-
-  _setThresholdDecimal(decimalValue) {
-    const v = Math.max(0, Math.min(1, Number(decimalValue) || 0));
-    this.scoreThresholdValue = v;
-    if (this.hasScoreThresholdTarget) this.scoreThresholdTarget.value = String(v);
-    if (this.hasScoreMultiplierTarget) this.scoreMultiplierTarget.value = String(Math.round(v * 100));
   }
 }

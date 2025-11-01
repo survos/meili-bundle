@@ -8,14 +8,34 @@
     </div>
 
     <div class="page-actions">
-        <a href="{{ path('meili_admin_meili_index') }}" class="btn btn-secondary">
+        <a href="{{ path('admin_meili_index') }}" class="btn btn-secondary">
             <i class="fa fa-arrow-left"></i> Back to Meili Index
         </a>
     </div>
 {% endblock %}
 
 {% block main %}
+    {% for fieldName, counts in facetCounts %}
+        <h4>{{ fieldName }}</h4>
+        <ul>
+            {% for c in counts %}
+                <li>{{ c.label }}: {{ c.count }}</li>
+            {% endfor %}
+        </ul>
+    {% endfor %}
 
+    {{ dump(rawInfo) }}
+    {{ dump(stats) }}
+
+    survos_facet_show
+
+    {% for facetName, details in settings.facets|default([]) %}
+        <li>
+            <a href="{{ path('survos_facet_show', {indexName: indexName, fieldName: facetName}) }}">
+                {{ facetName }}
+            </a>
+        </li>
+    {% endfor %}
     <a class="btn btn-primary" href="{{ path('meili_insta', {indexName: indexName}) }}">
         SEARCH
     </a>

@@ -1,69 +1,59 @@
-/** ---------- Stable helpers: do not churn ---------- */
+// -----------------------------------------------------------------------------
+// Survos Meili helpers (framework-agnostic)
+// -----------------------------------------------------------------------------
 
-/** Safe JSON parse with fallback */
-export const safeParse = (s, fallback) => { try { return JSON.parse(s) } catch { return fallback } };
+/**
+ * Convert Meili's safe tokens to <mark class="ais-Highlight">…</mark>
+ * Example seen in payloads: "__ais-highlight__Dory__/ais-highlight__"
+ */
+export function convertAisHighlights(text, tag = 'mark') {
+  if (typeof text !== 'string') return text;
+  return text
+    .replaceAll('__ais-highlight__', `<${tag} class="ais-Highlight">`)
+    .replaceAll('__/ais-highlight__', `</${tag}>`);
+}
 
-/** Small string helpers */
-export const stripProtocol = (u) => (u || '').replace(/(^\w+:|^)\/\//, '');
-export const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-
-/** Facets that are tiny enums: default non-searchable unless overridden */
-export const DEFAULT_NON_SEARCHABLE = new Set(['gender', 'marking', 'house', 'currentParty', 'countries', 'locale']);
-
-/** Named formatters for RangeSlider tooltips, referenced by name via data-tooltips='{"format":"monthIndex"}' */
-export const FORMATTERS = {
-  monthIndex(i) {
-    const year = Math.floor(i / 12), month = i % 12;
-    return new Date(year, month, 1).toLocaleString('default', { year: 'numeric', month: 'short' });
-  },
-  int(v) { return Math.round(Number(v) || 0); },
-  usd(v) { return '$' + new Intl.NumberFormat().format(Number(v) || 0); },
-};
-
-/** Turn string options (data-*) into proper booleans/numbers and resolve tooltip formatters */
-export function coerceWidgetOptions(widgetName, opts) {
-  const out = { ...opts };
-  if (out.tooltips && typeof out.tooltips === 'object') {
-    const fmt = out.tooltips.format;
-    if (typeof fmt === 'string' && FORMATTERS[fmt]) {
-      out.tooltips = { ...out.tooltips, format: FORMATTERS[fmt] };
-    }
-  }
-  for (const k of ['pips','searchable','showMore']) {
-    if (k in out && typeof out[k] === 'string') out[k] = out[k] === 'true';
-  }
-  for (const k of ['step','min','max','limit','showMoreLimit']) {
-    if (k in out && typeof out[k] === 'string') {
-      const n = Number(out[k]); if (!Number.isNaN(n)) out[k] = n;
-    }
+/** Deep-walk a hit/_formatted object converting highlight tokens in strings */
+export function normalizeFormatted(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const out = Array.isArray(obj) ? [] : {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (typeof v === 'string') out[k] = convertAisHighlights(v);
+    else if (v && typeof v === 'object') out[k] = normalizeFormatted(v);
+    else out[k] = v;
   }
   return out;
 }
 
-/** Accept facets as array or map; default widget = RefinementList */
-export function normalizeConfig(raw) {
-  const cfg = (raw && typeof raw === 'object') ? { ...raw } : {};
-  if (cfg.facets && !Array.isArray(cfg.facets) && typeof cfg.facets === 'object') {
-    cfg.facets = Object.entries(cfg.facets).map(([attribute, f]) => {
-      const o = (f && typeof f === 'object') ? { ...f } : {};
-      o.attribute = attribute;
-      o.widget = typeof o.widget === 'string' ? o.widget
-               : (typeof o.type === 'string' ? o.type : 'RefinementList');
-      return o;
-    });
-  }
-  if (!Array.isArray(cfg.facets)) cfg.facets = [];
-  return cfg;
+/**
+ * Attach transformItems that hides zero-count facet values.
+ * Use when building a RefinementList.
+ */
+export function withHideZero(options, enabled = true) {
+  if (!enabled) return options;
+  return {
+    ...options,
+    transformItems: (items) => items.filter((i) => (i?.count ?? 0) > 0),
+  };
 }
 
-/** Minimal label transformer used by facets */
-export function transformWithLookup(ctrl, items, attribute, lookup) {
-  if (attribute === 'locale') {
-    return items.map(it => ({ ...it, highlighted: ctrl.languageNames.of(it.value.toUpperCase()) }));
-  }
-  if (attribute === 'countries' || attribute === 'countryCode') {
-    return items.map(it => ({ ...it, highlighted: ctrl.regionNames.of(it.value.toUpperCase()) }));
-  }
-  if (!lookup || Object.keys(lookup).length === 0) return items;
-  return items.map(it => ({ ...it, highlighted: lookup[it.value] || it.value }));
+/**
+ * Build fixed range for RangeSlider from index stats (so slider doesn't disable).
+ * Expect stats like: stats.numericRanges[attribute] = { min, max }
+ */
+export function fixedRangeFromStats(stats, attribute) {
+  const r = stats?.numericRanges?.[attribute];
+  return (r && Number.isFinite(r.min) && Number.isFinite(r.max))
+    ? { min: r.min, max: r.max }
+    : {};
+}
+
+/**
+ * Utility to map an array of hits and normalize _formatted highlighting.
+ */
+export function convertHighlightsInHits(hits, tag = 'mark') {
+  return (hits ?? []).map(h => ({
+    ...h,
+    _formatted: normalizeFormatted(h._formatted ?? {}),
+  }));
 }
