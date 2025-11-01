@@ -18,7 +18,6 @@ class InstantSearchComponent
         private LoggerInterface $logger,
         private RequestStack $requestStack,
         private UrlGeneratorInterface $urlGenerator,
-        private ?InspectionService $inspectionService = null,
         private ?MeiliService $meiliService = null,
         public ?string $stimulusController = null,
         private bool $meili = false,

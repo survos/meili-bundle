@@ -52,11 +52,14 @@
   {% set _sc_modal = '@survos/meili-bundle/json' %}
   {% set templateUrl = path('meili_template', { templateName: templateName }) %}
 
+  {# set default to false during production or when this is completely debugged #}
+  {% set sanity = app.request.get('sanity', true) %}
   <div
     {{ stimulus_controller(_sc, {
       serverUrl: server,
       serverApiKey: apiKey,
       indexName: indexName,
+      sanity: sanity,
 
       embedderName: embedder,
       hitClass: app.request.get('class', 'grid-' ~ app.request.get('grid')|default(2)),

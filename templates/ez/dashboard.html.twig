@@ -19,6 +19,13 @@
                     {{ ux_icon('mdi:search') }}
                     {{ settings.rawName }}
                 </a>
+                {% for embedder in settings.embedders??[] %}
+                    <a href="{{ path('meili_insta_embed', {indexName: indexName, embedder: embedder}) }}">
+                        Sematic Search {{ embedder }}
+                    </a>
+
+
+                {% endfor %}
             </li>
 
         {% endfor %}

@@ -6,7 +6,6 @@ use Psr\Log\LoggerAwareInterface;
 use ReflectionClass;
 use Survos\CoreBundle\HasAssetMapperInterface;
 use Survos\CoreBundle\Traits\HasAssetMapperTrait;
-use Survos\InspectionBundle\Services\InspectionService;
 use Survos\MeiliBundle\Api\Filter\MultiFieldSearchFilter;
 use Survos\MeiliBundle\Command\FastSyncIndexesCommand;
 use Survos\MeiliBundle\Command\IterateIndexesCommand;
@@ -37,7 +36,6 @@ use Survos\MeiliBundle\Service\MeiliNdjsonUploader;
 use Survos\MeiliBundle\Service\MeiliPayloadBuilder;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\SettingsService;
-use Survos\MeiliBundle\Util\BabelLocaleScope;
 use Survos\MeiliBundle\Util\EmbedderConfig;
 use Survos\MeiliBundle\Util\ResolvedEmbeddersProvider;
 use Survos\MeiliBundle\Util\TextFieldResolver;
@@ -172,7 +170,6 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->setAutoconfigured(true)
             ->setArgument('$twig', new Reference('twig'))
             ->setArgument('$logger', new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE))
-            ->setArgument('$inspectionService', new Reference(InspectionService::class, ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->setArgument('$meiliService', new Reference('meili_service'));
     }
 

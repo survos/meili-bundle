@@ -1,135 +1,140 @@
-/* ===== Highlight styles (InstantSearch/Meili-agnostic) ===== */
-mark.ais-Highlight,
-em.ais-Highlight {
-    background: linear-gradient(transparent 60%, rgba(255, 234, 0, 0.55) 0);
-    border-radius: .15rem;
-    font-style: inherit;
-    font-weight: 600;
-    color: inherit;
-    line-height: inherit;
-    word-break: break-word;
-    overflow-wrap: anywhere;
+/* =============================================================================
+   Survos MeiliBundle – Pretty-by-default UI
+   Safe, framework-agnostic styles that sit on top of InstantSearch classes.
+   Version: 1.0
+   ========================================================================== */
 
-    /* Force tighter spacing - may look cramped */
-    letter-spacing: -0.02em;
+/* ------- CSS vars (easy theming) ------- */
+:root{
+    --meili-bg: #fff;
+    --meili-fg: #1f2328;
+    --meili-muted: #6b7280;
+    --meili-border: #e5e7eb;
+    --meili-chip-bg: #f3f4f6;
+    --meili-chip-fg: #374151;
+
+    --meili-accent: #3b82f6;
+    --meili-accent-weak: rgba(59,130,246,.12);
+
+    --meili-badge-bg: rgba(0,0,0,.08);
+    --meili-badge-fg: rgba(0,0,0,.7);
+
+    --meili-radius: 10px;
+    --meili-pad: .75rem;
+    --meili-gap: .75rem;
 }
 
-/*mark.ais-Highlight,*/
-/*em.ais-Highlight {*/
-/*    margin-inline: clamp(0.02em, 0.25ch, 0.15em);*/
-/*}*/
+/* ------- Header chips ------- */
+.meili-header .meili-bar{display:flex;justify-content:space-between;gap:.75rem;padding:.5rem 1rem;border-bottom:1px solid var(--meili-border);background:var(--meili-bg)}
+.meili-chip{display:inline-flex;align-items:center;gap:.35rem;background:var(--meili-chip-bg);color:var(--meili-chip-fg);padding:.25rem .5rem;border-radius:999px;font-size:.875rem}
 
-/* Optional: subtle outline on dark backgrounds */
-@media (prefers-color-scheme: dark) {
-    mark.ais-Highlight,
-    em.ais-Highlight {
-        background: linear-gradient(transparent 60%, rgba(255, 214, 10, 0.45) 0);
-        text-shadow:
-                0 0 0.01px currentColor,
-                0 0 0.01px currentColor; /* sharpen light text in some renderers */
+/* ------- Layout grid ------- */
+.insta-grid{display:grid;grid-template-columns:320px minmax(0,1fr);gap:1rem}
+@media (max-width: 900px){ .insta-grid{grid-template-columns:1fr} }
+.insta-grid > main{min-width:0}
+
+/* ------- Facet blocks ------- */
+.facet-block{
+    background:var(--meili-bg);
+    border:1px solid var(--meili-border);
+    border-radius:var(--meili-radius);
+    padding:calc(var(--meili-pad) - .15rem) var(--meili-pad);
+    box-shadow:0 1px 0 rgba(0,0,0,.02);
+}
+.facet-header{display:flex;align-items:center;gap:.5rem}
+.facet-title{font-weight:700;margin:0;color:var(--meili-fg);letter-spacing:.01em}
+.facet-actions{margin-left:auto;display:inline-flex;gap:.25rem}
+.facet-collapse{background:transparent;border:0;padding:.25rem;border-radius:8px;cursor:pointer}
+.facet-collapse:hover{background:var(--meili-accent-weak)}
+.facet-collapse svg{width:16px;height:16px;transition:transform .15s ease}
+.facet-collapse[aria-expanded="false"] svg{transform:rotate(-90deg)}
+.facet-body{margin-top:.5rem}
+
+/* ------- Search box inside facet (InstantSearch refinement search) ------- */
+.ais-RefinementList .ais-SearchBox{margin-bottom:.35rem}
+.ais-SearchBox-form{
+    display:flex;align-items:center;gap:.5rem;
+    border:1px solid var(--meili-border);
+    border-radius:8px;padding:.35rem .5rem;background:#fff
+}
+.ais-SearchBox-input{
+    border:0;outline:none;width:100%;
+    font:inherit;color:inherit;background:transparent;padding:.25rem 0
+}
+.ais-SearchBox-submit,
+.ais-SearchBox-reset{border:0;background:transparent;padding:.25rem;cursor:pointer}
+.ais-SearchBox-submit:hover,
+.ais-SearchBox-reset:hover{opacity:.8}
+
+/* ------- Refinement list items ------- */
+.ais-RefinementList-list{list-style:none;margin:0;padding:0}
+.ais-RefinementList-item{padding:.25rem 0}
+.ais-RefinementList-label{display:flex;align-items:center;gap:.5rem}
+.ais-RefinementList-checkbox{
+    width:1.05rem;height:1.05rem;border-radius:5px;border:1px solid var(--meili-border);
+    appearance:none;display:inline-grid;place-content:center;background:#fff;cursor:pointer
+}
+.ais-RefinementList-checkbox:checked{
+    border-color:var(--meili-accent);background:var(--meili-accent)
+}
+.ais-RefinementList-checkbox:checked::after{
+    content:'';width:.5rem;height:.5rem;border-radius:2px;background:#fff
+}
+.ais-RefinementList-labelText{min-width:0;flex:1;color:var(--meili-fg)}
+.ais-RefinementList-count{
+    display:inline-block;padding:.125rem .375rem;border-radius:.5rem;
+    font-size:.75rem;font-weight:600;background:var(--meili-badge-bg);color:var(--meili-badge-fg);margin-left:.5rem
+}
+.ais-RefinementList-showMore{
+    display:inline-block;margin-top:.35rem;border:1px solid var(--meili-border);
+    border-radius:8px;padding:.25rem .55rem;background:#fff;cursor:pointer;font-size:.875rem
+}
+.ais-RefinementList-showMore:hover{border-color:var(--meili-accent);box-shadow:0 0 0 3px var(--meili-accent-weak)}
+.ais-RefinementList--noRefinement .ais-RefinementList-searchBox{display:none}
+.ais-RefinementList--noRefinement .ais-RefinementList-showMore{display:none}
+
+/* ------- Range slider (ais-RangeSlider/rheostat) ------- */
+.ais-RangeSlider{padding:.15rem .5rem .5rem .15rem}
+.rheostat{position:relative;height:22px}
+.rheostat-background{position:absolute;left:0;right:0;top:9px;height:4px;background:var(--meili-border);border-radius:999px}
+.rheostat-progress{position:absolute;top:9px;height:4px;background:var(--meili-accent);border-radius:999px}
+.rheostat-handle{
+    position:absolute;top:2px;transform:translate(-50%,0);
+    width:18px;height:18px;border-radius:50%;
+    border:2px solid var(--meili-accent);background:#fff;cursor:grab
+}
+.rheostat-handle:focus{outline:0;box-shadow:0 0 0 4px var(--meili-accent-weak)}
+.rheostat-handle:active{cursor:grabbing}
+.rheostat-tooltip{position:absolute;top:-26px;left:50%;transform:translateX(-50%);
+    font-size:.75rem;color:var(--meili-muted);background:#fff;border:1px solid var(--meili-border);
+    padding:2px 6px;border-radius:6px}
+
+/* ------- Search row (main) ------- */
+.ais-SearchBox-input::placeholder{color:var(--meili-muted)}
+.ais-Stats{color:var(--meili-muted)}
+
+/* ------- Highlight (hits) ------- */
+mark.ais-Highlight, em.ais-Highlight{
+    background:linear-gradient(transparent 60%, rgba(255,234,0,.55) 0);
+    border-radius:.15rem;font-weight:600;color:inherit;word-break:break-word;overflow-wrap:anywhere;letter-spacing:-.02em
+}
+@media (prefers-color-scheme: dark){
+    mark.ais-Highlight, em.ais-Highlight{
+        background:linear-gradient(transparent 60%, rgba(255,214,10,.45) 0);
+        text-shadow:0 0 .01px currentColor, 0 0 .01px currentColor
     }
 }
+mark{padding:0 !important}
 
-/* If you ever switch back to Algolia’s default em tag without class */
-em.ais-Highlight,
-em.ais-Snippet { /* parity with InstantSearch defaults */
-    font-style: normal; /* don’t italicize highlights */
-}
-
-/* Keep your existing reset for inline mark padding */
-mark { padding: 0 !important; }
-
-/* ===== Your existing layout helpers (unchanged) ===== */
-
-/* Tighten metadata rows */
-.meta-grid{
-    display:grid;
-    grid-template-columns:auto 1fr;
-    gap:.35rem .75rem;
-    min-width:0;
-}
-.meta-key{ white-space:nowrap; }
-.meta-val{
-    min-width:0;
-    overflow-wrap:anywhere;
-    word-break:break-word;
-}
-
-/* Multi-line clamp for overview */
-.description-clamp{
-    display:-webkit-box;
-    -webkit-box-orient:vertical;
-    -webkit-line-clamp:4;
-    overflow:hidden;
-    max-width:100%;
-    word-break:break-word;
-}
-.description-clamp > p,
-.description-clamp > div,
-.description-clamp > ul,
-.description-clamp > ol{
-    display:inline; margin:0; padding:0;
-}
-.description-clamp br{ display:none; }
-
-/* Responsive grid helpers (used by the hits container) */
-.grid-5{ width:calc(20% - 1rem) !important; }
-.grid-4{ width:calc(25% - 1rem) !important; }
-.grid-3{ width:calc(33.333% - 1rem) !important; }
-@media (max-width:1199.98px){
-    .grid-3{ width:calc(50% - 1rem) !important; }
-}
-@media (max-width:575.98px){
-    .grid-3{ width:calc(100% - 1rem) !important; }
-}
-.grid-2{ width:calc(50% - 1rem) !important; }
-.grid-1{ width:calc(100% - 1rem) !important; }
-
-/* One/two-line truncation helpers */
-.line-limit-1,
-.line-limit-2{
-    display:-webkit-box;
-    -webkit-box-orient:vertical;
-    overflow:hidden;
-}
-.line-limit-1{ -webkit-line-clamp:1; }
-.line-limit-2{ -webkit-line-clamp:2; }
-
-/* Facet sidebar layout (optional, keep if you use the sidebar) */
-.insta-grid{ display:grid; grid-template-columns:320px minmax(0,1fr); gap:1rem; }
-@media (max-width:991.98px){ .insta-grid{ grid-template-columns:1fr; } }
-.insta-grid > main{ min-width:0; }
-
-.facet-block{ margin-bottom:1.1rem; }
-.facet-header{ display:flex; align-items:center; gap:.5rem; }
-.facet-title{ font-weight:600; flex:1 1 auto; min-width:0; }
-.facet-actions{ display:inline-flex; gap:.25rem; margin-left:auto; }
-.facet-body{ margin-top:.5rem; }
-.facet-search-input { width: 100%; }
-
-/* Compact icon buttons (framework-neutral) */
-.btn-xxs{ padding:2px 4px; line-height:1; }
-.btn-icon svg{ width:16px; height:16px; vertical-align:-2px; }
-.facet-collapse svg{ width:16px; height:16px; transition:transform .15s ease; }
-.facet-collapse[aria-expanded="false"] svg{ transform:rotate(-90deg); }
-
-/* InstantSearch bits: make counts look like badges without theme coupling */
-.ais-RefinementList-label{ display:flex; align-items:center; gap:.5rem; }
-.ais-RefinementList-count{
-    display:inline-block;
-    padding:.125rem .375rem;
-    border-radius:.375rem;
-    font-size:.75rem;
-    font-weight:500;
-    background-color:rgba(0,0,0,.08);
-    color:rgba(0,0,0,.7);
-    margin-left:auto;
-}
-.ais-RefinementList-item{ padding:.25rem 0; }
-
-/* Avoid clipped numbers in slider UIs */
-.ais-RangeSlider,
-.ais-RangeSlider .rheostat,
-.ais-RangeSlider .rheostat-background,
-.ais-RangeSlider .rheostat-progress{ overflow:visible !important; }
-.ais-RangeSlider{ padding-right:.5rem; }
+/* ------- Hits responsive helpers ------- */
+.grid-5{ width:calc(20% - 1rem) !important }
+.grid-4{ width:calc(25% - 1rem) !important }
+.grid-3{ width:calc(33.333% - 1rem) !important }
+@media (max-width:1199.98px){ .grid-3{ width:calc(50% - 1rem) !important } }
+@media (max-width:575.98px){ .grid-3{ width:calc(100% - 1rem) !important } }
+.grid-2{ width:calc(50% - 1rem) !important }
+.grid-1{ width:calc(100% - 1rem) !important }
+.line-limit-1, .line-limit-2{display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden}
+.line-limit-1{ -webkit-line-clamp:1 } .line-limit-2{ -webkit-line-clamp:2 }
+.meta-grid{display:grid;grid-template-columns:auto 1fr;gap:.35rem .75rem;min-width:0}
+.meta-key{white-space:nowrap} .meta-val{min-width:0;overflow-wrap:anywhere;word-break:break-word}

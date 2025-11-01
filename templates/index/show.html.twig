@@ -18,16 +18,28 @@
     {% for fieldName, counts in facetCounts %}
         <h4>{{ fieldName }}</h4>
         <ul>
-            {% for c in counts %}
+            {% for c in counts|slice(0,4) %}
                 <li>{{ c.label }}: {{ c.count }}</li>
             {% endfor %}
         </ul>
     {% endfor %}
+    <pre>{{ settings|json_pretty }}</pre>
+    <pre>{{ rawInfo|json_pretty }}</pre>
+    <pre>{{ stats|json_pretty }}</pre>
+{#    <andypf-json-viewer#}
+{#            indent="2"#}
+{#            expanded="true"#}
+{#            theme="default-light"#}
+{#            show-data-types="true"#}
+{#            show-toolbar="false"#}
+{#            expand-icon-type="arrow"#}
+{#            show-copy="true"#}
+{#            show-size="true"#}
+{#            data='{"example": "data"}'#}
+{#    ></andypf-json-viewer>#}
 
-    {{ dump(rawInfo) }}
-    {{ dump(stats) }}
-
-    survos_facet_show
+{#    <andypf-json-viewer data='{"test": "Hello World"}'></andypf-json-viewer>#}
+{#    <andypf-json-viewer>{"name": "Helmut"}</andypf-json-viewer>#}
 
     {% for facetName, details in settings.facets|default([]) %}
         <li>
