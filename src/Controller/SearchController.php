@@ -20,8 +20,7 @@ class SearchController extends AbstractController
     protected $helper;
 
     public function __construct(
-        #[Autowire('%kernel.project_dir%/templates/js/')]
-        private string $jsTemplateDir,
+        #[Autowire('%kernel.project_dir%/templates/js/')]  private string $jsTemplateDir,
         private readonly MeiliService $meiliService,
         private readonly RouterInterface $router,
     ) {
