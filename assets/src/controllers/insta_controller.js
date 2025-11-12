@@ -1,15 +1,15 @@
 /**
  * File: assets/src/controllers/insta_controller.js
- * Version: MEILI-INSTA v6.4.2
+ * Version: MEILI-INSTA v6.4.3
  *
  * Keys:
- *  - Instant Meilisearch adapter is the only source of truth.
- *  - Seed `meiliSearchParams.facets` before creating the client.
+ *  - Deep-convert __ais-highlight__ markers across all hit fields (strings anywhere).
+ *  - Keep Instant Meilisearch as the single source of truth.
+ *  - Seed meiliSearchParams.facets before client creation.
  *  - keepZeroFacets=true so facets render on first paint.
- *  - FIX: robust parsing of data-limit / data-show-more-limit ("" -> undefined, not 0).
- *  - FIX: showReset=true on main SearchBox
- *  - FIX: hide zero-count facet values via transformItems
- *  - FIX: swap __ais-highlight__ markers to <mark class="ais-Highlight"> for display
+ *  - Robust parsing of data-limit / data-show-more-limit ("" -> undefined).
+ *  - showReset=true on SearchBox.
+ *  - Hide zero-count facet values via transformItems.
  */
 
 import { Controller } from '@hotwired/stimulus';
@@ -18,8 +18,6 @@ import instantsearch from 'instantsearch.js';
 import { instantMeiliSearch } from '@meilisearch/instant-meilisearch';
 import { MeiliSearch } from 'meilisearch';
 import { runMeiliSanity } from '../debug/meili_sanity.js';
-
-// We only need withHideZero from helpers; the rest we implement locally here.
 import { withHideZero } from './insta_helpers.js';
 
 // AI: NEVER ELIMINATE OR MODIFY THESE LINES!, they are very important
@@ -50,10 +48,7 @@ import {
   rangeSlider
 } from 'instantsearch.js/es/widgets';
 
-// --- local tiny helpers that were previously imported ---
-const safeParse = (json, fallback) => {
-  try { return json ? JSON.parse(json) : fallback; } catch { return fallback; }
-};
+const safeParse = (json, fallback) => { try { return json ? JSON.parse(json) : fallback; } catch { return fallback; } };
 const stripProtocol = (url) => String(url || '').replace(/^https?:\/\//i, '');
 const escapeHtml = (s) => String(s ?? '').replaceAll(/&/g,'&amp;').replaceAll(/</g,'&lt;').replaceAll(/>/g,'&gt;');
 const normalizeConfig = (cfg) => cfg || {};
@@ -72,24 +67,56 @@ function swapMarkersToHtml(s) {
   return txt.replaceAll(HLPRE, '<mark class="ais-Highlight">')
             .replaceAll(HLPOST, '</mark>');
 }
+
+/** Deeply map all strings in a value with a transformer fn */
+function mapDeepStrings(value, fn) {
+  if (typeof value === 'string') return fn(value);
+  if (Array.isArray(value)) return value.map(v => mapDeepStrings(v, fn));
+  if (value && typeof value === 'object') {
+    const out = Array.isArray(value) ? [] : {};
+    for (const [k, v] of Object.entries(value)) out[k] = mapDeepStrings(v, fn);
+    return out;
+  }
+  return value;
+}
+
+/** Build AIS-like _highlightResult from a (possibly converted) _formatted object */
 function buildHighlightResultFromFormatted(formatted) {
   const out = {};
   for (const [key, val] of Object.entries(formatted || {})) {
     if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') {
-      out[key] = { value: swapMarkersToHtml(val) };
+      out[key] = { value: String(val) };
     } else if (Array.isArray(val)) {
       out[key] = val.map(v =>
         (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')
-          ? { value: swapMarkersToHtml(v) }
+          ? { value: String(v) }
           : { value: swapMarkersToHtml(JSON.stringify(v)) }
       );
-    } else {
+    } else if (val && typeof val === 'object') {
+      // Render nested objects as JSON but preserve <mark> tags in any strings
       out[key] = { value: swapMarkersToHtml(JSON.stringify(val)) };
     }
   }
   return out;
 }
-const j = (v) => { try { return JSON.stringify(v, null, 2); } catch { return String(v); } };
+
+/** Convert all highlight markers in-place and return the hit */
+function convertHighlightInHit(hit) {
+  // 1) If Meili gave _formatted, convert it deeply first.
+  if (hit && hit._formatted && typeof hit._formatted === 'object') {
+    hit._formatted = mapDeepStrings(hit._formatted, swapMarkersToHtml);
+  }
+  // 2) Convert ALL string fields in the hit (anywhere) to ensure markers never leak.
+  //    This is safe because swapMarkersToHtml() is a no-op for strings without markers.
+  const converted = mapDeepStrings(hit, swapMarkersToHtml);
+
+  // 3) Provide/refresh _highlightResult for consumers that expect it.
+  if (converted._formatted && typeof converted._formatted === 'object') {
+    converted._highlightResult = buildHighlightResultFromFormatted(converted._formatted);
+  }
+
+  return converted;
+}
 
 // Parse numeric data-attrs: empty -> undefined, invalid -> undefined
 function parseDataNumber(value) {
@@ -100,7 +127,6 @@ function parseDataNumber(value) {
   return Number.isFinite(n) ? n : undefined;
 }
 
-// ---------- controller ----------
 export default class extends Controller {
   static targets = [
     'searchBox','hits','reset','refinementList','stats',
@@ -125,13 +151,8 @@ export default class extends Controller {
   };
 
   initialize() {
-    // Version banner (so our logs match)
-    hard('MEILI-INSTA v6.4.2 boot', {
-      index: this.indexNameValue,
-      url: this.serverUrlValue
-    });
-
-    try { if (!localStorage.getItem('debug')) { localStorage.setItem('debug', 'insta:*'); } } catch {}
+    hard('MEILI-INSTA v6.4.3 boot', { index: this.indexNameValue, url: this.serverUrlValue });
+    try { if (!localStorage.getItem('debug')) localStorage.setItem('debug', 'insta:*'); } catch {}
 
     this.globals = safeParse(this.globalsJsonValue, {});
     this.icons   = safeParse(this.iconsJsonValue, {});
@@ -142,13 +163,10 @@ export default class extends Controller {
 
     this.template = null;
     this._facetAttrs = [];
-
-    // diagnostics throttling
     this._facetRenderChecks = 0;
     this._facetWarnedOnce = false;
     this._lastFacetKeys = [];
 
-    // Single truth: seed adapter; we fill facets in connect()
     this._meiliOptions = {
       primaryKey: undefined,
       keepZeroFacets: true,
@@ -167,21 +185,16 @@ export default class extends Controller {
   async connect() {
     await this._loadTemplate();
 
-    // 1) Collect facet attributes from DOM
     this._facetAttrs = this._collectFacetAttributes();
-    logFacets('facet attributes (requested) → %o', this._facetAttrs);
     hard('facet attrs requested', this._facetAttrs);
 
-    // 2) Seed adapter facets before creating client
     if (Array.isArray(this._facetAttrs) && this._facetAttrs.length) {
       this._meiliOptions.meiliSearchParams.facets = this._facetAttrs;
     }
     this._meiliOptions.keepZeroFacets = true;
 
-    // 3) Start UI
     await this._startSearch();
 
-    // 4) Non-blocking sanity
     const host = this.serverUrlValue;
     const apiKey = this.serverApiKeyValue || null;
     const indexUid = this.indexNameValue;
@@ -213,7 +226,6 @@ export default class extends Controller {
     return searchClient;
   }
 
-  // ---------- SEARCH UI ----------
   async _startSearch(initialUiState = null) {
     const ui = initialUiState ?? {
       [this.indexNameValue]: { query: (this.qValue || '').trim() || undefined }
@@ -238,7 +250,6 @@ export default class extends Controller {
         highlightPostTag: HLPOST
       }),
 
-      // MAIN SearchBox — showReset to get the "×"
       searchBox({
         container: this.searchBoxTarget,
         searchAsYouType: this.hasSearchAsYouTypeValue ? !!this.searchAsYouTypeValue : true,
@@ -274,18 +285,7 @@ export default class extends Controller {
           loadMore: 'btn btn-primary',
           disabledLoadMore: 'btn btn-secondary disabled'
         },
-        transformItems: (items) => items.map(h => {
-          // Convert Meili markers into HTML before rendering
-          if (h && h._formatted && typeof h._formatted === 'object') {
-            h._highlightResult = buildHighlightResultFromFormatted(h._formatted);
-            for (const [k, v] of Object.entries(h._formatted)) {
-              if (typeof v === 'string' && typeof h[k] === 'string') {
-                h[k] = swapMarkersToHtml(v);
-              }
-            }
-          }
-          return h;
-        }),
+        transformItems: (items) => items.map((h) => convertHighlightInHit(h)),
         templates: {
           item: (hit) => {
             const ctx = { hit, icons: this.icons, globals: this.globals, _config: this.config };
@@ -326,7 +326,6 @@ export default class extends Controller {
     });
   }
 
-  // ---------- FACET WIDGETS ----------
   _facetSort(mode) {
     const m = String(mode || '').toLowerCase();
     if (m === 'count') return ['isRefined', 'count:desc', 'name:asc'];
@@ -335,10 +334,8 @@ export default class extends Controller {
   }
 
   _mountRefinementList(is, el, attribute) {
-    // Treat empty strings as undefined; enforce sane minimums
     let limit = parseDataNumber(el.dataset.limit);
     let showMoreLimit = parseDataNumber(el.dataset.showMoreLimit);
-
     if (!Number.isFinite(limit) || limit <= 0) limit = 10;
     if (!Number.isFinite(showMoreLimit) || showMoreLimit <= limit) {
       showMoreLimit = Math.max(limit + 10, limit * 2);
@@ -353,7 +350,6 @@ export default class extends Controller {
       limit,
       showMore: true,
       showMoreLimit,
-      // Hide zero-count values *without* losing keepZeroFacets behavior
       transformItems: (items) => withHideZero({}, true).transformItems?.(items) ?? items
     };
 
@@ -422,7 +418,6 @@ export default class extends Controller {
     });
   }
 
-  // ---------- DEBUG ----------
   _updateDebug(helper) {
     if (!this.hasDebugTarget || !helper) return;
     const st = helper.state;
@@ -444,7 +439,7 @@ export default class extends Controller {
       facetsRefinements: st.facetsRefinements || {},
       disjunctiveFacetsRefinements: st.disjunctiveFacetsRefinements || {}
     };
-    this.debugTarget.value = j(dbg);
+    this.debugTarget.value = JSON.stringify(dbg, null, 2);
   }
 
   _logFacetDiagnostics(helper, requestedAttrs) {

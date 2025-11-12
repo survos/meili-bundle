@@ -18,7 +18,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Yethee\Tiktoken\EncoderProvider;
 
-#[AsCommand('meili:schema:update', 'Update Meilisearch index settings from compiler-pass schema')]
+#[AsCommand('meili:schema:update', 'Update Meilisearch index settings from compiler-pass schema', aliases: ['meili:settings:update'])]
 final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 {
     /** @param array<string,array<string,mixed>> $indexSettings (indexName => settings)
