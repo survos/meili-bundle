@@ -3,6 +3,41 @@
 // -----------------------------------------------------------------------------
 
 /**
+ * Safe JSON.parse with fallback.
+ */
+export function safeParse(json, fallback) {
+  try {
+    return json ? JSON.parse(json) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Strip http/https from a URL (for placeholders / debug).
+ */
+export function stripProtocol(url) {
+  return String(url || '').replace(/^https?:\/\//i, '');
+}
+
+/**
+ * Basic HTML escaping for debug / fallback rendering.
+ */
+export function escapeHtml(s) {
+  return String(s ?? '')
+    .replaceAll(/&/g, '&amp;')
+    .replaceAll(/</g, '&lt;')
+    .replaceAll(/>/g, '&gt;');
+}
+
+/**
+ * Normalize a config object (null/undefined → {}).
+ */
+export function normalizeConfig(cfg) {
+  return cfg || {};
+}
+
+/**
  * Convert Meili's safe tokens to <mark class="ais-Highlight">…</mark>
  * Example seen in payloads: "__ais-highlight__Dory__/ais-highlight__"
  */

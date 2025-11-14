@@ -1,11 +1,9 @@
 {# -----------------------------------------------------------------------------
    File: templates/insta.html.twig
-   Version: MEILI-INSTA v4.7
+   Version: MEILI-INSTA v4.9
    Notes:
-   - Bundle-friendly base (no framework requirement); app may override bundle base.
-   - Preserves critical globals & icons blocks (DO NOT REMOVE).
-   - Grid columns are driven by indexConfig.ui.columns (fallback to ?cols= / default 3).
-   - Full InstantSearch UI (SearchBox, Stats, Reset, Hits, Pagination, SortBy, Configure).
+   - Keyword mode: facets sidebar + hits (original layout).
+   - Embedder mode: NO facets UI, but a hidden refinementList target so Stimulus is happy.
 #}
 {% extends "@SurvosMeili/base.html.twig" %}
 
@@ -14,8 +12,14 @@
 {% block stylesheets %}
   {{ parent() }}
   <style>
-    .insta-grid { display: grid; grid-template-columns: 320px 1fr; gap: 1rem; }
-    @media (max-width: 900px) { .insta-grid { grid-template-columns: 1fr; } }
+    .insta-grid {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 900px) {
+      .insta-grid { grid-template-columns: 1fr; }
+    }
     .facet-header { display: flex; align-items: baseline; gap: .75rem; }
     .facet-title { text-transform: none; font-weight: 600; }
     .facet-actions { margin-left: auto; display: inline-flex; gap: .35rem; }
@@ -54,6 +58,8 @@
 
   {# set default to false during production or when this is completely debugged #}
   {% set sanity = app.request.get('sanity', true) %}
+  Embedder: {{ embedder }}
+
   <div
     {{ stimulus_controller(_sc, {
       serverUrl: server,
@@ -79,83 +85,47 @@
     <div {{ stimulus_controller(_sc_modal, { serverUrl: server, serverApiKey: apiKey, indexName: indexName, globalsJson: globals|json_encode }) }}>
       {{ include('@SurvosMeili/components/_modal.html.twig', { _sc_modal: _sc_modal }) }}
 
-      <div class="insta-grid">
-        {# ---------- Facets (sidebar) ---------- #}
-        <aside aria-label="Filters" {{ stimulus_target(_sc, 'refinementList') }}>
-          {% for name, conf in indexConfig.facets %}
-            {% set widget = conf.widget ?? conf.type ?? 'RefinementList' %}
-            <div class="facet-block mb-5" data-facet-block>
-              <div class="facet-header">
-                <h3 class="facet-title h6 m-0">{{ conf.label ?? name }}</h3>
-                <span class="facet-actions">
-                  <button class="facet-collapse btn btn-ghost btn-xxs p-0"
-                          type="button"
-                          data-collapse-control
-                          data-attribute="{{ name }}"
-                          aria-expanded="{{ (conf.collapsed is same as(true)) ? 'false' : 'true' }}"
-                          title="Collapse/Expand">
-                    {{ ux_icon('tabler:chevron-down')|raw }}
-                  </button>
-                </span>
-              </div>
-              <div class="facet-body mt-2">
-                <div
-                  data-attribute="{{ name }}"
-                  data-search-mode="{{ conf.searchMode|default('contains') }}"
-                  data-widget="{{ widget }}"
-                  {% if conf.sortMode is defined %} data-sort-mode="{{ conf.sortMode }}"{% endif %}
-                  {% if conf.searchable is same as(true) %} data-searchable="true"{% elseif conf.searchable is same as(false) %} data-searchable="false"{% endif %}
-                  {% if conf.limit is defined %} data-limit="{{ conf.limit }}"{% endif %}
-                  {% if conf.showMoreLimit is defined %} data-show-more-limit="{{ conf.showMoreLimit }}"{% endif %}
-                  {% if conf.lookup is defined and conf.lookup is iterable %} data-lookup='{{ conf.lookup|json_encode }}'{% endif %}
-                  {% if widget == 'RangeSlider' %}
-                    {% if conf.step is defined %} data-step="{{ conf.step }}"{% endif %}
-                    {% if conf.min is defined %} data-min="{{ conf.min }}"{% endif %}
-                    {% if conf.max is defined %} data-max="{{ conf.max }}"{% endif %}
-                    {% if conf.pips is defined %} data-pips="{{ conf.pips ? 'true' : 'false' }}"{% endif %}
-                    {% if conf.tooltips is defined %} data-tooltips='{{ conf.tooltips|json_encode }}'{% endif %}
-                  {% endif %}>
-                </div>
-              </div>
-            </div>
-          {% endfor %}
-        </aside>
+      {# ------------------------------------------------------------------
+         EMBEDDER / HYBRID MODE: no visible sidebar, but keep a hidden
+         refinementList target so the controller doesn't throw.
+         ------------------------------------------------------------------ #}
+      {% if embedder|default(false) %}
 
-        {# ---------- Main (search, hits) ---------- #}
+        {# hidden dummy target to satisfy Stimulus "refinementList" requirement #}
+        <div style="display:none" {{ stimulus_target(_sc, 'refinementList') }}></div>
+
         <main>
-          {% if embedder|default(false) %}
-            <div class="semantic-toolbar d-flex align-items-center gap-2 mb-3">
-              <span class="text-muted small">Semantic search</span>
+          <div class="semantic-toolbar d-flex align-items-center gap-2 mb-3">
+            <span class="text-muted small">Semantic search</span>
 
-              <label class="small text-muted ms-2" for="semantic-range">Weight</label>
-              {% set initialSemantic = (app.request.get('semantic') ?? 30) %}
-              <input
-                {{ stimulus_action(_sc, 'semantic', 'change') }}
-                {{ stimulus_target(_sc, 'semanticSlider') }}
-                id="semantic-range"
-                type="range" min="0" max="100" step="1"
-                value="{{ initialSemantic }}"
-                style="width: 180px;">
-              <output {{ stimulus_target(_sc, 'semanticOutput') }} class="small text-muted">{{ initialSemantic }}%</output>
+            <label class="small text-muted ms-2" for="semantic-range">Weight</label>
+            {% set initialSemantic = (app.request.get('semantic') ?? 30) %}
+            <input
+              {{ stimulus_action(_sc, 'semantic', 'change') }}
+              {{ stimulus_target(_sc, 'semanticSlider') }}
+              id="semantic-range"
+              type="range" min="0" max="100" step="1"
+              value="{{ initialSemantic }}"
+              style="width: 180px;">
+            <output {{ stimulus_target(_sc, 'semanticOutput') }} class="small text-muted">{{ initialSemantic }}%</output>
 
-              <label class="small text-muted ms-3" for="min-score-mult">Min score ×0.01</label>
-              <input
-                id="min-score-mult"
-                type="number" min="0" max="100" step="1"
-                value="{{ (app.request.get('minScore', 0) * 100)|round(0, 'floor') }}"
-                class="form-control form-control-sm"
-                style="width: 110px;"
-                {{ stimulus_target(_sc, 'scoreMultiplier') }}
-                {{ stimulus_action(_sc, 'setMinScoreMultiplier', 'input') }}
-                {{ stimulus_action(_sc, 'setMinScoreMultiplier', 'change') }}>
+            <label class="small text-muted ms-3" for="min-score-mult">Min score ×0.01</label>
+            <input
+              id="min-score-mult"
+              type="number" min="0" max="100" step="1"
+              value="{{ (app.request.get('minScore', 0) * 100)|round(0, 'floor') }}"
+              class="form-control form-control-sm"
+              style="width: 110px;"
+              {{ stimulus_target(_sc, 'scoreMultiplier') }}
+              {{ stimulus_action(_sc, 'setMinScoreMultiplier', 'input') }}
+              {{ stimulus_action(_sc, 'setMinScoreMultiplier', 'change') }}>
 
-              <input type="hidden"
-                {{ stimulus_target(_sc, 'scoreThreshold') }}
-                value="{{ app.request.get('minScore', 0) }}">
+            <input type="hidden"
+              {{ stimulus_target(_sc, 'scoreThreshold') }}
+              value="{{ app.request.get('minScore', 0) }}">
 
-              <div class="ms-3" {{ stimulus_target(_sc, 'sortBy') }}></div>
-            </div>
-          {% endif %}
+            <div class="ms-3" {{ stimulus_target(_sc, 'sortBy') }}></div>
+          </div>
 
           {# Search row: input + manual Search button (above results) #}
           <div class="mb-3 d-flex gap-2 align-items-center">
@@ -189,7 +159,89 @@
             <textarea {{ stimulus_target(_sc, 'debug') }} class="form-control" rows="8" spellcheck="false"></textarea>
           </div>
         </main>
-      </div>
+
+      {# ------------------------------------------------------------------
+         KEYWORD MODE (no embedder): full grid with facets sidebar
+         ------------------------------------------------------------------ #}
+      {% else %}
+
+        <div class="insta-grid">
+          {# ---------- Facets (sidebar) ---------- #}
+          <aside aria-label="Filters" {{ stimulus_target(_sc, 'refinementList') }}>
+            {% for name, conf in indexConfig.facets %}
+              {% set widget = conf.widget ?? conf.type ?? 'RefinementList' %}
+              <div class="facet-block mb-5" data-facet-block>
+                <div class="facet-header">
+                  <h3 class="facet-title h6 m-0">{{ conf.label ?? name }}</h3>
+                  <span class="facet-actions">
+                    <button class="facet-collapse btn btn-ghost btn-xxs p-0"
+                            type="button"
+                            data-collapse-control
+                            data-attribute="{{ name }}"
+                            aria-expanded="{{ (conf.collapsed is same as(true)) ? 'false' : 'true' }}"
+                            title="Collapse/Expand">
+                      {{ ux_icon('tabler:chevron-down')|raw }}
+                    </button>
+                  </span>
+                </div>
+                <div class="facet-body mt-2">
+                  <div
+                    data-attribute="{{ name }}"
+                    data-search-mode="{{ conf.searchMode|default('contains') }}"
+                    data-widget="{{ widget }}"
+                    {% if conf.sortMode is defined %} data-sort-mode="{{ conf.sortMode }}"{% endif %}
+                    {% if conf.searchable is same as(true) %} data-searchable="true"{% elseif conf.searchable is same as(false) %} data-searchable="false"{% endif %}
+                    {% if conf.limit is defined %} data-limit="{{ conf.limit }}"{% endif %}
+                    {% if conf.showMoreLimit is defined %} data-show-more-limit="{{ conf.showMoreLimit }}"{% endif %}
+                    {% if conf.lookup is defined and conf.lookup is iterable %} data-lookup='{{ conf.lookup|json_encode }}'{% endif %}
+                    {% if widget == 'RangeSlider' %}
+                      {% if conf.step is defined %} data-step="{{ conf.step }}"{% endif %}
+                      {% if conf.min is defined %} data-min="{{ conf.min }}"{% endif %}
+                      {% if conf.max is defined %} data-max="{{ conf.max }}"{% endif %}
+                      {% if conf.pips is defined %} data-pips="{{ conf.pips ? 'true' : 'false' }}"{% endif %}
+                      {% if conf.tooltips is defined %} data-tooltips='{{ conf.tooltips|json_encode }}'{% endif %}
+                    {% endif %}>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </aside>
+
+          {# ---------- Main (search, hits) ---------- #}
+          <main>
+            <div class="mb-3 d-flex gap-2 align-items-center">
+              <div class="flex-grow-1" {{ stimulus_target(_sc, 'searchBox') }}></div>
+
+              <button type="button"
+                      class="btn btn-primary"
+                      title="Run search (Enter ↵)"
+                      {{ stimulus_target(_sc, 'submit') }}
+                      {{ stimulus_action(_sc, 'submit', 'click') }}
+                      style="{{ searchAsYouType ? 'display:none' : '' }}">
+                Search ↵
+              </button>
+
+              <div {{ stimulus_target(_sc, 'reset') }}></div>
+            </div>
+
+            <div class="mb-2 small text-muted" {{ stimulus_target(_sc, 'stats') }}></div>
+            <div class="mb-2" {{ stimulus_target(_sc, 'notice') }}></div>
+
+            <div
+              {{ stimulus_target(_sc, 'hits') }}
+              style="--cols: {{ cols|e('html_attr') }};">
+            </div>
+
+            <div class="mt-4" {{ stimulus_target(_sc, 'pagination') }}></div>
+
+            <div class="mb-3">
+              <label class="form-label small text-muted">Outgoing /multi-search payload</label>
+              <textarea {{ stimulus_target(_sc, 'debug') }} class="form-control" rows="8" spellcheck="false"></textarea>
+            </div>
+          </main>
+        </div>
+
+      {% endif %}
     </div>
   </div>
 {% endblock %}

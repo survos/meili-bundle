@@ -133,3 +133,19 @@ mark{padding:0 !important}
 .line-limit-1{-webkit-line-clamp:1}.line-limit-2{-webkit-line-clamp:2}
 .meta-grid{display:grid;grid-template-columns:auto 1fr;gap:.35rem .75rem;min-width:0}
 .meta-key{white-space:nowrap}.meta-val{min-width:0;overflow-wrap:anywhere;word-break:break-word}
+
+/* Override InstantSearch default layout */
+.ais-InfiniteHits-list {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 1rem;
+  padding: 0;
+  margin: 0;
+}
+
+.ais-InfiniteHits-item {
+  list-style: none;
+  display: block !important; /* keep block but allow width to control columns */
+  padding: 0;
+  margin: 0;
+}
