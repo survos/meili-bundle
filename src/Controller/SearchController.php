@@ -75,6 +75,7 @@ class SearchController extends AbstractController
             'indexName'        => $indexName,
             'indexConfig'      => $indexConfig,
             'settings'         => $settings,
+            'allSettings'      => $this->meiliService->getAllSettings(),
             'primaryKey'       => $indexConfig['primaryKey'],
             'q'                => $q,
             'facets'           => $settings['filterableAttributes'] ?? [],

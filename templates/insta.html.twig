@@ -58,7 +58,6 @@
 
   {# set default to false during production or when this is completely debugged #}
   {% set sanity = app.request.get('sanity', true) %}
-  Embedder: {{ embedder }}
 
   <div
     {{ stimulus_controller(_sc, {

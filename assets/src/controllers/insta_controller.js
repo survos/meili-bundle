@@ -749,4 +749,26 @@ export default class extends Controller {
     if (this.hasScoreThresholdTarget) this.scoreThresholdTarget.value = String(v);
     if (this.hasScoreMultiplierTarget) this.scoreMultiplierTarget.value = String(Math.round(v * 100));
   }
+
+  setMinScoreMultiplier(event) {
+    event?.preventDefault?.();
+
+    // Read numeric "multiplier" from input (0–100, representing % × 0.01)
+    const raw = Number(String(event?.currentTarget?.value ?? '').trim());
+    const mult = Number.isFinite(raw) ? raw : 0;
+
+    // Convert to decimal threshold [0,1]
+    const decimal = Math.max(0, Math.min(1, mult / 100));
+
+    // Update internal + input fields via existing helper
+    this._setThresholdDecimal(decimal);
+
+    // Re-run search with new threshold
+    try {
+      this.search?.refresh();
+    } catch {
+      /* ignore */
+    }
+  }
+
 }

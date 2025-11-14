@@ -74,7 +74,8 @@ class InstantSearchComponent
     public string $tableClasses = '';
 
     /** @var array<string,mixed> */
-    public array $indexConfig = []; // <- NEW
+    public array $indexConfig = []; // this index configuration
+    public array $settings = []; // All indexes, for
 
     public function getLocale(): string
     {
@@ -93,6 +94,8 @@ class InstantSearchComponent
         $this->filter = $filter;
         $this->buttons = $buttons;
         $this->class = $class;
+        $this->settings = $this->meiliService->getAllSettings();
+        dd($this->settings);
         $this->indexConfig = $indexConfig ?? $this->indexConfig; // <- NEW
     }
 

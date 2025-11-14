@@ -84,6 +84,11 @@ class MeiliService
         return $this->rawSettings;
     }
 
+    public function getAllSettings(): array
+    {
+        return $this->rawSettings;
+    }
+
     public function indexedByClass(): array
     {
         $response = [];

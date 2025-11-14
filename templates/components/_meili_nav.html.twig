@@ -1,6 +1,15 @@
 {# A tiny, framework-free header bar that the bundle owns. #}
 {% set embedders = indexConfig.embedders|default([]) %}
 <div class="meili-bar">
+  <a href="/">/ (hack)</a>
+  {% for indexName, indexSettings in allSettings %}
+      <li>
+        <a href="{{ path('meili_insta', {indexName: indexSettings.prefixedName}) }}">
+          {{ ux_icon('mdi:search') }}
+          {{ indexName }}</a>
+      </li>
+  {% endfor %}
+    {{ dump(allSettings) }}
   <div class="meili-bar-left">
     {% if indexName %}
       <span class="meili-chip">

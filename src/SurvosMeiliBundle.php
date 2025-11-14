@@ -206,6 +206,10 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                             ->scalarNode('apiKey')->defaultNull()->end()                      // e.g. '%env(OPENAI_API_KEY)%'
                             ->scalarNode('for')->defaultNull()->end()                         // optional FQCN (e.g. App\Entity\Product)
                             ->scalarNode('template')->defaultNull()->end()                    // optional inline template
+                            ->arrayNode('examples')
+                                ->prototype('scalar')->end()
+                                ->defaultValue([])
+                            ->end()
                         ->end()
                     ->end()
                 ->end()
