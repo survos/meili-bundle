@@ -19,10 +19,19 @@
                     {{ ux_icon('mdi:search') }}
                     {{ settings.rawName }}
                 </a>
-                {% for embedder in settings.embedders??[] %}
-                    <a href="{{ path('meili_insta_embed', {indexName: indexName, embedder: embedder}) }}">
-                        Sematic Search {{ embedder }}
-                    </a>
+
+                <hr />
+                {{ ux_icon('fluent:brain-circuit-20-filled') }}
+                {% set icons = ['fluent:brain-circuit-20-filled', 'mdi:semantic-web'] %}
+                {% for idx, embedder in settings.embedders??[] %}
+                    <button>
+
+                        {# select icons from https://ux.symfony.com/icons and then run bin/console ux:icons:lock from the application root #}
+                        <a href="{{ path('meili_insta_embed', {indexName: indexName, embedder: embedder}) }}" target="_blank">
+                            {{ ux_icon('mdi:semantic-web') }}
+                            Sematic Search {{ embedder }}
+                        </a>
+                    </button>
 
 
                 {% endfor %}
