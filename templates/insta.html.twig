@@ -26,10 +26,18 @@
   </style>
 
   <style>
+    body {
+      background-color: lightblue !important;
+      background-image: radial-gradient(circle at center, #93c5fd, transparent) !important;
+    }
+    .insta-grid [class^='ais-'] {
+      box-sizing: border-box;
+    }
     .insta-grid .facet-block {
       background: rgba(255, 255, 255, 0.5);
       border: none;
       box-shadow: none;
+      margin-bottom: 1rem !important;
     }
     .insta-grid .facet-title {
       color: #000000;
@@ -88,14 +96,235 @@
       padding: 0.375rem 0.75rem;
     }
     .insta-grid .ais-RefinementList-showMore {
+      background: rgba(0, 150, 219, 0.5);
+      font-size: 0.875rem;
+      font-weight: 500;
       margin-top: 1rem;
+      padding: 0.625rem 0.75rem;
+      width: 100%;
+    }
+    .insta-grid .ais-RefinementList-showMore:hover {
+      background: rgba(0, 150, 219, 0.625);
+    }
+    .insta-grid .ais-RefinementList-showMore:focus {
+      background: rgba(0, 150, 219, 0.625);
+    }
+    .insta-grid .ais-Pagination {
+      margin-bottom: 1.5rem;
+    }
+    .insta-grid .ais-Pagination-link {
+      align-items: center;
+      background: rgba(255, 255, 255, 0.875);
+      border: none;
+      border-radius: 50%;
+      display: inline-flex;
+      font-size: 0.875rem;
+      font-weight: 600;
+      height: 2.25rem;
+      justify-content: center;
+      min-width: 2.25rem;
+    }
+    .insta-grid .ais-Pagination-link:hover {
+      text-decoration: none;
+    }
+    .insta-grid .ais-Pagination-item--selected .ais-Pagination-link {
+      background-color: rgba(0, 150, 219, 0.5);
+      border-color: transparent;
+    }
+    .insta-grid .ais-InfiniteHits {
+      margin-top: 1rem;
+    }
+    .insta-grid .ais-InfiniteHits .ais-InfiniteHits-list {
+      display: grid !important;
+      grid-template-columns: repeat(var(--cols), 1fr);
+      gap: 1rem;
+      margin: 0;
+    }
+    .insta-grid .ais-InfiniteHits-list .ais-InfiniteHits-item {
+      border: none;
+      box-shadow: none;
+      margin: 0;
+      padding: 0;
+      width: 100% !important;
+    }
+    .insta-grid .ais-InfiniteHits-list .ais-InfiniteHits-item .insta-hit {
+      height: 100%;
+    }
+    .insta-grid .ais-InfiniteHits-list .ais-InfiniteHits-item .card {
+      background: rgba(255, 255, 255, 0.5);
+      box-shadow: none !important;
+    }
+    .insta-grid .ais-InfiniteHits-list .ais-InfiniteHits-item .card-body > img {
+      border-radius: 0.375rem;
+      filter: drop-shadow(0 0.25rem 0.5rem rgba(0, 0, 0, 0.375));
+      min-height: 160px !important;
+    }
+    .insta-grid .ais-InfiniteHits-list .ais-InfiniteHits-item .card-title {
+      font-size: 0.875rem;
+      font-weight: 600;
+      line-height: 1.125rem;
+      margin-top: 0.75rem;
+      text-align: center;
+    }
+    .insta-grid .ais-InfiniteHits-loadMore {
+      background: rgba(0, 150, 219, 0.5);
+      border: none;
+      box-shadow: none;
+      display: block;
+      margin: 2rem auto;
+    }
+    .insta-grid .ais-InfiniteHits-loadMore:hover {
+      background: rgba(0, 150, 219, 0.625);
+    }
+    .insta-grid .ais-InfiniteHits-loadMore:focus {
+      background: rgba(0, 150, 219, 0.625);
+    }
+    .insta-grid .ais-InfiniteHits-loadMore:active {
+      background: rgba(0, 150, 219, 0.75) !important;
+    }
+    .insta-grid > aside {
+      align-self: start;
+      scrollbar-width: none;
+    }
+    @media (min-width: 900px) {
+      .insta-grid > aside {
+        height: calc(100vh - 1rem);
+        overflow-y: auto;
+        position: sticky;
+        top: 1rem;
+      }
+    }
+    .insta-grid .ais-SearchBox {
+      height: 3rem;
+    }
+    .insta-grid .ais-SearchBox-form {
+      background: rgba(255, 255, 255, 0.5);
+      border: none;
+      border-radius: 999px;
+    }
+    .insta-grid > main .ais-SearchBox-input {
+      background: transparent;
+      border: none;
+      color: inherit;
+      font-size: 1rem;
+      font-weight: 500;
+      height: 100%;
+      padding: 0.25rem 1rem;
+    }
+    .insta-grid .ais-SearchBox-submit {
+      background: rgba(0, 150, 219, 0.5);
+      border: none;
+      height: 3rem;
+      min-width: 3rem;
+      top: 0;
+      transform: none;
+    }
+    .insta-grid .ais-SearchBox-resetIcon {
+      left: -40px;
+    }
+    .insta-grid .ais-ClearRefinements-button {
+      background: transparent;
+      border: none;
+      color: rgba(0, 150, 219, 0.75);
+      font-size: 0.75rem;
+      font-weight: 500;
+      height: 3rem;
+      padding: 0rem 0.5rem !important;
+      text-transform: uppercase;
+    }
+    .insta-grid .ais-ClearRefinements-button:hover {
+      background: transparent;
+      color: rgba(0, 150, 219, 1);
+      text-decoration: none;
+    }
+    .insta-grid .ais-ClearRefinements-button:focus {
+      background: transparent;
+      color: rgba(0, 150, 219, 1);
+    }
+    .insta-grid .ais-ClearRefinements-button:active {
+      background: transparent;
+      border: none;
+      color: rgba(0, 150, 219, 1);
+    }
+    .insta-grid .ais-RangeSlider .rheostat-handle {
+      margin-left: 0;
+    }
+    .insta-grid .rheostat-tooltip {
+      margin-left: 0;
+      top: -28px;
+    }
+    .insta-grid .rheostat-progress {
+      background: rgba(0, 150, 219, 0.5);
+    }
+    .insta-grid input, .insta-grid textarea {
+      background: rgba(255, 255, 255, 0.5);
+    }
+    .insta-grid .ais-RefinementList-labelText {
+      font-size: 0.875rem;
+    }
+
+    .meili-header {
+      backdrop-filter: blur(4px);
+      background: rgba(255, 255, 255, 0.75);
+      position: sticky;
+      top: 0;
+      width: 100%;
+      z-index: 50;
+    }
+    .meili-header .meili-bar {
+      align-items: center;
+      background: transparent;
+      border-bottom: none;
+      gap: 1.5rem;
+      margin: 0 auto;
+      min-height: 3rem;
+      padding: 0.75rem 1.5rem;
+    }
+    .meili-chip {
+      align-items: center;
+      background: rgba(0, 0, 0, 0.075);
+      border-radius: 999px;
+      color: inherit;
+      display: inline-flex;
+      font-size: 0.75rem;
+      line-height: 1;
+      padding: 0.25rem 0.625rem;
+    }
+    .meili-bar-left {
+      align-items: center;
+      display: flex;
+      gap: 0.5rem;
+      margin-left: auto;
+    }
+    .meili-bar-right {
+      align-items: center;
+      display: flex;
+      gap: 0.5rem;
+    }
+    .meili-bar > li {
+      list-style: none;
+    }
+    .meili-bar > a, .meili-bar > li > a {
+      align-items: center;
+      color: inherit;
+      display: flex;
+      font-size: 0.875rem;
+      font-weight: 500;
+      gap: 0.5rem;
+      text-decoration: none;
+    }
+    .meili-bar > a:hover, .meili-bar li a:hover {
+      color: rgba(0, 150, 219, 0.75);
+      text-decoration: none;
+    }
+    .meili-bar svg {
+      height: 1rem;
+      width: 1rem;
     }
   </style>
 {% endblock %}
 
 {% block body %}
-
-  {{ _self }}
 
   {# === Keep these blocks intact (critical for controllers/templates) === #}
   {% set globals = {
