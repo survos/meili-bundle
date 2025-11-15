@@ -65,7 +65,11 @@ class SearchController extends AbstractController
         }
 
         $indexConfig = $this->meiliService->getIndexSetting($indexName);
+        assert($indexConfig, "Missing config for $indexName");
         $stats = $index->stats();
+//        $results = $index->search(null, [
+//            'facets' => array_keys($indexConfig['facets'] ?? []),
+//        ]);
 
         $params = [
             'server'           => $useProxy
