@@ -764,7 +764,7 @@ export default class extends Controller {
 
   async semantic(event) {
     event?.preventDefault?.();
-    if (!this._isSemantic()) return;
+    /*if (!this._isSemantic()) return;*/
     const el = this.hasSemanticSliderTarget ? this.semanticSliderTarget : (event?.currentTarget ?? null);
     const percent = Number(el?.value ?? 0) || 0;
     const clamped = Math.max(0, Math.min(100, percent));
