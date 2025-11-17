@@ -247,28 +247,49 @@ export default class extends Controller {
       const toHighlightEntry = (v) => {
         if (v == null) return null;
 
-        if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+        if (
+          typeof v === 'string' ||
+          typeof v === 'number' ||
+          typeof v === 'boolean'
+        ) {
           return { value: decodeAndSwap(v) };
         }
 
         if (Array.isArray(v)) {
-          const arr = v.map(entry => {
-            if (entry == null) return null;
-            if (typeof entry === 'string' || typeof entry === 'number' || typeof entry === 'boolean') {
-              return { value: decodeAndSwap(entry) };
-            }
-            try { return { value: decodeAndSwap(JSON.stringify(entry)) }; }
-            catch { return null; }
-          }).filter(Boolean);
+          const arr = v
+            .map(entry => {
+              if (entry == null) return null;
+
+              if (
+                typeof entry === 'string' ||
+                typeof entry === 'number' ||
+                typeof entry === 'boolean'
+              ) {
+                return { value: decodeAndSwap(entry) };
+              }
+
+              try {
+                return { value: decodeAndSwap(JSON.stringify(entry)) };
+              } catch {
+                return null;
+              }
+            })
+            .filter(Boolean);
+
           return arr.length ? arr : null;
         }
 
-        try { return { value: decodeAndSwap(JSON.stringify(v)) }; }
-        catch { return null; }
+        try {
+          return { value: decodeAndSwap(JSON.stringify(v)) };
+        } catch {
+          return null;
+        }
       };
 
       // debug: peek at raw _formatted from Meili (first 2 hits)
-      const sampleFormatted = (meiliResult?.hits || []).slice(0, 2).map(h => h?._formatted ?? null);
+      const sampleFormatted = (meiliResult?.hits || [])
+        .slice(0, 2)
+        .map(h => h?._formatted ?? null);
       logHL('raw _formatted (first 2): %o', sampleFormatted);
 
       const hits = (meiliResult?.hits || []).map((hit, idx) => {
@@ -304,7 +325,23 @@ export default class extends Controller {
         ? +meiliResult.estimatedTotalHits
         : hits.length;
 
-      return {
+      // Map Meili facetStats -> Algolia facets_stats (for RangeSlider, etc.)
+      const facets = meiliResult?.facetDistribution ?? {};
+      const rawStats = meiliResult?.facetStats || meiliResult?.facet_stats || null;
+      const facets_stats = {};
+
+      if (rawStats && typeof rawStats === 'object') {
+        for (const [attr, stats] of Object.entries(rawStats)) {
+          if (!stats || typeof stats !== 'object') continue;
+          const min = Number(stats.min);
+          const max = Number(stats.max);
+          if (Number.isFinite(min) && Number.isFinite(max)) {
+            facets_stats[attr] = { min, max };
+          }
+        }
+      }
+
+      const base = {
         hits,
         nbHits,
         nbPages: Math.max(1, Math.ceil(nbHits / limit)),
@@ -313,8 +350,14 @@ export default class extends Controller {
           ? +meiliResult.processingTimeMs
           : 0,
         query: meiliResult?.query ?? q.q ?? '',
-        facets: meiliResult?.facetDistribution ?? {},
+        facets
       };
+
+      if (Object.keys(facets_stats).length) {
+        base.facets_stats = facets_stats;
+      }
+
+      return base;
     };
 
     const buildQueries = (requests, shouldHybrid, ratio, threshold) => {
@@ -365,7 +408,7 @@ export default class extends Controller {
         }
 
         // --- FACETS HANDLING ---
-        // Prefer what InstantSearch provides; otherwise fallback to config/schema
+        // Prefer what InstantSearch provides; otherwise fallback from config/schema
         let facetsParam = p.facets;
         if (facetsParam == null) {
           const schemaFacets = this.config?.schema?.filterableAttributes || [];
@@ -576,6 +619,7 @@ export default class extends Controller {
               _score: hit._rankingScore,
               _scoreDetails: hit._rankingScoreDetails,
               icons: this.icons,
+              _sc_modal: this.globals._sc_modal,
               globals: this.globals,
               hints: (this.config?.hints || {}),
               view: (this.config?.view || {})

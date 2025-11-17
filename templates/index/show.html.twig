@@ -46,6 +46,7 @@
             <a href="{{ path('survos_facet_show', {indexName: indexName, fieldName: facetName}) }}">
                 {{ facetName }}
             </a>
+            {{ dump(facetCounts) }}
         </li>
     {% endfor %}
     <a class="btn btn-primary" href="{{ path('meili_insta', {indexName: indexName}) }}">

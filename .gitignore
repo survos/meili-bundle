@@ -5,5 +5,3 @@ composer.lock
 /tests/project-dir/var
 /.phpunit.cache
 /coverage
-*.pixie*
-*.pixie*

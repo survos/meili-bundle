@@ -8,7 +8,6 @@
     Design an EasyAdmin DashboardController for all our indexes, from the compiler pass data (the #[Meiliindex()] attribute data, plus
 
 
-
     {{ _self }}
     <ul>
 
@@ -19,6 +18,14 @@
                     {{ ux_icon('mdi:search') }}
                     {{ settings.rawName }}
                 </a>
+
+
+                <a class="btn btn-primary"
+                   href="{{ path('meili_admin_meili_show_index', {indexName: indexName}) }}">
+                    SHOW!
+                    {{ settings.rawName }}
+                </a>
+
 
                 <hr />
                 {{ ux_icon('fluent:brain-circuit-20-filled') }}

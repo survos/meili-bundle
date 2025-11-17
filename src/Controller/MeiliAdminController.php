@@ -187,7 +187,7 @@ END
         ];
         return $_format == 'json'
             ? $this->json($data)
-            : $this->render('@SurvosApiGrid/stats.html.twig', $data);
+            : $this->render('@SurvosMeili/stats.html.twig', $data);
 
         // Get the base URL
 //        $url = "/api/projects";//.$indexName;

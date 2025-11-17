@@ -41,9 +41,17 @@ class MeiliController extends AbstractController
         // configured
         $settings = $this->meiliService->settings[$indexName];
         // live
-        $this->meiliService->getIndex($indexName, autoCreate: false);
+        $index = $this->meiliService->getIndex($indexName, autoCreate: false);
+
 
         $indexApi  = $this->meiliService->getIndexEndpoint($indexName);
+        $results = $indexApi->search(null, [
+            'limit' => 0,
+            'facets' => ['*']
+        ]);
+
+// Access facet distribution
+        $facetDistribution = $results->getFacetDistribution();
         try {
             $rawInfo = $indexApi->fetchRawInfo(); // NOT a task
         } catch (ApiException $e) {
@@ -85,7 +93,6 @@ class MeiliController extends AbstractController
             }
             $facetCounts[$fieldName] = $counts;
         }
-
 //        $info = $this->meiliService->getMeiliClient()->getRawIndex($actualIndexName);
 
         return $this->render('@SurvosMeili/index/show.html.twig', [

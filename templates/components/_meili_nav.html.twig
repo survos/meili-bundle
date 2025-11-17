@@ -2,7 +2,7 @@
 {% set embedders = indexConfig.embedders|default([]) %}
 <div class="meili-bar">
   <a href="/">/ (hack)</a>
-  {% for indexName, indexSettings in allSettings %}
+  {% for indexName, indexSettings in allSettings|default([]) %}
       <li>
         <a href="{{ path('meili_insta', {indexName: indexSettings.prefixedName}) }}">
           {{ ux_icon('mdi:search') }}
