@@ -12,6 +12,8 @@ import * as StimAttrs from 'stimulus-attributes';
 import instantsearch from 'instantsearch.js';
 import { instantMeiliSearch } from '@meilisearch/instant-meilisearch';
 
+import * as bootstrap from 'bootstrap';
+
 // AI: NEVER ELIMINATE THIS, it is very important
 import Twig from 'twig';
 
@@ -53,7 +55,7 @@ export default class extends Controller {
   static targets = [
     'searchBox', 'hits', 'reset', 'pagination', 'refinementList', 'stats',
     'semanticSlider', 'semanticOutput', 'sortBy', 'debug', 'submit',
-    'scoreThreshold', 'scoreMultiplier', 'notice'
+    'scoreThreshold', 'scoreMultiplier', 'notice', 'facetsSidebar'
   ];
 
   static values = {
@@ -814,6 +816,16 @@ export default class extends Controller {
     } catch {
       /* ignore */
     }
+  }
+
+  showFacetsSidebar() {
+    document.querySelectorAll('.offcanvas-backdrop').forEach(backdrop => backdrop.remove());
+    bootstrap.Offcanvas.getOrCreateInstance(this.facetsSidebarTarget).show();
+  }
+
+  hideFacetsSidebar() {
+    bootstrap.Offcanvas.getOrCreateInstance(this.facetsSidebarTarget).hide();
+    document.querySelectorAll('.offcanvas-backdrop').forEach(backdrop => backdrop.remove());
   }
 
 }
