@@ -4,24 +4,35 @@
 
 {% block content_header %}
     <div class="content-header-title">
-        <h1 class="title">{{ indexName }}</h1>
+        <h1 class="title">{{ indexName }} Admin</h1>
     </div>
 
-    <div class="page-actions">
-        <a href="{{ path('admin_meili_index') }}" class="btn btn-secondary">
-            <i class="fa fa-arrow-left"></i> Back to Meili Index
-        </a>
-    </div>
+    {# this is only relevant for showing an individual item, not the index admin! #}
+{#    <div class="page-actions">#}
+{#        {{ indexName }}#}
+{#        <a href="{{ path('meili_admin_%s_index'|format(indexName)) }}" class="btn btn-secondary">#}
+{#            <i class="fa fa-arrow-left"></i> Back to {{ indexName }}#}
+{#        </a>#}
+{#    </div>#}
 {% endblock %}
 
 {% block main %}
     {% for fieldName, counts in facetCounts %}
         <h4>{{ fieldName }}</h4>
-        <ul>
-            {% for c in counts|slice(0,4) %}
-                <li>{{ c.label }}: {{ c.count }}</li>
+        <table class="table table-striped table-hover table-condensed">
+            <thead>
+            <tr>
+                <th>Label</th>
+                <th>Count</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for c in counts|slice(0,10) %}
+                <tr><td>{{ c.label }}</td><td>{{ c.count }}</td></tr>
             {% endfor %}
-        </ul>
+
+            </tbody>
+        </table>
     {% endfor %}
     <pre>{{ settings|json_pretty }}</pre>
     <pre>{{ rawInfo|json_pretty }}</pre>
@@ -41,35 +52,32 @@
 {#    <andypf-json-viewer data='{"test": "Hello World"}'></andypf-json-viewer>#}
 {#    <andypf-json-viewer>{"name": "Helmut"}</andypf-json-viewer>#}
 
-    {% for facetName, details in settings.facets|default([]) %}
-        <li>
-            <a href="{{ path('survos_facet_show', {indexName: indexName, fieldName: facetName}) }}">
-                {{ facetName }}
-            </a>
-            {{ dump(facetCounts) }}
-        </li>
-    {% endfor %}
-    <a class="btn btn-primary" href="{{ path('meili_insta', {indexName: indexName}) }}">
-        SEARCH
-    </a>
+{#    {% for facetName, details in settings.facets|default([]) %}#}
+{#        <li>#}
+{#            <a href="{{ path('survos_facet_show', {indexName: indexName, fieldName: facetName}) }}">#}
+{#                {{ facetName }}#}
+{#            </a>#}
+{#            {{ dump(facetCounts) }}#}
+{#        </li>#}
+{#    {% endfor %}#}
+{#    <a class="btn btn-primary" href="{{ path('meili_insta', {indexName: indexName}) }}">#}
+{#        SEARCH#}
+{#    </a>#}
 
     {% set riccox = 'http://localhost:24900/ins/1/index/' ~ indexName %}
     <a class="btn btn-primary" href="{{ riccox }}">
         Tasks
     </a>
 
-    <h3>Embedders</h3>
+    <h3>{{ settings.embedders|length }} Embedders</h3>
     {% for e in settings.embedders %}
         <a class="btn btn-success" href="{{ path('meili_insta_embed', {indexName: indexName, embedder: e}) }}">
             Semantic Search with {{ e }}
         </a>
     {% endfor %}
 
-
-
-    {{ dump(indexName) }}
-
-    {{ dump(settings) }}
+{#    {{ dump(indexName) }}#}
+{#    {{ dump(settings) }}#}
 {#    {{ dump(adminContext.dashboardTitle) }}#}
 {#    {{ dump(adminContext.getDashboardRouteName) }}#}
 

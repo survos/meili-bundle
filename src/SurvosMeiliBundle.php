@@ -47,6 +47,7 @@ use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigura
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use Survos\MeiliBundle\Bridge\EasyAdmin\MeiliEasyAdminMenuFactory;
 
 class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterface, CompilerPassInterface
 {
@@ -67,6 +68,12 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->tag('doctrine.event_listener', ['event' => 'preRemove'])
             ->tag('doctrine.event_listener', ['event' => 'prePersist'])
             ->tag('doctrine.event_listener', ['event' => 'postPersist']);
+
+        if (class_exists(\EasyCorp\Bundle\EasyAdminBundle\Config\MenuItem::class)) {
+            $builder->autowire(MeiliEasyAdminMenuFactory::class)
+                ->setPublic(true)
+                ->setAutoconfigured(true);
+        }
 
         foreach ([SettingsService::class, MeiliPayloadBuilder::class,
 // these are API Platform classes that don't gracefully autowire.

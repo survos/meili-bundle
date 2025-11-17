@@ -32,7 +32,7 @@ class MeiliController extends AbstractController
 //        $this->helper = $helper;
     }
 
-    #[AdminRoute(path: '/show/{indexName}', name: 'meili_show_index')]
+    #[AdminRoute(path: '/index/overview/{indexName}', name: 'meili_show_index')]
     public function showIndex(
         AdminContext $context,
         string $indexName,
@@ -42,8 +42,6 @@ class MeiliController extends AbstractController
         $settings = $this->meiliService->settings[$indexName];
         // live
         $index = $this->meiliService->getIndex($indexName, autoCreate: false);
-
-
         $indexApi  = $this->meiliService->getIndexEndpoint($indexName);
         $results = $indexApi->search(null, [
             'limit' => 0,

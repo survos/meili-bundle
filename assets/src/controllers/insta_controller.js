@@ -618,6 +618,7 @@ export default class extends Controller {
               _config: this.config,
               _score: hit._rankingScore,
               _scoreDetails: hit._rankingScoreDetails,
+              _isSemantic: this._isSemantic(),
               icons: this.icons,
               _sc_modal: this.globals._sc_modal,
               globals: this.globals,
