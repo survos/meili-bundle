@@ -16,7 +16,6 @@
       gap: 0;
     }
 
-
     /*
     .insta-grid {
       display: grid;
@@ -146,7 +145,7 @@
       gap: 1rem;
       margin: 0;
     }
-    @media (max-width: 575px) {
+    @media (max-width: 767px) {
       .insta-grid .ais-InfiniteHits .ais-InfiniteHits-list {
         --cols: 2 !important;
       }
@@ -193,11 +192,13 @@
     .insta-grid .ais-InfiniteHits-loadMore:active {
       background: rgba(0, 150, 219, 0.75) !important;
     }
+    /*
     @media (min-width: 768px) {
       .insta-grid .ais-InfiniteHits-loadMore {
         display: none;
       }
     }
+    */
     @media (min-width: 900px) {
       .insta-grid > aside {
         align-self: start;
@@ -380,9 +381,39 @@
       font-weight: 900;
     }
 
+
+
+    .insta-grid .ais-InfiniteHits-item .card-body .blockquote {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+      overflow: hidden;
+      word-break: break-word;
+      font-size: 0.875rem !important;
+    }
+
+    .insta-grid .ais-InfiniteHits-item .card-body .badge.bg-secondary {
+      background-color: rgba(0, 0, 0, 0.075) !important;
+      color: #000000;
+      font-size: 0.8125rem;
+    }
+
+    .insta-grid .ais-InfiniteHits-item .card-body .card-body.p-3 {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+      overflow: hidden;
+      word-break: break-word;
+      font-size: 0.875rem !important;
+      padding: 0 !important;
+      margin: 1rem 0;
+    }
+
     .insta-grid .semantic-toolbar {
 
     }
+
+
   </style>
 {% endblock %}
 
@@ -454,36 +485,54 @@
         <div style="display:none" {{ stimulus_target(_sc, 'refinementList') }}></div>
 
         <main class="col-12">
-          <div class="semantic-toolbar d-flex align-items-center gap-2 mb-3 overflow-x-auto">
-            <span class="text-muted small">Semantic search</span>
+          <div class="semantic-toolbar d-flex align-items-center gap-4 mb-3 overflow-x-auto p-3 rounded-3" style="background-color: rgba(255, 255, 255, 0.5);">
+            <div class="row">
+              <div class="col-auto me-2">
+                <span>Semantic search:</span>
+              </div>
+              <div class="col-auto">
+                <div class="row g-3 align-items-center">
+                  <div class="col-auto">
+                    <label for="semantic-range">Weight</label>
+                  </div>
+                  <div class="col-auto" style="display: grid; justify-items: center;">
+                    {% set initialSemantic = (app.request.get('semantic') ?? 30) %}
+                    <input
+                      {{ stimulus_action(_sc, 'semantic', 'change') }}
+                      {{ stimulus_target(_sc, 'semanticSlider') }}
+                      id="semantic-range"
+                      type="range" min="0" max="100" step="1"
+                      value="{{ initialSemantic }}"
+                      style="width: 180px;">
+                  </div>
+                  <div class="col-auto">
+                    <output {{ stimulus_target(_sc, 'semanticOutput') }} class="text-muted">{{ initialSemantic }}%</output>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-auto">
+              <div class="row g-3 align-items-center">
+                <div class="col-auto">
+                  <label for="min-score-mult">Min score ×0.01</label>
+                </div>
+                <div class="col-auto">
+                  <input
+                    id="min-score-mult"
+                    type="number" min="0" max="100" step="1"
+                    value="{{ (app.request.get('minScore', 0) * 100)|round(0, 'floor') }}"
+                    class="form-control form-control-sm bg-white"
+                    style="width: 110px;"
+                    {{ stimulus_target(_sc, 'scoreMultiplier') }}
+                    {{ stimulus_action(_sc, 'setMinScoreMultiplier', 'input') }}
+                    {{ stimulus_action(_sc, 'setMinScoreMultiplier', 'change') }}>
 
-            <label class="small text-muted ms-2" for="semantic-range">Weight</label>
-            {% set initialSemantic = (app.request.get('semantic') ?? 30) %}
-            <input
-              {{ stimulus_action(_sc, 'semantic', 'change') }}
-              {{ stimulus_target(_sc, 'semanticSlider') }}
-              id="semantic-range"
-              type="range" min="0" max="100" step="1"
-              value="{{ initialSemantic }}"
-              style="width: 180px;">
-            <output {{ stimulus_target(_sc, 'semanticOutput') }} class="small text-muted">{{ initialSemantic }}%</output>
-
-            <label class="small text-muted ms-3" for="min-score-mult">Min score ×0.01</label>
-            <input
-              id="min-score-mult"
-              type="number" min="0" max="100" step="1"
-              value="{{ (app.request.get('minScore', 0) * 100)|round(0, 'floor') }}"
-              class="form-control form-control-sm"
-              style="width: 110px;"
-              {{ stimulus_target(_sc, 'scoreMultiplier') }}
-              {{ stimulus_action(_sc, 'setMinScoreMultiplier', 'input') }}
-              {{ stimulus_action(_sc, 'setMinScoreMultiplier', 'change') }}>
-
-            <input type="hidden"
-              {{ stimulus_target(_sc, 'scoreThreshold') }}
-              value="{{ app.request.get('minScore', 0) }}">
-
-            <!--<div class="ms-3" {{ stimulus_target(_sc, 'sortBy') }}></div>-->
+                  <input type="hidden"
+                    {{ stimulus_target(_sc, 'scoreThreshold') }}
+                    value="{{ app.request.get('minScore', 0) }}">
+                </div>
+              </div>
+            </div>
           </div>
 
           {# Search row: input + manual Search button (above results) #}
@@ -513,7 +562,7 @@
             style="--cols: {{ cols|e('html_attr') }};">
           </div>
 
-          <div class="mt-4 d-none d-md-block" {{ stimulus_target(_sc, 'pagination') }}></div>
+          <div class="mt-4 d-none" {{ stimulus_target(_sc, 'pagination') }}></div>
 
           <div class="mb-3">
             <label class="form-label small text-muted">Outgoing /multi-search payload</label>
@@ -576,8 +625,16 @@
 
           {# ---------- Main (search, hits) ---------- #}
           <main class="col-12 col-md-8 col-lg-9">
-            <div class="semantic-toolbar d-flex align-items-center gap-2 mb-3 overflow-x-auto">
-              <div class="ms-3" {{ stimulus_target(_sc, 'sortBy') }}></div>
+
+            <div class="semantic-toolbar d-flex align-items-center gap-2 mb-3 overflow-x-auto justify-content-end">
+              <div class="row g-3 align-items-center">
+                <div class="col-auto">
+                  <label class="col-form-label">Sort By</label>
+                </div>
+                <div class="col-auto">
+                  <div {{ stimulus_target(_sc, 'sortBy') }}></div>
+                </div>
+              </div>
             </div>
 
             <div class="mb-3 d-flex gap-2 align-items-center">
@@ -603,7 +660,7 @@
               style="--cols: {{ cols|e('html_attr') }};">
             </div>
 
-            <div class="mt-4 d-none d-md-block" {{ stimulus_target(_sc, 'pagination') }}></div>
+            <div class="mt-4 d-none" {{ stimulus_target(_sc, 'pagination') }}></div>
 
             <div class="mb-3">
               <label class="form-label small text-muted">Outgoing /multi-search payload</label>
