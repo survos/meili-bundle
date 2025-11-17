@@ -1,6 +1,6 @@
 {
   "name": "@survos/meili-bundle",
-  "description": "integrate meili and instant search",
+  "description": "integrate meili and instant search.  NOTE: flag-icons:^7.5 removed from importmap and flag-icons/css/flag-icons.min.css removed from autoimport",
   "license": "MIT",
   "version": "1.1",
   "symfony": {
@@ -11,7 +11,6 @@
         "fetch": "eager",
         "enabled": true,
         "autoimport": {
-          "flag-icons/css/flag-icons.min.css": true,
           "instantsearch.css/themes/algolia.min.css": false,
           "pretty-print-json/dist/css/pretty-print-json.min.css": true
         }
@@ -30,7 +29,6 @@
       "debug": "^4.4.3",
       "stimulus-attributes": "^1.0.1",
       "fos-routing": "^0.0.6",
-      "flag-icons": "^7.5",
       "instantsearch.js": "^4.79",
       "instantsearch.js/es/widgets": "^4.79",
       "instantsearch.css/themes/algolia.min.css": "^8.5.1",
