@@ -2,48 +2,127 @@
 
 {% block title %}Search Dashboard{% endblock %}
 
+{% block head_stylesheets %}
+    {{ parent() }}
+    <style>
+        .hover-shadow {
+            transition: all 0.3s ease;
+        }
+
+        .hover-shadow:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+        }
+
+        .index-card .card-body {
+            min-height: 200px;
+        }
+
+        .feature-icon {
+            font-size: 2.5rem;
+        }
+
+        .field-badge {
+            font-size: 0.85rem;
+        }
+    </style>
+{% endblock %}
+
 {% block page_content %}
+    <div class="container-fluid">
+        <h1 class="mb-4">Search Indexes</h1>
+
+        <div class="row g-4">
+            {% for indexName, settings in settings %}
+                <div class="col-12 col-lg-6 col-xl-4">
+                    <div class="card h-100 shadow-sm hover-shadow index-card">
+                        <div class="card-header bg-primary text-white">
+                            <h4 class="mb-0">
+                                {{ ux_icon('mdi:database-search') }}
+                                {{ settings.rawName }}
+                            </h4>
+                        </div>
+
+                        <div class="card-body">
+                            {# Index Management #}
+                            <div class="mb-4">
+                                <a href="{{ path('meili_admin_meili_show_index', {indexName: indexName}) }}"
+                                   class="btn btn-outline-primary w-100">
+                                    {{ ux_icon('oui:nav-overview') }}
+                                    Index Details
+                                </a>
+                            </div>
+
+                            {# Full Text Search #}
+                            <div class="mb-4">
+                                <h6 class="text-muted mb-2">
+                                    {{ ux_icon('mdi:magnify-expand') }}
+                                    Text/Facet Search
+                                </h6>
+                                <a href="{{ path('meili_insta', {indexName: indexName}) }}"
+                                   target="_blank"
+                                   class="btn btn-success w-100 mb-2">
+                                    {{ ux_icon('mdi:search') }}
+                                    Open Search
+                                </a>
+
+                                {% if settings.schema.searchableAttributes|length > 0 %}
+                                    <div class="d-flex flex-wrap gap-1">
+                                        {% for searchField in settings.schema.searchableAttributes %}
+                                            <span class="badge bg-light text-dark field-badge">
+                                                {{ searchField }}
+                                            </span>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            {# Filterable Fields (Optional) #}
+                            {% if settings.schema.filterableAttributes is defined and settings.schema.filterableAttributes|length > 0 %}
+                                <div class="mt-3">
+                                    <h6 class="text-muted mb-2">
+                                        {{ ux_icon('mdi:filter') }}
+                                        Filterable Fields
+                                    </h6>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        {% for filterField in settings.schema.filterableAttributes %}
+                                            <span class="badge bg-secondary field-badge">
+                                                {{ filterField }}
+                                            </span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
 
 
-    Design an EasyAdmin DashboardController for all our indexes, from the compiler pass data (the #[Meiliindex()] attribute data, plus
 
+                        {# Semantic Search / Embedders #}
+                            {% if settings.embedders is defined and settings.embedders|length > 0 %}
+                                <div>
+                                    <h6 class="text-muted mb-2">
+                                        {{ ux_icon('fluent:brain-circuit-20-filled') }}
+                                        Semantic Search
+                                    </h6>
+                                    <div class="d-grid gap-2">
+                                        {% for embedder in settings.embedders %}
+                                            <a href="{{ path('meili_insta_embed', {indexName: indexName, embedder: embedder}) }}"
+                                               target="_blank"
+                                               class="btn btn-outline-info btn-sm">
+                                                {{ ux_icon('mdi:semantic-web') }}
+                                                {{ embedder }}
+                                            </a>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% endif %}
 
-    {{ _self }}
-    <ul>
-
-        {% for indexName, settings in settings %}
-            <li>
-                <a class="btn btn-primary"
-                   href="{{ path('meili_insta', {indexName: indexName}) }}" target="_blank">
-                    {{ ux_icon('mdi:search') }}
-                    {{ settings.rawName }}
-                </a>
-
-
-                <a class="btn btn-primary"
-                   href="{{ path('meili_admin_meili_show_index', {indexName: indexName}) }}">
-                    SHOW!
-                    {{ settings.rawName }}
-                </a>
-
-
-                <hr />
-                {{ ux_icon('fluent:brain-circuit-20-filled') }}
-                {% set icons = ['fluent:brain-circuit-20-filled', 'mdi:semantic-web'] %}
-                {% for idx, embedder in settings.embedders??[] %}
-                    <button>
-
-                        {# select icons from https://ux.symfony.com/icons and then run bin/console ux:icons:lock from the application root #}
-                        <a href="{{ path('meili_insta_embed', {indexName: indexName, embedder: embedder}) }}" target="_blank">
-                            {{ ux_icon('mdi:semantic-web') }}
-                            Sematic Search {{ embedder }}
-                        </a>
-                    </button>
-
-
-                {% endfor %}
-            </li>
-
-        {% endfor %}
-    </ul>
+                        <div class="card-footer text-muted small">
+                            Index: <code>{{ indexName }}</code>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
 {% endblock %}
