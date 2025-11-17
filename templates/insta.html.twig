@@ -450,6 +450,7 @@
         <div style="display:none" {{ stimulus_target(_sc, 'refinementList') }}></div>
 
         <main class="col-12">
+          <!--
           <div class="semantic-toolbar d-flex align-items-center gap-2 mb-3 overflow-x-auto">
             <span class="text-muted small">Semantic search</span>
 
@@ -481,6 +482,7 @@
 
             <div class="ms-3" {{ stimulus_target(_sc, 'sortBy') }}></div>
           </div>
+          -->
 
           {# Search row: input + manual Search button (above results) #}
           <div class="mb-3 d-flex gap-2 align-items-center">
@@ -572,6 +574,38 @@
 
           {# ---------- Main (search, hits) ---------- #}
           <main class="col-12 col-md-8 col-lg-9">
+            <div class="semantic-toolbar d-flex align-items-center gap-2 mb-3 overflow-x-auto">
+              <span class="text-muted small">Semantic search</span>
+
+              <label class="small text-muted ms-2" for="semantic-range">Weight</label>
+              {% set initialSemantic = (app.request.get('semantic') ?? 30) %}
+              <input
+                {{ stimulus_action(_sc, 'semantic', 'change') }}
+                {{ stimulus_target(_sc, 'semanticSlider') }}
+                id="semantic-range"
+                type="range" min="0" max="100" step="1"
+                value="{{ initialSemantic }}"
+                style="width: 180px;">
+              <output {{ stimulus_target(_sc, 'semanticOutput') }} class="small text-muted">{{ initialSemantic }}%</output>
+
+              <label class="small text-muted ms-3" for="min-score-mult">Min score ×0.01</label>
+              <input
+                id="min-score-mult"
+                type="number" min="0" max="100" step="1"
+                value="{{ (app.request.get('minScore', 0) * 100)|round(0, 'floor') }}"
+                class="form-control form-control-sm"
+                style="width: 110px;"
+                {{ stimulus_target(_sc, 'scoreMultiplier') }}
+                {{ stimulus_action(_sc, 'setMinScoreMultiplier', 'input') }}
+                {{ stimulus_action(_sc, 'setMinScoreMultiplier', 'change') }}>
+
+              <input type="hidden"
+                {{ stimulus_target(_sc, 'scoreThreshold') }}
+                value="{{ app.request.get('minScore', 0) }}">
+
+              <div class="ms-3" {{ stimulus_target(_sc, 'sortBy') }}></div>
+            </div>
+
             <div class="mb-3 d-flex gap-2 align-items-center">
               <div class="flex-grow-1" {{ stimulus_target(_sc, 'searchBox') }}></div>
 
