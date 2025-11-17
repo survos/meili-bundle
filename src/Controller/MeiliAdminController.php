@@ -31,7 +31,7 @@ class MeiliAdminController extends AbstractController
 
 //    #[Route(path: '/index', name: 'meili_admin_index', methods: ['GET'])]
     #[AdminRoute('/meili-index', name: 'meili_index')]
-    #[Template('@SurvosMeili/index.html.twig')]
+    #[Template('@SurvosMeili/ez/dashboard.html.twig')]
     public function index(AdminContext $context): Response|array
     {
 
