@@ -23,20 +23,28 @@
         }
 
         .field-badge {
-            font-size: 0.85rem;
+            font-size: 0.75rem;
+            font-weight: 300;
+            margin: 0 !important;
+            padding: 0.125rem 0.375rem;
+        }
+
+        .index-card .card-header h4 {
+            font-size: 1.25rem;
+            font-weight: 800;
         }
     </style>
 {% endblock %}
 
 {% block page_content %}
-    <div class="container-fluid">
-        <h1 class="mb-4">Search Indexes</h1>
+    <div class="container-fluid p-0">
+        <h1 class="mb-3">Search Indexes</h1>
 
         <div class="row g-4">
             {% for indexName, settings in settings %}
-                <div class="col-12 col-lg-6 col-xl-4">
-                    <div class="card h-100 shadow-sm hover-shadow index-card">
-                        <div class="card-header bg-primary text-white">
+                <div class="col-12 col-md-6 col-xl-4">
+                    <div class="card h-100 index-card">
+                        <div class="card-header">
                             <h4 class="mb-0">
                                 {{ ux_icon('mdi:database-search') }}
                                 {{ settings.rawName }}
@@ -47,7 +55,7 @@
                             {# Index Management #}
                             <div class="mb-4">
                                 <a href="{{ path('meili_admin_meili_show_index', {indexName: indexName}) }}"
-                                   class="btn btn-outline-primary w-100">
+                                   class="btn btn-secondary w-100 justify-content-center">
                                     {{ ux_icon('oui:nav-overview') }}
                                     Index Details
                                 </a>
@@ -61,7 +69,7 @@
                                 </h6>
                                 <a href="{{ path('meili_insta', {indexName: indexName}) }}"
                                    target="_blank"
-                                   class="btn btn-success w-100 mb-2">
+                                   class="btn btn-secondary w-100 mb-2 justify-content-center">
                                     {{ ux_icon('mdi:search') }}
                                     Open Search
                                 </a>
@@ -69,7 +77,7 @@
                                 {% if settings.schema.searchableAttributes|length > 0 %}
                                     <div class="d-flex flex-wrap gap-1">
                                         {% for searchField in settings.schema.searchableAttributes %}
-                                            <span class="badge bg-light text-dark field-badge">
+                                            <span class="badge bg-success-subtle field-badge">
                                                 {{ searchField }}
                                             </span>
                                         {% endfor %}
@@ -79,36 +87,33 @@
 
                             {# Filterable Fields (Optional) #}
                             {% if settings.schema.filterableAttributes is defined and settings.schema.filterableAttributes|length > 0 %}
-                                <div class="mt-3">
+                                <div class="mb-4">
                                     <h6 class="text-muted mb-2">
                                         {{ ux_icon('mdi:filter') }}
                                         Filterable Fields
                                     </h6>
-                                    <div class="d-flex flex-wrap gap-1">
+                                    <div class="d-flex flex-wrap gap-2">
                                         {% for filterField in settings.schema.filterableAttributes %}
-                                            <span class="badge bg-secondary field-badge">
+                                            <span class="badge bg-primary-subtle text-dark field-badge">
                                                 {{ filterField }}
                                             </span>
                                         {% endfor %}
                                     </div>
                                 </div>
                             {% endif %}
-                        </div>
 
-
-
-                        {# Semantic Search / Embedders #}
+                            {# Semantic Search / Embedders #}
                             {% if settings.embedders is defined and settings.embedders|length > 0 %}
                                 <div>
                                     <h6 class="text-muted mb-2">
                                         {{ ux_icon('fluent:brain-circuit-20-filled') }}
                                         Semantic Search
                                     </h6>
-                                    <div class="d-grid gap-2">
+                                    <div class="d-flex gap-2">
                                         {% for embedder in settings.embedders %}
                                             <a href="{{ path('meili_insta_embed', {indexName: indexName, embedder: embedder}) }}"
                                                target="_blank"
-                                               class="btn btn-outline-info btn-sm">
+                                               class="btn btn-secondary btn-sm px-2">
                                                 {{ ux_icon('mdi:semantic-web') }}
                                                 {{ embedder }}
                                             </a>
@@ -116,6 +121,7 @@
                                     </div>
                                 </div>
                             {% endif %}
+                        </div>
 
                         <div class="card-footer text-muted small">
                             Index: <code>{{ indexName }}</code>
