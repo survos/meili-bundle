@@ -115,33 +115,6 @@ class SettingsCommand # extends Command
         $idFields = $this->settingsService->getFieldsWithAttribute($settings, 'is_primary');
         $primaryKey = count($idFields) ? $idFields[0] : 'id';
 
-        if ($indexName === 'dtdemo_Instrument') {
-            $documentTemplate = 'Instrument {{ doc.name }} is of type {{ doc.type }}. {{ doc.description }}.
-        {% if doc.genres %}
-         {% assign genres = doc.genres|default: ""|split: "," %}
-         Genres: {% for genre in genres %} 
-         {{ genre }}{% if forloop.last %} and {% endif %}
-         {% endfor %}
-         {% endif %}
-        ';
-            $embedders = $index->getEmbedders();
-            $embedder = [
-                'open_ai_small' => [
-                    'source' => 'openAi',
-                    'model' => 'text-embedding-3-small',
-                    'apiKey' => $this->openAiApiKey,
-                    'documentTemplate' => $documentTemplate,
-                ]
-            ];
-            $task = $index->updateEmbedders(
-                $embedder,
-            );
-            $results = $this->meiliService->waitForTask($task);
-
-            if ($results['status'] <> 'succeeded') {
-                dd($results);
-            }
-        }
         $localizedAttributes = [];
         foreach ($this->enabledLocales as $locale) {
             $localizedAttributes[] = ['locales' => [$locale],
@@ -165,6 +138,7 @@ class SettingsCommand # extends Command
             ];
             if (!$dry) {
                 $results = $index->updateSettings($settingsConfig);
+                dd($results);
 //            $stats = $this->meiliService->waitUntilFinished($index);
 //            dump($stats, $debug, $filterable, $index->getUid());
 //        dump($index->getSettings(), $index->getEmbedders());

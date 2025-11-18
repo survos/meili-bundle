@@ -1,8 +1,9 @@
 // -----------------------------------------------------------------------------
 // File: assets/src/controllers/insta_controller.js
-// Version: MEILI-INSTA v4.6-restored
+// Version: MEILI-INSTA v4.7-sort-fix
 //  - Custom multi-search client that injects `hybrid` (embedder + semanticRatio).
 //  - Fix: translate Algolia-style facetFilters / numericFilters -> Meilisearch `filter`.
+//  - Fix: translate Algolia replica-style indexName (for sortBy) -> Meili `indexUid` + `sort`.
 //  - Keep: facets array normalization + fallback from config/schema.
 //  - Keep: highlight conversion, hybrid/threshold handling, debug hooks.
 // -----------------------------------------------------------------------------
@@ -369,8 +370,39 @@ export default class extends Controller {
         const pg = Number.isFinite(+p.page) ? (+p.page) : 0;
         const off = p.hasOwnProperty('offset') ? (+p.offset || 0) : (pg * (hp || 20));
 
+        // -------------------------------------------------------------------
+        // Sort handling
+        // -------------------------------------------------------------------
+        // InstantSearch's sortBy widget *renames* the index instead of passing
+        // a `sort` param (Algolia replica pattern), e.g.:
+        //   indexName = "dtdemo_jeopardy:monthIndex:asc"
+        //
+        // Meilisearch expects:
+        //   indexUid = "dtdemo_jeopardy"
+        //   sort     = ["monthIndex:asc"]
+        //
+        // We detect and normalize that here.
+        const baseIndexName =
+          r.indexName ?? r.indexUid ?? r.index ?? this.indexNameValue;
+
+        let indexUid = baseIndexName;
+        let sort = p.sort;
+
+        if (!sort && typeof baseIndexName === 'string') {
+          const parts = baseIndexName.split(':');
+          // Expect at least "index:field:dir"
+          if (parts.length >= 3) {
+            indexUid = parts.shift(); // real index name
+            const attr = parts.shift();
+            const dir  = parts.shift();
+            if (attr && dir) {
+              sort = [`${attr}:${dir}`];
+            }
+          }
+        }
+
         const out = {
-          indexUid: r.indexName ?? r.indexUid ?? r.index ?? this.indexNameValue,
+          indexUid,
           q:        r.q ?? p.q ?? p.query ?? '',
           limit:    Math.max(1, hp || 20),
           offset:   Math.max(0, off),
@@ -391,7 +423,9 @@ export default class extends Controller {
         };
 
         // Normalize params that Meilisearch expects in specific shapes
-        if (p.sort)                 out.sort = p.sort;
+        if (sort) {
+          out.sort = Array.isArray(sort) ? sort : [sort];
+        }
         if (p.distinct)             out.distinct = p.distinct;
         if (p.matchingStrategy)     out.matchingStrategy = p.matchingStrategy;
 
@@ -451,7 +485,8 @@ export default class extends Controller {
           rankingScoreThreshold: out.rankingScoreThreshold,
           hybrid: out.hybrid,
           facets: out.facets,
-          filter: out.filter
+          filter: out.filter,
+          sort: out.sort
         });
 
         return out;

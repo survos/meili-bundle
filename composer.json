@@ -15,7 +15,7 @@
         "symfony/http-kernel": "^7.3||^8.0",
         "twig/twig": "^3.4",
         "symfony/property-access": "^7.3||^8.0",
-        "meilisearch/meilisearch-php": "^1.11",
+        "meilisearch/meilisearch-php": "^1.16||dev-main|1.x-dev",
         "adbario/php-dot-notation": "^3.3",
         "cebe/php-openapi": "^1.8",
         "survos/core-bundle": "^2.0",
