@@ -103,9 +103,11 @@ export function mountFacetFromNode(ctrl, instantSearch, el) {
   };
 
   const mountList = () => {
-    const sortBy = (sortMode === 'name' || sortMode === 'alpha')
+    const secondarySort = (sortMode === 'name' || sortMode === 'alpha')
       ? ['name:asc']
       : ['count:desc'];
+
+    const sortBy = ['isRefined:desc', ...secondarySort];
 
     let transformItems = (items) => applyLookup(items);
 
