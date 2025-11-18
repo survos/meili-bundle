@@ -20,7 +20,6 @@ use Survos\MeiliBundle\Compiler\MeiliIndexPass;
 use Survos\MeiliBundle\Components\InstantSearchComponent;
 use Survos\MeiliBundle\Command\CreateCommand;
 use Survos\MeiliBundle\Command\IndexCommand;
-use Survos\MeiliBundle\Command\ListCommand;
 use Survos\MeiliBundle\Command\SettingsCommand;
 use Survos\MeiliBundle\Controller\MeiliAdminController;
 use Survos\MeiliBundle\Controller\MeiliController;
@@ -108,7 +107,8 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
 
         $container->services()->alias('meili_service', MeiliService::class);
 
-        foreach ([IndexCommand::class, SettingsCommand::class,
+        foreach ([IndexCommand::class,
+//                     SettingsCommand::class,
 //                     FastSyncIndexesCommand::class,
 //                     SyncIndexesCommand::class,
         ExportCommand::class,
@@ -118,7 +118,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                      MeilEstimatorCommand::class,
                      MeiliSchemaValidateCommand::class,
                      MeiliFlushFileCommand::class,
-                     ListCommand::class, CreateCommand::class] as $class) {
+                 ] as $class) {
             $builder->autowire($class)
                 ->setPublic(true)
                 ->setAutoconfigured(true)

@@ -35,11 +35,19 @@ class MeiliBaseCommand extends Command implements LoggerAwareInterface
     }
 
 
-    /** @return string[] */
+    /** @return string[] array of PREFIXED index names */
     protected function resolveTargets(?string $index, ?string $class): array
     {
 
         $names = [];
+        if ($class) {
+            if (!class_exists($class)) {
+                $class = 'App\\Entity\\' . $class;
+            }
+            if (!class_exists($class)) {
+                throw new \Exception('Class "' . $class . '" does not exist');
+            }
+        }
         foreach ($this->meili->getRawIndexSettings() as $indexName => $setting) {
             if ($index && $indexName !== $index) {
                 continue;
@@ -47,7 +55,7 @@ class MeiliBaseCommand extends Command implements LoggerAwareInterface
             if ($class && $class !== $setting['class']) {
                 continue;
             }
-            $names[] = $indexName;
+            $names[] = $setting['prefixedName'];
         }
         return $names;
         $names = array_keys($this->meili->getRawIndexSettings());
@@ -68,21 +76,6 @@ class MeiliBaseCommand extends Command implements LoggerAwareInterface
         return $names;
     }
 
-    protected function  deleteIndexIfExists(string $uid, SymfonyStyle $io): void
-    {
-        try {
-            $task = $this->meili->getIndex($uid)->delete();
-            $io->writeln(sprintf('delete index taskUid=%s', (string)($task['taskUid'] ?? 'unknown')));
-            try { $this->meili->waitForTask($task['taskUid'] ?? 0, 2000, 50); } catch (\Throwable) {}
-        } catch (\Meilisearch\Exceptions\ApiException $e) {
-            if ($e->getCode() === 404) {
-                $io->writeln('Index did not exist.');
-                return;
-            }
-            throw $e;
-        }
-    }
-
     public function pendingTasks(string $uid): int
     {
         $resp = $this->meili->getTasks($uid,  MeiliTaskStatus::ACTIVE);
@@ -96,9 +89,6 @@ class MeiliBaseCommand extends Command implements LoggerAwareInterface
         foreach ($this->meili->getTasks($uid,  MeiliTaskStatus::ACTIVE) as $task) {
             $this->meili->getMeiliClient()->cancelTasks($task['taskUid']);
         }
-        $resp = $this->meili->cancelTasks(['indexUids' => [$uid]]);
-        $io->writeln(sprintf('cancelTasks taskUid=%s', (string)($resp['taskUid'] ?? 'unknown')));
-        try { $this->meili->waitForTask($resp['taskUid'] ?? 0, 2000, 50); } catch (\Throwable) {}
     }
 
 }

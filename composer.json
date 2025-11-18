@@ -15,14 +15,15 @@
         "symfony/http-kernel": "^7.3||^8.0",
         "twig/twig": "^3.4",
         "symfony/property-access": "^7.3||^8.0",
-        "meilisearch/meilisearch-php": "^1.16||dev-main|1.x-dev",
+        "meilisearch/meilisearch-php": "dev-main",
         "adbario/php-dot-notation": "^3.3",
         "cebe/php-openapi": "^1.8",
         "survos/core-bundle": "^2.0",
         "nyholm/psr7": "^1.8",
         "zenstruck/bytes": "^1.0",
         "symfony/stopwatch": "^7.3||^8.0",
-        "symfony/string": "^7.3||^8.0"
+        "symfony/string": "^7.3||^8.0",
+        "survos/jsonl-bundle": "^2.0"
     },
     "require-dev": {
         "survos/inspection-bundle": "^2.0",

@@ -9,7 +9,6 @@ use Meilisearch\Contracts\CancelTasksQuery;
 use Meilisearch\Contracts\TasksQuery;
 use Survos\CoreBundle\Service\SurvosUtils;
 use Survos\MeiliBundle\Meili\MeiliTaskStatus;
-use Survos\MeiliBundle\Meili\Task;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
@@ -18,7 +17,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Yethee\Tiktoken\EncoderProvider;
 
-#[AsCommand('meili:schema:update', 'Update Meilisearch index settings from compiler-pass schema', aliases: ['meili:settings:update'])]
+#[AsCommand('meili:settings:update', 'Update Meilisearch index settings from compiler-pass schema')]
 final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 {
     /** @param array<string,array<string,mixed>> $indexSettings (indexName => settings)
@@ -32,6 +31,9 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 
     public function __invoke(
         SymfonyStyle $io,
+
+        #[Argument('Filter by index name, without prefix')]
+        ?string $indexName = null,
 
         #[Option('Dump settings without applying', name: 'dump')]
         bool $dumpSettings = false,
@@ -51,89 +53,87 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
         #[Option('Update the embedders', name: 'embed')]
         bool $updateEmbedders = false,
 
-        #[Option('Filter by index name')]
-        ?string $index = null,
-
         #[Option('Filter by FQCN or short class name')]
         ?string $class = null,
     ): int {
-        if ($reset) {
-            $force = true;
-        }
         $wait ??= true;
 
-        $targets = $this->resolveTargets($index, $class);
+        $targets = $this->resolveTargets($indexName, $class);
         if ($targets === []) {
             $io->warning('No matching indexes. Use --index or --class to filter. or --all?');
             return Command::SUCCESS;
         }
 
         if ($dumpSettings) {
-            foreach ($targets as $name) {
-                $io->section(sprintf('Index "%s"', $name));
-                $index = $this->meili->getIndex($this->meili->getPrefixedIndexName($name));
-                $settings = $this->meili->getRawIndexSetting($name);
-                // is update different than create?
+            foreach ($targets as $uId) {
+                // internal, from compiler pass, no network call
+                $settings = $this->meili->getIndexSetting($uId);
+                $io->section(sprintf('Index "%s"', $uId));
+                if (!$index = $this->meili->getIndex($uId, autoCreate: false)) {
+                    $io->warning('Index "'.$uId.'" has not yet been created.');
+                } else {
+                    $actualSettings = $index->getSettings();
+                    $io->writeln(json_encode($actualSettings, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES));
+                    // @todo: compare!
+//                dump($actualSettings, $settings['schema']);
+                    // is update different than create?
 //                $task = $index->updateSettings($settings['schema']);
 //                dump($task);
-                $io->writeln(json_encode($settings['schema'], JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES));
-
-
-            }
-            if (!$force) {
-                return Command::SUCCESS;
+                }
+//                if ($io->isVerbose()) {
+//                    $io->writeln("Target settings:\n\n" . json_encode($settings['schema'], JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES));
+//                }
             }
         }
 
 // constructor-inject ResolvedEmbeddersProvider $embedders
 
 
-        foreach ($targets as $name) {
+        foreach ($targets as $uId) {
 
-            $io->section(sprintf('Processing index "%s"', $name));
+            $io->section(sprintf('Processing index "%s"', $uId));
 //            $uid = $this->prefixed($name);
 
-            $settings = $this->meili->getRawIndexSetting($name);
+            $settings = $this->meili->getIndexSetting($uId);
 
             $embedders = $this->embeddersProvider->forMeili();
-//            $task = $index->updateEmbedders($embedders);
-
-
-            $prefixedName = $this->meili->getPrefixedIndexName($name);
-            $pending = $this->pendingTasks($prefixedName);
+            $pending = $this->pendingTasks($uId);
             if (!$reset && $pending > 0) {
                 $io->error(sprintf('Index "%s" has %d pending tasks. Re-run with --reset.', $index->getUid(), $pending));
                 return Command::FAILURE;
             }
 
             if ($reset) {
-                $io->warning('Reset: canceling tasks and deleting index… ' . $prefixedName);
-                $resp = $this->meili->getTasks($prefixedName,  MeiliTaskStatus::ACTIVE);
+                $io->warning('Reset: canceling tasks and deleting index… ' . $uId);
+                $resp = $this->meili->getTasks($uId,  MeiliTaskStatus::ACTIVE);
                 $tasks = $this->meili->getMeiliClient()->getTasks(
-                    new TasksQuery()->setIndexUids([$prefixedName])
+                    new TasksQuery()->setIndexUids([$uId])
                         ->setStatuses(MeiliTaskStatus::ACTIVE)
                 );
-                dump($tasks);
                 foreach ($resp->getIterator() as $task) {
                     $io->warning(sprintf("Cancelling %s %s", $task['taskUid'], $task['type']));
                 }
                 $cancelledTasks = $this->meili->getMeiliClient()->cancelTasks(new CancelTasksQuery()
-                    ->setIndexUids([$prefixedName])
+                    ->setIndexUids([$uId])
                     ->setStatuses(MeiliTaskStatus::ACTIVE)
                 );
+                // reset does not require --force
+                $this->meili->reset($uId);
 //                foreach ($resp['results'] ?? [] as $task) {
 //                    dd($task);
 //                }
 
 //                $this->cancelTasks($index->getUid(), $io);
-                $this->deleteIndexIfExists($prefixedName, $io);
+                // reset is debatable here
+//                $this->deleteIndexIfExists($uId, $io);
 //                $index = $this->meili->getIndex($prefixedName, $settings['primaryKey']??'id');
 //                dd($index, $index->getUid(), $index->getPrimaryKey());
 
-                $task = new Task($this->meili->getMeiliClient()->createIndex($prefixedName, ['primaryKey' => $settings['primaryKey']]));
-                $this->meili->waitForTask($task);
+                // debatable!
+//                $task = $this->meili->getMeiliClient()->createIndex($uId, ['primaryKey' => $settings['primaryKey']]);
+//                $this->meili->waitForTask($task);
 
-                $index = $this->meili->getOrCreateIndex($prefixedName, $settings['primaryKey']??'id');
+//                $index = $this->meili->getOrCreateIndex($uId, $settings['primaryKey']??'id');
             }
 
 //            if (!$force) {
@@ -142,16 +142,23 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 //            }
 
             if ($force) {
-                $index = $this->meili->getOrCreateIndex($prefixedName, $settings['primaryKey']??'id');
-                $task = new Task($index->updateSettings($settings['schema']));
-                $io->writeln(sprintf('updateSettings taskUid=%s', (string)$task->taskUid));
+                $index = $this->meili->getOrCreateIndex($uId, $settings['primaryKey']??'id', wait: $wait);
+                $task = $index->updateSettings($settings['schema']);
+                $io->writeln(sprintf('updateSettings taskUid=%s', $task->getTaskUid()));
+                if ($wait) {
+                    $io->writeln(sprintf('waiting for task to update settings...'));
+                    $task = $task->wait();
+                    $io->writeln(sprintf("%s %s %s", $uId, $task->getType()->value, $task->getStatus()->value));
+                }
+            } else {
+                $io->warning(sprintf('use --force to apply settings to "%s"', $uId));
             }
 
             $totalTokens = [];
             $embedderKeys = $settings['embedders'] ?? [];
             if ($embedders !== []) {
                 // resolve api keys from params if provided as parameter names
-                foreach ($embedders as $name => &$cfg) {
+                foreach ($embedders as $uId => &$cfg) {
                     if (!empty($cfg['apiKeyParameter'])) {
                         $paramName = $cfg['apiKeyParameter'];
 //                        $cfg['apiKey'] = $this->params->get($paramName) ?? getenv($paramName) ?? null;
@@ -220,11 +227,10 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
                     }
 
                     if ($force && $updateEmbedders) {
-                        $embeddersTask = new Task($index->updateEmbedders($embeddersForThisIndex));
-                        $res  = $this->meili->waitForTask($embeddersTask);
-                        if (!$embeddersTask->succeeded) {
-                            dump($embeddersTask);
-                            throw new \RuntimeException('Embedders update failed: '.json_encode($res));
+                        $embeddersTask = $index->updateEmbedders($embeddersForThisIndex);
+                        if ($wait) {
+                            $task = $task->wait();
+                            $io->writeln(sprintf('Update embedders: %s', $embeddersTask->getStatus()->value));
                         }
                     }
 
@@ -233,15 +239,10 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 
             }
 
-
-            $io->writeln(json_encode($settings['schema'], JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
-
-            try {
-                $this->meili->waitForTask($task['taskUid'] ?? 0, $index, true, 50);
-                $io->success('Settings updated.');
-            } catch (\Throwable) {
-                $io->warning('Settings update task still in progress.');
+            if ($io->isVerbose()) {
+                $io->info(json_encode($settings['schema'], JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
             }
+
         }
 
         return Command::SUCCESS;

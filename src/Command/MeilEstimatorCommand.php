@@ -6,7 +6,6 @@ namespace Survos\MeiliBundle\Command;
 use Liquid\Template;
 use Meilisearch\Client;
 use Survos\MeiliBundle\Meili\MeiliTaskStatus;
-use Survos\MeiliBundle\Meili\Task;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
@@ -132,27 +131,9 @@ final class MeilEstimatorCommand extends MeiliBaseCommand
                         $io->writeln("$embedderName tokens: " . $totalTokens[$embedderName]);
                     }
                 }
-
-                if ($force && $updateEmbedders) {
-                    $embeddersTask = new Task($index->updateEmbedders($embeddersForThisIndex));
-                    $res = $this->meili->waitForTask($embeddersTask);
-                    if (!$embeddersTask->succeeded) {
-                        dump($embeddersTask);
-                        throw new \RuntimeException('Embedders update failed: ' . json_encode($res));
-                    }
-                }
-
             }
 
 
-            $io->writeln(json_encode($settings['schema'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-
-            try {
-                $this->meili->waitForTask($task['taskUid'] ?? 0, $index, true, 50);
-                $io->success('Settings updated.');
-            } catch (\Throwable) {
-                $io->warning('Settings update task still in progress.');
-            }
         }
 
         return Command::SUCCESS;

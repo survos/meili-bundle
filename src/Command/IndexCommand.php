@@ -30,16 +30,15 @@ use Symfony\Component\Messenger\Stamp\TransportNamesStamp;
 use Symfony\Component\Yaml\Yaml;
 
 #[AsCommand(
-    name: 'meili:index',
-    aliases: ['meili:populate'],
-    description: 'Index entities (per-locale) for Meilisearch'
+    name: 'meili:populate',
+//    aliases: ['meili:index'],
+    description: 'Populate meili from a doctrine entity, could be per-locale'
 )]
 class IndexCommand extends MeiliBaseCommand
 {
     private SymfonyStyle $io;
 
     public function __construct(
-        protected ParameterBagInterface $bag,
         protected ?EntityManagerInterface $entityManager,
         private MessageBusInterface $messageBus,
         private SettingsService $settingsService,
@@ -68,10 +67,13 @@ class IndexCommand extends MeiliBaseCommand
 
     public function __invoke(
         SymfonyStyle $io,
-        #[Argument('Entity class')]
+        #[Argument('Explicit index base name (defaults to prefix + class shortname)')]
+        ?string $indexName = null,
+
+        #[Option('Entity class')]
         ?string $class = null,
 
-        #[Argument('Filter as YAML (e.g., "status: published")')]
+        #[Option('Filter as YAML (e.g., "status: published")')]
         string $filter = '',
 
         #[Option('Max documents to process (approx, producer side)', 'limit')]
@@ -82,9 +84,6 @@ class IndexCommand extends MeiliBaseCommand
 
         #[Option('Primary key field name in Meili (defaults to detected or id)', 'pk')]
         string $pk = 'id',
-
-        #[Option('Explicit index base name (defaults to prefix + class shortname)')]
-        ?string $index = null,
 
         #[Option('Dump the Nth normalized row and exit', 'dump')]
         ?int $dump = null,
@@ -144,75 +143,31 @@ class IndexCommand extends MeiliBaseCommand
             return Command::FAILURE;
         }
 
-        $targets = $this->resolveTargets($index, $class);
+        $targets = $this->resolveTargets($indexName, $class);
 
-        // Gather Meili-managed classes
-        $classes = [];
-//        foreach ($this->meiliService->indexedEntities as $entityClass) {
-//            if ($class && ($entityClass !== $class)) {
-//                $this->logger->info("Skipping $entityClass, does not match $class");
-//                continue;
-//            }
-//            if (!$groups = $this->settingsService->getNormalizationGroups($entityClass)) {
-//                $io->error("ERROR {$entityClass}: no normalization groups defined");
-//                return Command::FAILURE;
-//            }
-//            $classes[$entityClass] = $groups;
-//        }
-//
         // Locales to handle
         $locales = $onlyLocales
             ? array_values(array_filter(array_map('trim', explode(',', $onlyLocales))))
             : $this->enabledLocales;
-        $indexNames = [];
 
 
-//        foreach ($this->meiliService->indexedByClass() as $class=>$indexes) {
-//            foreach ($indexes as $indexName => $settings) {
-//                if ($perLocale) {
-//                    foreach ($locales as $loc) {
-//                        $indexNames[$class][$loc] = $indexName . '_' . $loc;
-//                    }
-//                } else {
-//                    // single index uses default framework locale as its language
-//                    $indexNames[$class][$this->defaultLocale] = $indexName;
-//                }
-//            }
-//        }
-
-        foreach ($targets as $indexName) {
+        foreach ($targets as $uId) {
             {
-                $settings = $this->meiliService->rawSettings[$indexName];
-                $indexName = $this->meiliService->getPrefixedIndexName($indexName);
-//            dd($indexName, $settings);
-//        }
-//            foreach ($indexNames as $entityClass => $indexes) {
-//                foreach ($indexes as $loc => $indexName) {
-//                    $languageForIndex = $loc ?: $this->defaultLocale;
-                    $this->io->title($indexName);
+                $settings = $this->meiliService->getIndexSetting($uId);
+                    $this->io->title($uId);
 
                     if ($reset) {
                         if ($dry) {
                             $io->error('you cannot have both --reset and --dry');
                             return Command::FAILURE;
                         }
-                        $this->meiliService->reset($indexName);
+                        $task = $this->meiliService->reset($uId);
                         $updateSettings = true;
                     }
 
-
-//                    if ($updateSettings) {
-//                        dd("moved to meili:schema:update --force, but we can flag if it's out of sync");
-//                        $idx = $this->meiliService->getIndex($indexName, $pk);
-//                        $this->configureIndex($entityClass, $idx, $languageForIndex);
-//                        if (!$reset && is_null($fetch)) {
-//                            $fetch = false;
-//                        }
-//                    }
-
-                    $index = $this->meiliService->getOrCreateIndex($indexName, autoCreate: false);
+                    $index = $this->meiliService->getOrCreateIndex($uId, autoCreate: false);
                     if (!$index) {
-                        $this->io->error("Index {$indexName} not found, run meili:settings to create");
+                        $this->io->error("Index {$uId} not found, run meili:settings to create");
                         return Command::FAILURE;
                     }
 
@@ -220,7 +175,7 @@ class IndexCommand extends MeiliBaseCommand
                         $entityClass = $settings['class'];
                         // Producer side: stream primary keys in batches; consumer will load+normalize with the same locale
                         $runner = function () use ($entityClass,
-                            $index, $batchSize, $indexName,
+                            $index, $batchSize, $uId,
                             $sync,
                             $limit, $filterArray, $dump, $transport, $pk,
                         ) {
@@ -228,7 +183,7 @@ class IndexCommand extends MeiliBaseCommand
                                 class: $entityClass,
                                 index: $index,
                                 batchSize: $batchSize,
-                                indexName: $indexName,
+                                indexName: $uId,
                                 limit: $limit ?? 0,
                                 filter: $filterArray,
                                 dump: $dump,
@@ -245,7 +200,7 @@ class IndexCommand extends MeiliBaseCommand
                             ? $this->localeScope->withLocale($languageForIndex, $runner)
                             : $runner();
 
-                        $this->io->success($indexName . ' Document count: ' . $stats['numberOfDocuments']);
+                        $this->io->success($uId . ' Document count: ' . $stats['numberOfDocuments']);
 
                         if ($wait) {
                             $this->meiliService->waitUntilFinished($index);
@@ -254,16 +209,16 @@ class IndexCommand extends MeiliBaseCommand
 
                     if ($this->io->isVeryVerbose()) {
                         $stats = $index->stats();
-                        $this->io->title("$indexName stats");
+                        $this->io->title("$uId stats");
                         $this->io->write(json_encode($stats, JSON_PRETTY_PRINT));
                     }
 
                     if ($this->io->isVerbose()) {
-                        $this->io->title("$indexName settings");
+                        $this->io->title("$uId settings");
                         $this->io->write(json_encode($index->getSettings(), JSON_PRETTY_PRINT));
                     }
 
-                    $this->io->success($this->getName() . ' ' . $entityClass . ' finished indexing to ' . $indexName);
+                    $this->io->success($this->getName() . ' ' . $entityClass . ' finished indexing to ' . $uId);
                 }
             }
         $this->io->success($this->getName() . ' complete.');

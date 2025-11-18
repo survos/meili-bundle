@@ -17,7 +17,6 @@ use Psr\Log\LoggerInterface;
 use Survos\CoreBundle\Service\SurvosUtils;
 use Survos\MeiliBundle\Meili\MeiliTaskStatus;
 use Survos\MeiliBundle\Meili\MeiliTaskType;
-use Survos\MeiliBundle\Meili\Task;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
 use Survos\MeiliBundle\Message\BatchRemoveEntitiesMessage;
 use Survos\MeiliBundle\MessageHandler\BatchIndexEntitiesMessageHandler;
@@ -35,7 +34,7 @@ use function Symfony\Component\String\u;
 use Symfony\Component\HttpClient\Psr18Client;
 use Nyholm\Psr7\Factory\Psr17Factory;
 
-class MeiliService
+final class MeiliService
 {
     public array $settings = [];
     public array $rawSettings = [];
@@ -101,10 +100,12 @@ class MeiliService
     }
     public function getRawIndexSetting(string $rawName): ?array
     {
+        SurvosUtils::assertKeyExists($rawName, $this->rawSettings);
         return $this->rawSettings[$rawName] ?? null;
     }
     public function getIndexSetting(string $indexName): ?array
     {
+        SurvosUtils::assertKeyExists($indexName, $this->settings);
         return $this->settings[$indexName] ?? null;
     }
 
@@ -142,12 +143,14 @@ class MeiliService
         if ($types) {
             $tasksQuery->setTypes($types);
         }
+        if ($limit) {
+            $tasksQuery->setLimit($limit);
+        }
 
         if (count($statuses) > 0) {
             $tasksQuery->setStatuses($statuses);
         }
-        $tasks = $this->getMeiliClient()->getTasks($tasksQuery);
-        return $tasks;
+        return $this->getMeiliClient()->getTasks($tasksQuery);
 
     }
 
@@ -266,10 +269,9 @@ class MeiliService
         try {
             $index = $client->index($indexName);
 //            dd($index);
-            $task = new Task($client->deleteIndex($indexName));
-            $this->waitForTask($task, $index);
-//            $this->io()->info("Deletion Task is at " . $task['status']);
-            $this->logger->warning("Index " . $indexName . " has been deleted.");
+            $task = $client->deleteIndex($indexName);
+            $task = $task->wait();
+            $this->logger->warning("Index " . $indexName . " has been deleted. " . $task->getStatus()->value);
         } catch (ApiException $exception) {
             if ($exception->errorCode == 'index_not_found') {
                 try {
@@ -305,54 +307,54 @@ class MeiliService
 
     }
 
-    public function waitForTask(Task|array|int $taskLike, ?Indexes $index = null, bool $stopOnError = true, mixed $dataToDump = null): Task
-    {
-        assert($taskLike instanceof Task, "pass the Task object.");
-        // Normalize to Task + id
-        $task = match (true) {
-            $taskLike instanceof Task => $taskLike,
-            \is_array($taskLike)      => Task::fromArray($taskLike),
-            \is_int($taskLike)        => Task::fromArray(['taskUid' => $taskLike]),
-            default                   => throw new \InvalidArgumentException('Unsupported task input.'),
-        };
-
-        $taskId = $task->taskUid;
-
-        // If we already have its terminal state, return early
-        if ($task->finished) {
-            return $task;
-        }
-
-        // Path A: We have an Indexes instance (SDK helper)
-        if ($index instanceof Indexes) {
-            $arr = $index->waitForTask($taskId);
-            return $task->updateFromArray($arr);
-        }
-
-        // Path B: Poll the client directly (for index-creation & admin ops)
-        // NOTE: implement getMeiliClient()->getTask(int $uid): array in this service.
-        do {
-            $arr = $this->getMeiliClient()->getTask($taskId);
-            $task->updateFromArray($arr);
-
-            $this->logger?->info(sprintf('Task %d status: %s', $taskId, $task->status));
-
-            if (!$task->finished) {
-                sleep(1);
-            }
-        } while (!$task->finished);
-
-        if ($task->failed && $stopOnError) {
-            $this->logger?->warning(
-                \json_encode($dataToDump ?? [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
-            );
-
-            $message = $task->error['message'] ?? 'Unknown Meilisearch task error.';
-            throw new \RuntimeException(sprintf('Task %d failed: %s', $taskId, $message));
-        }
-
-        return $task;
-    }
+//    public function waitForTask(Task|array|int $taskLike, ?Indexes $index = null, bool $stopOnError = true, mixed $dataToDump = null): Task
+//    {
+//        assert($taskLike instanceof Task, "pass the Task object.");
+//        // Normalize to Task + id
+//        $task = match (true) {
+//            $taskLike instanceof Task => $taskLike,
+//            \is_array($taskLike)      => Task::fromArray($taskLike),
+//            \is_int($taskLike)        => Task::fromArray(['taskUid' => $taskLike]),
+//            default                   => throw new \InvalidArgumentException('Unsupported task input.'),
+//        };
+//
+//        $taskId = $task->taskUid;
+//
+//        // If we already have its terminal state, return early
+//        if ($task->finished) {
+//            return $task;
+//        }
+//
+//        // Path A: We have an Indexes instance (SDK helper)
+//        if ($index instanceof Indexes) {
+//            $arr = $index->waitForTask($taskId);
+//            return $task->updateFromArray($arr);
+//        }
+//
+//        // Path B: Poll the client directly (for index-creation & admin ops)
+//        // NOTE: implement getMeiliClient()->getTask(int $uid): array in this service.
+//        do {
+//            $arr = $this->getMeiliClient()->getTask($taskId);
+//            $task->updateFromArray($arr);
+//
+//            $this->logger?->info(sprintf('Task %d status: %s', $taskId, $task->status));
+//
+//            if (!$task->finished) {
+//                sleep(1);
+//            }
+//        } while (!$task->finished);
+//
+//        if ($task->failed && $stopOnError) {
+//            $this->logger?->warning(
+//                \json_encode($dataToDump ?? [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+//            );
+//
+//            $message = $task->error['message'] ?? 'Unknown Meilisearch task error.';
+//            throw new \RuntimeException(sprintf('Task %d failed: %s', $taskId, $message));
+//        }
+//
+//        return $task;
+//    }
 
     public function getPrefix(): ?string
     {
@@ -519,18 +521,23 @@ class MeiliService
         } while ($nextPage);
     }
 
-    public function getOrCreateIndex(string $indexName, string $key = 'id', bool $autoCreate = true): ?Indexes
+    public function getOrCreateIndex(string $indexName, string $key = 'id', bool $autoCreate = true, bool $wait=false): Indexes
     {
         $client = $this->getMeiliClient();
         try {
+            // by doing a fetch, we can see if it already exists, and dispatch a create request if not
             $index = $client->getIndex($indexName);
         } catch (ApiException $exception) {
             if ($exception->httpStatus === 404) {
                 if ($autoCreate) {
-                    $task = new Task($this->getMeiliClient()->createIndex($indexName, ['primaryKey' => $key]));
-                    $this->waitForTask($task);
+                    // this dispatches a task, may not run here.
+                    $task = $this->getMeiliClient()->createIndex($indexName, ['primaryKey' => $key]);
+                    if ($wait) {
+                        $task = $task->wait();
+                    }
+//                    $this->waitForTask($task);
                     // the API Endpoint
-                    $index = $client->getIndex($indexName);
+//                    $index = $client->index($indexName);
                 } else {
                     $index = null;
                 }
@@ -538,7 +545,8 @@ class MeiliService
                 dd($exception, $exception::class);
             }
         }
-        return $index;
+        // return the endpoint, not the fetch
+        return $client->index($indexName);
     }
 
 

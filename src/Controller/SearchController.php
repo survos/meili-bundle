@@ -46,7 +46,6 @@ class SearchController extends AbstractController
         try {
             $settings = $index->getSettings();
         } catch (\Exception $exception) {
-            dump($index);
             dd($exception, $indexName, $this->meiliService->getMeiliClient());
         }
 
