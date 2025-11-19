@@ -564,10 +564,12 @@
 
           <div class="mt-4 d-none" {{ stimulus_target(_sc, 'pagination') }}></div>
 
+          {% if globals.debug %}
           <div class="mb-3">
-            <label class="form-label small text-muted">Outgoing /multi-search payload</label>
+            <label class="form-label small text-muted">Outgoing   /multi-search payload</label>
             <textarea {{ stimulus_target(_sc, 'debug') }} class="form-control" rows="8" spellcheck="false"></textarea>
           </div>
+          {% endif %}
         </main>
 
       {# ------------------------------------------------------------------
