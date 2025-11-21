@@ -10,7 +10,14 @@ final class Dataset
 {
     public function __construct(
         public readonly string $name,
-        public readonly string $url, // list of URLs?
-        public readonly string $target,
-    ) {}
+        public readonly ?string $url, // list of URLs?
+        public readonly string $target, // what the URL fetches
+        public ?string $jsonl=null, // output of convert and input of import
+
+    ) {
+        if (!$this->jsonl) {
+            $targetExtension = pathinfo($this->target, PATHINFO_EXTENSION);
+            $this->jsonl = str_replace($targetExtension, 'jsonl', $this->target);
+        }
+    }
 }
