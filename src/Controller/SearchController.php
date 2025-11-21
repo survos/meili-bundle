@@ -14,7 +14,7 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Routing\RouterInterface;
 
-#[Route('/instant-search')]
+#[Route('/search')]
 class SearchController extends AbstractController
 {
     protected $helper;
