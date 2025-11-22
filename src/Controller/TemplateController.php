@@ -36,7 +36,7 @@ final class TemplateController extends AbstractController
             return new Response(file_get_contents($path) ?: '');
         }
 
-        $profilePath = $this->projectDir . '/data/' . $templateName . '.jsonl.profile.json';
+        $profilePath = $this->projectDir . '/data/' . $templateName . '.profile.json';
         if (!is_file($profilePath)) {
             return new Response(
                 sprintf('Missing profile file %s', $profilePath),

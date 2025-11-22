@@ -15,6 +15,7 @@ use Survos\MeiliBundle\Command\MeiliFlushFileCommand;
 use Survos\MeiliBundle\Command\MeiliSchemaCreateCommand;
 use Survos\MeiliBundle\Command\MeiliSchemaUpdateCommand;
 use Survos\MeiliBundle\Command\MeiliSchemaValidateCommand;
+use Survos\MeiliBundle\Command\MeiliSuggestSettingsCommand;
 use Survos\MeiliBundle\Command\SyncIndexesCommand;
 use Survos\MeiliBundle\Compiler\MeiliIndexPass;
 use Survos\MeiliBundle\Components\InstantSearchComponent;
@@ -33,6 +34,7 @@ use Survos\MeiliBundle\Metadata\MeiliIndex;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
 use Survos\MeiliBundle\Service\IndexFastSyncService;
 use Survos\MeiliBundle\Service\IndexSyncService;
+use Survos\MeiliBundle\Service\MeiliFieldHeuristic;
 use Survos\MeiliBundle\Service\MeiliNdjsonUploader;
 use Survos\MeiliBundle\Service\MeiliPayloadBuilder;
 use Survos\MeiliBundle\Service\MeiliService;
@@ -112,6 +114,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                      MeilEstimatorCommand::class,
                      MeiliSchemaValidateCommand::class,
                      MeiliFlushFileCommand::class,
+                    MeiliSuggestSettingsCommand::class,
                  ] as $class) {
             $builder->autowire($class)
                 ->setPublic(true)
@@ -121,6 +124,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
 
         foreach ([IndexSyncService::class,
                      MeiliNdjsonUploader::class,
+                     MeiliFieldHeuristic::class,
                      SyncIndexesCommand::class,
                      IndexFastSyncService::class,
                      TextFieldResolver::class,

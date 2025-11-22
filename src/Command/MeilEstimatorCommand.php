@@ -72,6 +72,10 @@ final class MeilEstimatorCommand extends MeiliBaseCommand
         $encoders  = [];
         $totals    = []; // embedderName => ['tokens' => int, 'rows' => int, 'model' => string]
 
+        if (!class_exists(EncoderProvider::class)) {
+            $io->warning(EncoderProvider::class . ' not installed.');
+            dd('composer require yethee/tiktoken --dev');
+        }
         $provider = new EncoderProvider();
 
         foreach ($embedderConfigs as $embedderName => $embedder) {
