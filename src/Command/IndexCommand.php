@@ -10,6 +10,7 @@ use Psr\Log\LoggerInterface;
 use Survos\CoreBundle\Service\SurvosUtils;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
 use Survos\MeiliBundle\Service\DoctrinePrimaryKeyStreamer;
+use Survos\MeiliBundle\Service\MeiliPayloadBuilder;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\SettingsService;
 use Survos\MeiliBundle\Util\BabelLocaleScope;
@@ -27,6 +28,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\TransportNamesStamp;
+use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 use Symfony\Component\Yaml\Yaml;
 
 #[AsCommand(
@@ -46,12 +48,18 @@ class IndexCommand extends MeiliBaseCommand
         protected ?LoggerInterface $logger,
         private TextFieldResolver $textFieldResolver,
         protected ResolvedEmbeddersProvider $resolvedEmbeddersProvider,
+//        #[Autowire('%kernel.project_dir%')]
+//        protected readonly string $projectDir,
+
+        protected ?NormalizerInterface $normalizer=null,
+        protected ?MeiliPayloadBuilder $payloadBuilder=null,
 
         #[Autowire('%kernel.enabled_locales%')] private array $enabledLocales = [],
         #[Autowire('%kernel.default_locale%')] private string $defaultLocale = 'en',
         private ?BabelLocaleScope $localeScope = null, // optional (no-op if Babel not installed)
     ) {
-        parent::__construct($meiliService,$resolvedEmbeddersProvider, $entityManager);
+
+        parent::__construct($meiliService,$resolvedEmbeddersProvider, $entityManager, $this->normalizer, $this->payloadBuilder);
     }
 
     /**

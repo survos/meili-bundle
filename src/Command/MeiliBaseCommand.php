@@ -31,7 +31,7 @@ class MeiliBaseCommand extends Command implements LoggerAwareInterface
         protected ?NormalizerInterface $normalizer=null,
         protected ?MeiliPayloadBuilder $payloadBuilder=null,
         #[Autowire('%kernel.project_dir%')]
-        protected readonly string $projectDir,
+        protected readonly ?string $projectDir=null,
 //        protected ?LoggerInterface $logger=null,
     ) {
         parent::__construct();
