@@ -4,138 +4,260 @@ declare(strict_types=1);
 namespace Survos\MeiliBundle\Command;
 
 use Liquid\Template;
-use Meilisearch\Client;
-use Survos\MeiliBundle\Meili\MeiliTaskStatus;
 use Survos\MeiliBundle\Service\MeiliService;
+use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
-use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Yethee\Tiktoken\EncoderProvider;
 
-#[AsCommand('meili:estimate', 'Estimate cost/tokens for the embedders')]
+#[AsCommand('meili:estimate', 'Estimate tokens and cost for Meili embedders using JSONL data')]
 final class MeilEstimatorCommand extends MeiliBaseCommand
 {
-    /** @param array<string,array<string,mixed>> $indexSettings (indexName => settings)
-     * @param array<string,string> $indexEntities (indexName => FQCN)
-     */
-//    public function __construct(
-//        public readonly MeiliService $meili,
-//    ) {
-//        parent::__construct();
-//    }
-
     public function __invoke(
         SymfonyStyle $io,
+        #[Argument('Index name (unprefixed Meili index name, e.g. "movies", "book")')]
+        string $indexName,
+        #[Option('Path to JSONL file (default: data/<index>.jsonl)', name: 'file')]
+        ?string $jsonlPath = null,
+        #[Option('Maximum number of records to sample from JSONL (0 = all)', name: 'limit')]
+        int $limit = 200,
+    ): int {
+        $io->title(sprintf('Meili embedder estimator — index "%s"', $indexName));
 
-        #[Option('Dump settings without applying', name: 'dump')]
-        bool         $dumpSettings = false,
+        // Resolve JSONL path: explicit --file wins, else data/<index>.jsonl relative to CWD.
+        if ($jsonlPath === null) {
+            $jsonlPath = sprintf('data/%s.jsonl', $indexName);
+        }
 
-        #[Option('Filter by index name')]
-        ?string      $index = null,
+        if (!is_file($jsonlPath)) {
+            $io->error(sprintf('JSONL file not found: %s', $jsonlPath));
+            return Command::FAILURE;
+        }
 
-        #[Option('Filter by FQCN or short class name')]
-        ?string      $class = null,
-    ): int
-    {
-        $targets = $this->resolveTargets($index, $class);
-        if ($targets === []) {
-            $io->warning('No matching indexes. Use --index or --class to filter. or --all?');
+        // Optional profile for recordCount estimate: data/<index>.jsonl.profile.json
+        $profilePath  = $jsonlPath . '.profile.json';
+        $totalRecords = null;
+        if (is_file($profilePath)) {
+            try {
+                $profile = json_decode(file_get_contents($profilePath) ?: '{}', true, 512, \JSON_THROW_ON_ERROR);
+                $totalRecords = $profile['recordCount'] ?? null;
+            } catch (\Throwable) {
+                // ignore profile errors; we can fall back to sample-only
+            }
+        }
+
+        $io->section('Loading Meilisearch index settings…');
+        $client   = $this->meili->getMeiliClient();
+        $index    = $client->getIndex($this->meili->getPrefixedIndexName($indexName));
+        $settings = $index->getSettings();
+
+        $embedderConfigs = $settings['embedders'] ?? [];
+        if (!$embedderConfigs) {
+            $io->warning('No embedders configured for this index (settings["embedders"] is empty).');
             return Command::SUCCESS;
         }
 
-        foreach ($targets as $name) {
+        $io->writeln(sprintf('JSONL: <info>%s</info>', $jsonlPath));
+        if ($totalRecords !== null) {
+            $io->writeln(sprintf('Total records (from profile): <info>%d</info>', $totalRecords));
+        } else {
+            $io->writeln('Total records: unknown (profile missing; estimate will be sample-only).');
+        }
+        $io->newLine();
 
-            $io->section(sprintf('Processing index "%s"', $name));
-//            $uid = $this->prefixed($name);
+        // Prepare Liquid templates & token encoders per embedder
+        $templates = [];
+        $encoders  = [];
+        $totals    = []; // embedderName => ['tokens' => int, 'rows' => int, 'model' => string]
 
-            $settings = $this->meili->getRawIndexSetting($name);
+        $provider = new EncoderProvider();
 
-            $embedders = $this->embeddersProvider->forMeili();
-//            $task = $index->updateEmbedders($embedders);
+        foreach ($embedderConfigs as $embedderName => $embedder) {
+            $model        = $embedder['model'] ?? null;
+            $docTemplate  = $embedder['documentTemplate'] ?? null;
 
-            $totalTokens = [];
-            foreach ($this->meili->getConfig()['embedders'] as $index => $embedder) {
-                $template = new Template();
-                $template->parse(file_get_contents($embedder['template']));
-                $templates[$index] = $template;
-            }
-            $embedderKeys = $settings['embedders'] ?? [];
-            // serialize the doc first
-
-            $iterator = $this->entityManager->getRepository($settings['class'])->createQueryBuilder('e')->select('e')
-                ->setMaxResults(3)
-                ->getQuery()
-                ->toIterable();
-            foreach ($iterator as $e) {
-                // chicken and egg -- we want to get the data from meili, it's exact, but we don't want to add it if the embedder is active.
-                $data = $this->payloadBuilder->build($e, $settings['persisted']);
-                dump($data);
-                foreach ($embedderKeys as $embedderKey) {
-                    $text = $templates[$embedderKey]->render(['doc' => $data]);
-                    dd($embedderKey, $text);
-                }
-            }
-            dd($embedderKeys);
-            if ($embedderKeys) {
-                $embeddersForThisIndex = [];
-                $templates = [];
-                foreach ($embedderKeys as $key) {
-                    $embeddersForThisIndex[$key] = $embedder = $embedders[$key];
-                    $templateFilename = $embedder['documentTemplate'];
-                    $embedder['documentTemplate'] = file_get_contents($templateFilename);
-                    $embeddersForThisIndex[$key]['documentTemplate'] = file_get_contents($templateFilename);
-//                        $content = file_get_contents($templateFilename);
-
-//                        $templates[$key]->parse($content);
-//                        dd($templates[$key]);
-                }
-                if ($cost) {
-                    if (!class_exists(Template::class)) {
-                        throw new \RuntimeException("composer req liquid/liquid");
-                    }
-                    foreach ($embeddersForThisIndex as $embedderName => $embedder) {
-                        $templates[$embedderName] = new Template($templateFilename);
-                        $totalTokens[$embedderName] = 0;
-                        $templates[$embedderName] = new Template();
-                    }
-
-                    // iterate through the records, render the liquid template, and pass to totenizer estmiate
-                    // @todo: batches, etc.  Argh. Should this be a separate command?
-                    $iterator = $this->entityManager->getRepository($settings['class'])->createQueryBuilder('e')->select('e')
-                        ->setMaxResults(3)
-                        ->getQuery()
-                        ->toIterable();
-                    foreach ($iterator as $e) {
-                        // chicken and egg -- we want to get the data from meili, it's exact, but we don't want to add it if the embedder is active.
-                        $data = $this->payloadBuilder->build($e, $settings['persisted']);
-//                            $data = $this->normalizer->normalize($e, 'array');
-//                            dump($data);
-                        foreach ($embeddersForThisIndex as $embedderName => $embedder) {
-                            $template = $templates[$embedderName];
-                            dump($data);
-                            $text = $template->render(['doc' => $data]);
-                            dd($templates, $embedderName, $template, $text);
-
-                            $provider = new EncoderProvider();
-                            $encoder = $provider->getForModel($embedder['model']); // or 'gpt-3.5-turbo'
-                            $tokens = $encoder->encode($text);
-                            $tokenCount = count($tokens);
-                            $totalTokens[$embedderName] += $tokenCount;
-                            dd($embedder['model'], $embedderName, $tokenCount, $text);
-                        }
-                    }
-                    dump($totalTokens);
-                    foreach ($embeddersForThisIndex as $embedderName => $embedder) {
-                        $io->writeln("$embedderName tokens: " . $totalTokens[$embedderName]);
-                    }
-                }
+            if (!$model || !$docTemplate) {
+                $io->warning(sprintf('Embedder "%s" missing model or documentTemplate; skipping.', $embedderName));
+                continue;
             }
 
+            // Liquid template
+            $tpl = new Template();
+            $tpl->parse($docTemplate);
+            $templates[$embedderName] = $tpl;
 
+            // Tokenizer
+            try {
+                $encoders[$embedderName] = $provider->getForModel($model);
+            } catch (\Throwable $e) {
+                $io->warning(sprintf(
+                    'Cannot get tokenizer for model "%s" (embedder "%s"): %s',
+                    $model,
+                    $embedderName,
+                    $e->getMessage()
+                ));
+                continue;
+            }
+
+            $totals[$embedderName] = [
+                'tokens' => 0,
+                'rows'   => 0,
+                'model'  => $model,
+            ];
         }
 
+        if ($templates === [] || $encoders === []) {
+            $io->warning('No usable embedders after filtering (missing templates or tokenizers).');
+            return Command::SUCCESS;
+        }
+
+        $io->section(sprintf('Sampling JSONL (limit: %s)…', $limit > 0 ? $limit : 'ALL'));
+
+        $fh = fopen($jsonlPath, 'rb');
+        if (!$fh) {
+            $io->error(sprintf('Unable to open JSONL file: %s', $jsonlPath));
+            return Command::FAILURE;
+        }
+
+        $sampledRows = 0;
+        $lineNumber  = 0;
+
+        try {
+            while (($line = fgets($fh)) !== false) {
+                $lineNumber++;
+                $line = trim($line);
+                if ($line === '') {
+                    continue;
+                }
+
+                try {
+                    $doc = json_decode($line, true, 512, \JSON_THROW_ON_ERROR);
+                } catch (\Throwable $e) {
+                    $io->warning(sprintf('Skipping invalid JSON on line %d: %s', $lineNumber, $e->getMessage()));
+                    continue;
+                }
+
+                if (!\is_array($doc)) {
+                    continue;
+                }
+
+                $sampledRows++;
+
+                foreach ($templates as $embedderName => $tpl) {
+                    if (!isset($encoders[$embedderName])) {
+                        continue;
+                    }
+
+                    $encoder = $encoders[$embedderName];
+
+                    // Render Liquid template with the doc
+                    $text = $tpl->render(['doc' => $doc]);
+
+                    // Tokenize locally
+                    $tokens = $encoder->encode($text);
+                    $tokenCount = \count($tokens);
+
+                    $totals[$embedderName]['tokens'] += $tokenCount;
+                    $totals[$embedderName]['rows']++;
+                }
+
+                if ($limit > 0 && $sampledRows >= $limit) {
+                    break;
+                }
+            }
+        } finally {
+            fclose($fh);
+        }
+
+        if ($sampledRows === 0) {
+            $io->warning('No rows sampled from JSONL; nothing to estimate.');
+            return Command::SUCCESS;
+        }
+
+        $io->section(sprintf(
+            'Results (sampled %d rows%s):',
+            $sampledRows,
+            $totalRecords !== null && $sampledRows < $totalRecords ? sprintf(' of %d', $totalRecords) : ''
+        ));
+
+        // Hard-coded pricing — cost per 1M tokens.
+        // Later: move this into SurvosMeiliBundle config.
+        $costPerMillion = [
+            'text-embedding-3-small' => 0.02,  // $0.02 / 1M tokens
+            'text-embedding-3-large' => 0.13,  // $0.13 / 1M tokens
+            'text-embedding-ada-002' => 0.10,  // legacy approx
+        ];
+
+        foreach ($totals as $embedderName => $data) {
+            if ($data['rows'] === 0) {
+                $io->writeln(sprintf(
+                    '<comment>Embedder "%s": no rows processed.</comment>',
+                    $embedderName
+                ));
+                continue;
+            }
+
+            $tokens    = $data['tokens'];
+            $rows      = $data['rows'];
+            $model     = $data['model'];
+            $avgTokens = $tokens / $rows;
+
+            $perMillion = $costPerMillion[$model] ?? null;
+            $costLabel  = $perMillion !== null
+                ? sprintf('$%.4f / 1M tokens', $perMillion)
+                : '<comment>(price unknown)</comment>';
+
+            $priceTotal     = null;
+            $priceEstimate  = null;
+            $estTotalTokens = null;
+
+            if ($perMillion !== null) {
+                $costPerToken = $perMillion / 1_000_000;
+                $priceTotal   = $tokens * $costPerToken;
+
+                if ($totalRecords !== null && $rows < $totalRecords) {
+                    $estTotalTokens = $avgTokens * $totalRecords;
+                    $priceEstimate  = $estTotalTokens * $costPerToken;
+                }
+            }
+
+            $lines = [];
+            $lines[] = sprintf(
+                '<info>%s</info> (model: <comment>%s</comment>):',
+                $embedderName,
+                $model
+            );
+            $lines[] = sprintf(
+                '  • tokens: <info>%d</info> over <info>%d</info> rows (avg <info>%.1f</info> tokens/row)',
+                $tokens,
+                $rows,
+                $avgTokens
+            );
+            $lines[] = sprintf('  • price: %s', $costLabel);
+
+            if ($priceTotal !== null) {
+                $lines[] = sprintf(
+                    '    - sample cost: <info>$%.4f</info>',
+                    $priceTotal
+                );
+            }
+
+            if ($priceEstimate !== null && $estTotalTokens !== null) {
+                $lines[] = sprintf(
+                    '    - est. full corpus (%d rows): <info>%d</info> tokens → <info>$%.4f</info>',
+                    $totalRecords,
+                    (int) \round($estTotalTokens),
+                    $priceEstimate
+                );
+            }
+
+            $io->writeln(implode("\n", $lines));
+            $io->newLine();
+        }
+
+        $io->success('Estimation complete.');
         return Command::SUCCESS;
     }
 }

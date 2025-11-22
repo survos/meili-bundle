@@ -95,18 +95,18 @@ class SearchController extends AbstractController
         return $params;
     }
 
-    #[Route('/template/{templateName}', name: 'meili_template')]
-    public function jsTemplate(string $templateName): Response|array
-    {
-        $templateName = preg_replace('/_..$/', '', $templateName);
-        $jsTwigTemplate = $this->jsTemplateDir . $templateName . '.html.twig';
-        if (!file_exists($jsTwigTemplate)) {
-            // fix: correct variable name in message
-            return new Response("Missing $jsTwigTemplate template", 404);
-        }
-        $template = file_get_contents($jsTwigTemplate);
-        return new Response($template);
-    }
+//    #[Route('/old/template/{templateName}', name: 'OLD_meili_template')]
+//    public function jsTemplate(string $templateName): Response|array
+//    {
+//        $templateName = preg_replace('/_..$/', '', $templateName);
+//        $jsTwigTemplate = $this->jsTemplateDir . $templateName . '.html.twig';
+//        if (!file_exists($jsTwigTemplate)) {
+//            // fix: correct variable name in message
+//            return new Response("Missing $jsTwigTemplate template", 404);
+//        }
+//        $template = file_get_contents($jsTwigTemplate);
+//        return new Response($template);
+//    }
 
     #[AdminRoute(path: '/show/{indexName}/{pk}', name: 'meili_show_liquid')]
     public function showIndex(AdminContext $context, string $indexName): Response

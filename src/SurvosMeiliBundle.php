@@ -25,6 +25,7 @@ use Survos\MeiliBundle\Controller\MeiliAdminController;
 use Survos\MeiliBundle\Controller\MeiliController;
 use Survos\MeiliBundle\Controller\MeiliProxyController;
 use Survos\MeiliBundle\Controller\SearchController;
+use Survos\MeiliBundle\Controller\TemplateController;
 use Survos\MeiliBundle\EventListener\DoctrineEventListener;
 use Survos\MeiliBundle\Filter\MeiliSearch\AbstractSearchFilter;
 use Survos\MeiliBundle\MessageHandler\BatchIndexEntitiesMessageHandler;
@@ -66,7 +67,6 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->tag('doctrine.event_listener', ['event' => 'postFlush'])
             ->tag('doctrine.event_listener', ['event' => 'postUpdate'])
             ->tag('doctrine.event_listener', ['event' => 'preRemove'])
-            ->tag('doctrine.event_listener', ['event' => 'prePersist'])
             ->tag('doctrine.event_listener', ['event' => 'postPersist']);
 
         if (class_exists(\EasyCorp\Bundle\EasyAdminBundle\Config\MenuItem::class)) {
@@ -75,10 +75,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                 ->setAutoconfigured(true);
         }
 
-        foreach ([SettingsService::class, MeiliPayloadBuilder::class,
-// these are API Platform classes that don't gracefully autowire.
-//                     AbstractSearchFilter::class, MultiFieldSearchFilter::class
-                 ] as $class) {
+        foreach ([SettingsService::class, MeiliPayloadBuilder::class] as $class) {
             $builder->autowire($class)
                 ->setPublic(true);
         }
@@ -86,11 +83,11 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         $builder->autowire(ResolvedEmbeddersProvider::class)
             ->setArgument(0, $config['embedders'] ?? [])
             ->setPublic(true);
-//        $resolved = EmbedderConfig::resolveEmbedders($config, $builder);
-//        $builder->setParameter('survos_meili.embedders', $resolved);
 
         $builder->setParameter('survos_meili.entity_dirs', $config['entity_dirs']);
         $builder->setParameter('survos_meili.prefix', $config['meiliPrefix']);
+        $builder->setParameter('survos_meili.pricing', $config['pricing'] ?? []);
+        $builder->setParameter('survos_meili.meili_settings', $config['meili_settings'] ?? []);
 
         $builder->autowire(MeiliService::class)
             ->setArgument('$config', $config)
@@ -100,7 +97,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->setArgument('$httpClient', new Reference('httplug.http_client', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->setArgument('$logger', new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->setArgument('$bag', new Reference('parameter_bag'))
-            ->setArgument('$indexedEntities', []) // placeholder; will be replaced in process()
+            ->setArgument('$indexedEntities', []) // placeholder; replaced in process()
             ->setAutowired(true)
             ->setPublic(true)
             ->setAutoconfigured(true);
@@ -108,10 +105,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         $container->services()->alias('meili_service', MeiliService::class);
 
         foreach ([IndexCommand::class,
-//                     SettingsCommand::class,
-//                     FastSyncIndexesCommand::class,
-//                     SyncIndexesCommand::class,
-        ExportCommand::class,
+                     ExportCommand::class,
                      IterateIndexesCommand::class,
                      MeiliSchemaCreateCommand::class,
                      MeiliSchemaUpdateCommand::class,
@@ -173,6 +167,13 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->setAutoconfigured(true)
             ->setPublic(true);
 
+        $builder->autowire(TemplateController::class)
+            ->addTag('container.service_subscriber')
+            ->addTag('controller.service_arguments')
+            ->setArgument('$meiliService', new Reference('meili_service'))
+            ->setAutoconfigured(true)
+            ->setPublic(true);
+
         $builder->register(InstantSearchComponent::class)
             ->setPublic(true)
             ->setAutowired(true)
@@ -193,44 +194,112 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->scalarNode('transport')->defaultValue('%env(default::MEILI_TRANSPORT)%')->end()
             ->scalarNode('searchKey')->defaultValue('%env(default::MEILI_SEARCH_KEY)%')->end()
             ->scalarNode('meiliPrefix')->defaultValue('%env(default::MEILI_PREFIX)%')->end()
-            ->booleanNode('passLocale')->defaultValue(false)->end()
+            ->booleanNode('passLocale')->defaultFalse()->end()
             ->integerNode('maxValuesPerFacet')->defaultValue(1000)->end()
-//            ->arrayNode('tools')->defaultValue([
-//                'riccox' => 'http://localhost:24900/',
-//            ])->end()
+
+            // Optional external tools, e.g. OpenAI playground, dashboards, etc.
             ->arrayNode('tools')
-                    ->arrayPrototype()
-                        ->children()
-                            ->scalarNode('label')->isRequired()->cannotBeEmpty()->end()      // e.g. 'openAi'
-                            ->scalarNode('url')->isRequired()->cannotBeEmpty()->end()       // e.g. 'text-embedding-3-small'
-                        ->end()
-                    ->end()
-                ->end()
-            ->arrayNode('embedders')
-                    ->useAttributeAsKey('name')
-                    ->arrayPrototype()
-                        ->children()
-                            ->scalarNode('source')->isRequired()->cannotBeEmpty()->end()      // e.g. 'openAi'
-                            ->scalarNode('model')->isRequired()->cannotBeEmpty()->end()       // e.g. 'text-embedding-3-small'
-                            ->scalarNode('apiKey')->defaultNull()->end()                      // e.g. '%env(OPENAI_API_KEY)%'
-                            ->scalarNode('for')->defaultNull()->end()                         // optional FQCN (e.g. App\Entity\Product)
-                            ->scalarNode('template')->defaultNull()->end()                    // optional inline template
-                            ->arrayNode('examples')
-                                ->prototype('scalar')->end()
-                                ->defaultValue([])
-                            ->end()
-                        ->end()
-                    ->end()
-                ->end()
-            /**
-             * NEW: allow multiple directories to be scanned for #[MeiliIndex].
-             * Defaults to the standard Doctrine location.
-             */
-            ->arrayNode('entity_dirs')
-                ->prototype('scalar')->end()
-                ->defaultValue(['%kernel.project_dir%/src/Entity'])
+            ->arrayPrototype()
+            ->children()
+            ->scalarNode('label')->isRequired()->cannotBeEmpty()->end()
+            ->scalarNode('url')->isRequired()->cannotBeEmpty()->end()
+            ->end()
+            ->end()
             ->end()
 
+            // Embedders: a named config that MeiliService + ResolvedEmbeddersProvider will use.
+            ->arrayNode('embedders')
+            ->useAttributeAsKey('name')
+            ->arrayPrototype()
+            ->children()
+            ->scalarNode('source')->isRequired()->cannotBeEmpty()->end()      // e.g. 'openAi'
+            ->scalarNode('model')->isRequired()->cannotBeEmpty()->end()       // e.g. 'text-embedding-3-small'
+            ->scalarNode('apiKey')->defaultNull()->end()                      // e.g. '%env(OPENAI_API_KEY)%'
+            ->scalarNode('for')->defaultNull()->end()                         // optional FQCN (e.g. App\Entity\Product)
+            ->scalarNode('template')->defaultNull()->end()                    // optional path to Liquid template
+            ->integerNode('documentTemplateMaxBytes')->defaultValue(4096)->end()
+            ->integerNode('maxTokensPerDoc')
+            ->defaultNull()
+            ->info('Optional hint for expected max tokens per doc for cost estimation / guard rails.')
+            ->end()
+            ->arrayNode('examples')
+            ->scalarPrototype()->end()
+            ->defaultValue([])
+            ->end()
+            ->end()
+            ->end()
+            ->end()
+
+            // Pricing configuration for cost estimator.
+            // Cost per 1M tokens, keyed by embedding model.
+            ->arrayNode('pricing')
+            ->addDefaultsIfNotSet()
+            ->children()
+            ->arrayNode('embedders')
+            ->useAttributeAsKey('model')
+            ->scalarPrototype()->end()
+            ->defaultValue([
+                'text-embedding-3-small' => 0.02,  // $0.02 / 1M tokens
+                'text-embedding-3-large' => 0.13,  // $0.13 / 1M tokens
+                'text-embedding-ada-002' => 0.10,  // legacy approx
+            ])
+            ->end()
+            ->end()
+            ->end()
+
+            // Allow passing default Meili settings (e.g. typoTolerance)
+            // through bundle config to SettingsService/SettingsCommand.
+            ->arrayNode('meili_settings')
+            ->addDefaultsIfNotSet()
+            ->children()
+            // This is intentionally loose; structure mirrors Meilisearch settings.
+            ->arrayNode('typoTolerance')
+            ->addDefaultsIfNotSet()
+            ->children()
+            ->booleanNode('enabled')->defaultTrue()->end()
+            ->integerNode('oneTypo')->defaultValue(5)->end()
+            ->integerNode('twoTypos')->defaultValue(9)->end()
+            ->arrayNode('disableOnWords')
+            ->scalarPrototype()->end()
+            ->defaultValue([])
+            ->end()
+            ->arrayNode('disableOnAttributes')
+            ->scalarPrototype()->end()
+            ->defaultValue([])
+            ->end()
+            ->booleanNode('disableOnNumbers')->defaultFalse()->end()
+            ->end()
+            ->end()
+
+            ->arrayNode('faceting')
+            ->addDefaultsIfNotSet()
+            ->children()
+            ->integerNode('maxValuesPerFacet')->defaultValue(1000)->end()
+            ->arrayNode('sortFacetValuesBy')
+            ->useAttributeAsKey('attribute')
+            ->scalarPrototype()->end()
+            ->defaultValue(['*' => 'count'])
+            ->end()
+            ->end()
+            ->end()
+
+            ->arrayNode('pagination')
+            ->addDefaultsIfNotSet()
+            ->children()
+            ->integerNode('maxTotalHits')->defaultValue(1000)->end()
+            ->end()
+            ->end()
+
+            ->booleanNode('facetSearch')->defaultTrue()->end()
+            ->scalarNode('prefixSearch')->defaultValue('indexingTime')->end()
+            ->end()
+            ->end()
+
+            // allow multiple directories to be scanned for #[MeiliIndex]
+            ->arrayNode('entity_dirs')
+            ->scalarPrototype()->end()
+            ->defaultValue(['%kernel.project_dir%/src/Entity'])
+            ->end()
             ->end();
     }
 
@@ -266,15 +335,10 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         $container->addCompilerPass(new MeiliIndexPass());
     }
 
-    /**
-     * CompilerPass logic: Find all entities with #[MeiliIndex] and inject them into MeiliService
-     */
     public function process(ContainerBuilder $container): void
     {
-        $attributeClass = MeiliIndex::class; // adjust if different
-        // @todo: allow an array of entity dirs to scan in config, defaulting to src/Entity
+        $attributeClass = MeiliIndex::class;
 
-        // use             $metas = $this->entityManager->getMetadataFactory()->getAllMetadata(); to get the doctrine-managed classes?
         $entityDir = $container->getParameter('kernel.project_dir') . '/src/Entity';
         $indexedClasses = [];
         foreach ($this->getClassesInDirectory($entityDir) as $class) {
@@ -285,20 +349,17 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             }
         }
 
-
         $container->setParameter('meili.indexed_entities', $indexedClasses);
 
         if ($container->hasDefinition(MeiliService::class)) {
             $def = $container->getDefinition(MeiliService::class);
             $def->setArgument('$indexedEntities', $indexedClasses);
-
-//            $def->setArgument('$indexSettings', $indexSettings);
         }
 
-        // this should happen automatically.  Maybe we should implement this for MeiliService?
-        if (0)
-        $container->registerForAutoconfiguration(LoggerAwareInterface::class)
-            ->addMethodCall('setLogger', [new Reference('logger')]);
+        if (0) {
+            $container->registerForAutoconfiguration(LoggerAwareInterface::class)
+                ->addMethodCall('setLogger', [new Reference('logger')]);
+        }
     }
 
     private function getClassesInDirectory(string $dir): array
