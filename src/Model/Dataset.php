@@ -12,10 +12,11 @@ final class Dataset
         public readonly string $name,
         public readonly ?string $url, // list of URLs?
         public readonly string $target, // what the URL fetches
-        public ?string $jsonl=null, // output of convert and input of import
+        public string|bool|null $jsonl=null, // output of convert and input of import
 
     ) {
-        if (!$this->jsonl) {
+        // hack, false or blank can mean to stop.
+        if (is_null($this->jsonl)) {
             $targetExtension = pathinfo($this->target, PATHINFO_EXTENSION);
             $this->jsonl = str_replace($targetExtension, 'jsonl', $this->target);
         }
