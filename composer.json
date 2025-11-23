@@ -26,6 +26,7 @@
         "survos/jsonl-bundle": "^2.0"
     },
     "require-dev": {
+        "roave/security-advisories": "dev-latest",
         "survos/inspection-bundle": "^2.0",
         "phpstan/phpstan": "^2.0",
         "symfony/browser-kit": "^7.3||^8.0",

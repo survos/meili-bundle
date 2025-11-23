@@ -29,29 +29,110 @@ final class TemplateController extends AbstractController
 
         // While developing, always regenerate from profile + Meili;
         // later we can re-enable the on-disk JS-Twig override.
-        /*
-        */
         $path = $this->jsTemplateDir . $templateName . '.html.twig';
         if (file_exists($path)) {
             return new Response(file_get_contents($path) ?: '');
         }
 
         $profilePath = $this->projectDir . '/data/' . $templateName . '.profile.json';
-        if (!is_file($profilePath)) {
-            return new Response(
-                sprintf('Missing profile file %s', $profilePath),
-                Response::HTTP_NOT_FOUND
-            );
+        $profile     = null;
+
+        if (is_file($profilePath)) {
+            $json    = file_get_contents($profilePath) ?: '[]';
+            $profile = json_decode($json, true) ?? [];
         }
 
-        $profile = json_decode(file_get_contents($profilePath) ?: '[]', true) ?? [];
-
-        [$config, $settings] = $this->buildConfigFromProfile($templateName, $profile);
+        if ($profile) {
+            // “Rich” config based on Jsonl profile
+            [$config, $settings] = $this->buildConfigFromProfile($templateName, $profile);
+        } else {
+            // Fallback: no profile.json → synthesize config from Meilisearch index settings
+            [$config, $settings] = $this->buildConfigFromSettings($templateName);
+        }
+//        dd(config: $config, settings: $settings);
 
         $twig = $this->generateJsTwigFromConfig($config, $settings);
 
         return new Response($twig);
     }
+
+    /**
+     * Fallback when there is no profile.json:
+     * derive a reasonable generic config from Meilisearch index settings.
+     *
+     * @return array{0: array, 1: array}
+     */
+    private function buildConfigFromSettings(string $indexName): array
+    {
+        // If the index is missing entirely, still render *something*
+        // instead of throwing — a minimal search box + hits list.
+        try {
+            $index    = $this->meiliClient->index($indexName);
+            $settings = $index->getSettings();
+        } catch (\Throwable $e) {
+            $settings = [
+                'searchableAttributes' => ['id'],
+                'filterableAttributes' => [],
+                'sortableAttributes'   => [],
+                'displayedAttributes'  => ['id'],
+            ];
+        }
+
+        $searchable   = $settings['searchableAttributes'] ?? [];
+        $displayed    = $settings['displayedAttributes'] ?? $searchable ?: ['id'];
+        $filterable   = $settings['filterableAttributes'] ?? [];
+        $sortable     = $settings['sortableAttributes'] ?? [];
+
+        // Heuristics for “nice enough” defaults
+        $titleField       = $this->guessFirstMatchingField($displayed, ['title', 'name', 'label']);
+        $subtitleField    = $this->guessFirstMatchingField($displayed, ['year', 'date', 'author', 'creator']);
+        $descriptionField = $this->guessFirstMatchingField($displayed, ['description', 'summary', 'abstract']);
+        $imageField       = $this->guessFirstMatchingField($displayed, ['image', 'thumbnail', 'poster', 'cover']);
+
+        $config = [
+            'indexName' => $indexName,
+
+            // Used by the JS/Twig template to render a card
+            'ui' => [
+                'titleField'       => $titleField ?? $displayed[0] ?? 'id',
+                'subtitleField'    => $subtitleField,
+                'descriptionField' => $descriptionField,
+                'imageField'       => $imageField,
+                'showScore'        => true,
+                'columns'          => 3,
+                'layout'           => 'neutral',
+            ],
+
+            // Search configuration
+            'search' => [
+                'primary'   => $searchable ?: $displayed,
+                'secondary' => array_values(array_diff($displayed, $searchable)),
+            ],
+
+            // Facets and sorting controls
+            'facets' => $filterable,
+            'sort'   => $sortable,
+        ];
+
+        return [$config, $settings];
+    }
+
+    private function guessFirstMatchingField(array $fields, array $candidates): ?string
+    {
+        $lower = array_map('strtolower', $fields);
+
+        foreach ($candidates as $needle) {
+            $needle = strtolower($needle);
+            foreach ($lower as $i => $field) {
+                if ($field === $needle || str_contains($field, $needle)) {
+                    return $fields[$i];
+                }
+            }
+        }
+
+        return null;
+    }
+
 
     /**
      * Heuristic helper: treat *_id / *Id etc. as ID-like. We don't want
@@ -362,13 +443,93 @@ final class TemplateController extends AbstractController
      * - Skip 0/blank scalar values
      * - Show ranking score as 0–100 badge when in [0,1]
      */
+// inside your TemplateController (or wherever this lives)
+
     private function generateJsTwigFromConfig(array $config, array $settings): string
     {
-        $configJson   = json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        // 1) Defaults for the flat Twig config
+        $defaults = [
+            'indexName'   => 'default',
+            'primaryKey'  => 'id',
+
+            'titleField'       => 'title',
+            'subtitleField'    => null,
+            'descriptionField' => null,
+            'imageField'       => null,
+
+            'maxLen'    => 100,
+            'maxList'   => 3,
+            'showScore' => true,
+            'columns'   => 3,
+            'layout'    => 'neutral',
+
+            'primarySearchFields'   => [],
+            'secondarySearchFields' => [],
+            'filterableFields'      => [],
+            'sortFields'            => [],
+
+            'scalarFields' => [],
+            'tagFields'    => [],
+            'labels'       => [],
+        ];
+
+        // 2) Detect if $config is already "flat" (e.g. profile generator returns final shape)
+        $isFlat = isset($config['titleField']) || isset($config['primarySearchFields']);
+
+        if ($isFlat) {
+            // Trust the profile more: merge profile config over defaults.
+            $twigConfig = array_replace($defaults, $config);
+        } else {
+            // 3) Nested shape (fallback + current profile builder)
+            $ui      = $config['ui']      ?? [];
+            $search  = $config['search']  ?? [];
+            $facets  = $config['facets']  ?? [];
+            $sort    = $config['sort']    ?? [];
+            $labels  = $config['labels']  ?? [];
+            $tags    = $config['tagFields'] ?? [];
+            $scalars = $config['scalarFields'] ?? [];
+
+            $nested = [
+                'indexName'  => $config['indexName']  ?? 'default',
+                'primaryKey' => $config['primaryKey'] ?? 'id',
+
+                'titleField'       => $ui['titleField']       ?? null,
+                'subtitleField'    => $ui['subtitleField']    ?? null,
+                'descriptionField' => $ui['descriptionField'] ?? null,
+                'imageField'       => $ui['imageField']       ?? null,
+
+                'maxLen'    => $ui['maxLen']    ?? null,
+                'maxList'   => $ui['maxList']   ?? null,
+                'showScore' => $ui['showScore'] ?? null,
+                'columns'   => $ui['columns']   ?? null,
+                'layout'    => $ui['layout']    ?? null,
+
+                'primarySearchFields'   => $search['primary']   ?? [],
+                'secondarySearchFields' => $search['secondary'] ?? [],
+                'filterableFields'      => $facets,
+                'sortFields'            => $sort,
+
+                'scalarFields' => $scalars,
+                'tagFields'    => $tags,
+                'labels'       => $labels,
+            ];
+
+            $twigConfig = array_replace(
+                $defaults,
+                array_filter($nested, static fn ($v) => $v !== null)
+            );
+        }
+
+        $configJson   = json_encode($twigConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $settingsJson = json_encode($settings, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
+        return $this->renderDefaultJsTwigTemplate($configJson, $settingsJson);
+    }
+
+    private function renderDefaultJsTwigTemplate(string $configJson, string $settingsJson): string
+    {
         return <<<TWIG
-{# Generated automatically from JSONL profile + Meilisearch settings.
+{# Generated automatically from profile / Meilisearch settings.
    Safe to edit; re-generating will overwrite.
 
    Meilisearch settings:
@@ -488,13 +649,7 @@ $settingsJson
                                     {% set label = labels[f]|default(f) %}
                                     <dt class="col-4 text-truncate">{{ label }}</dt>
                                     <dd class="col-8 text-truncate">
-                                        {% if v is iterable %}
-                                            {% for item in v|slice(0, maxList) %}
-                                                {{ loop.first ? '' : ', ' }}{{ item }}
-                                            {% endfor %}
-                                        {% else %}
-                                            {{ v }}
-                                        {% endif %}
+                                    {{ v|json_encode }}
                                     </dd>
                                 {% endif %}
                             {% endfor %}
@@ -513,13 +668,6 @@ $settingsJson
                         {% set label = labels[sf]|default(sf) %}
                         <span class="badge bg-light text-body-secondary">
                             {{ label }}:
-                            {% if v is iterable %}
-                                {% for item in v|slice(0, maxList) %}
-                                    {{ loop.first ? '' : ', ' }}{{ item }}
-                                {% endfor %}
-                            {% else %}
-                                {{ v }}
-                            {% endif %}
                         </span>
                     {% endif %}
                 {% endfor %}
@@ -553,6 +701,45 @@ $settingsJson
                 {% endfor %}
             </div>
         {% endif %}
+
+        {# ------------------------------------------------------------------ #}
+        {# Generic key/value dump: show "too much" by iterating the hit       #}
+        {# ------------------------------------------------------------------ #}
+
+        <dl class="row small text-body-secondary mb-0 mt-2">
+            {% for key, value in hit %}
+    {% set show = true %}
+
+    {# Skip Meili internal fields #}
+    {% if key starts with '_' %}
+        {% set show = false %}
+    {% endif %}
+
+    {# Skip fields already used (title/description/image/pk) #}
+    {% if show and key == titleKey %}
+        {% set show = false %}
+    {% endif %}
+    {% if show and descKey and key == descKey %}
+        {% set show = false %}
+    {% endif %}
+    {% if show and imageKey and key == imageKey %}
+        {% set show = false %}
+    {% endif %}
+    {% if show and key == _config.primaryKey %}
+        {% set show = false %}
+    {% endif %}
+
+    {# Skip arrays/objects (avoid [object Object]) #}
+    {% if show and value is iterable %}
+        {% set show = false %}
+    {% endif %}
+
+    {% if show %}
+        <dt class="col-4 text-truncate">{{ key }}</dt>
+        <dd class="col-8 text-truncate">{{ value }}</dd>
+    {% endif %}
+{% endfor %}
+        </dl>
     </div>
 
     <div class="card-footer bg-transparent border-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -590,4 +777,5 @@ $settingsJson
 </div>
 TWIG;
     }
+
 }
