@@ -13,6 +13,7 @@ final class Dataset
         public readonly ?string $url, // list of URLs?
         public readonly string $target, // what the URL fetches
         public string|bool|null $jsonl=null, // output of convert and input of import
+        public readonly ?string $afterDownload=null,
 
     ) {
         // hack, false or blank can mean to stop.
