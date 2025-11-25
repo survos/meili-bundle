@@ -1,84 +1,226 @@
 {% extends '@EasyAdmin/layout.html.twig' %}
 
-{% block title %}{{ indexName }}{% endblock %}
+{% block title %}{{ indexName }} — Meili Index{% endblock %}
 
 {% block content_header %}
-    <div class="content-header-title">
-        <h1 class="title">{{ indexName }} Admin</h1>
-    </div>
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+            <h1 class="title mb-0">
+                {{ indexName }} <small class="text-muted">index overview</small>
+            </h1>
+            <small class="text-muted">
+                {{ adminContext.dashboardTitle ?? 'Meili Admin' }}
+            </small>
+        </div>
 
-    {# this is only relevant for showing an individual item, not the index admin! #}
-{#    <div class="page-actions">#}
-{#        {{ indexName }}#}
-{#        <a href="{{ path('meili_admin_%s_index'|format(indexName)) }}" class="btn btn-secondary">#}
-{#            <i class="fa fa-arrow-left"></i> Back to {{ indexName }}#}
-{#        </a>#}
-{#    </div>#}
+        <div class="btn-toolbar gap-2">
+            {% set riccox = 'http://localhost:24900/ins/1/index/' ~ indexName %}
+            <a class="btn btn-outline-secondary" href="{{ riccox }}">
+                <i class="fa fa-tasks me-1"></i> Tasks
+            </a>
+
+            {% if settings.embedders is defined and settings.embedders|length %}
+                <div class="btn-group" role="group">
+                    {% for e in settings.embedders %}
+                        <a class="btn btn-success"
+                           href="{{ path('meili_insta_embed', {indexName: indexName, embedder: e}) }}">
+                            <i class="fa fa-magic me-1"></i> {{ e }}
+                        </a>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
 {% endblock %}
 
 {% block main %}
-    {% for fieldName, counts in facetCounts %}
-        <h4>{{ fieldName }}</h4>
-        <table class="table table-striped table-hover table-condensed">
-            <thead>
-            <tr>
-                <th>Label</th>
-                <th>Count</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for c in counts|slice(0,10) %}
-                <tr><td>{{ c.label }}</td><td>{{ c.count }}</td></tr>
-            {% endfor %}
+    <div class="row mb-3">
+        <div class="col-md-3 mb-3">
+            <div class="card h-100">
+                <div class="card-body py-3">
+                    <div class="text-muted small mb-1">Documents</div>
+                    <div class="h4 mb-0">
+                        {{ stats.numberOfDocuments ?? '—' }}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card h-100">
+                <div class="card-body py-3">
+                    <div class="text-muted small mb-1">Is Indexing</div>
+                    <div class="h4 mb-0">
+                        {{ stats.isIndexing ? 'Yes' : 'No' }}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {# Add more small stat cards if you like, e.g. fieldsDistribution|length #}
+    </div>
 
-            </tbody>
-        </table>
-    {% endfor %}
-    <pre>{{ settings|json_pretty }}</pre>
-    <pre>{{ rawInfo|json_pretty }}</pre>
-    <pre>{{ stats|json_pretty }}</pre>
-{#    <andypf-json-viewer#}
-{#            indent="2"#}
-{#            expanded="true"#}
-{#            theme="default-light"#}
-{#            show-data-types="true"#}
-{#            show-toolbar="false"#}
-{#            expand-icon-type="arrow"#}
-{#            show-copy="true"#}
-{#            show-size="true"#}
-{#            data='{"example": "data"}'#}
-{#    ></andypf-json-viewer>#}
+    <ul class="nav nav-tabs mb-3" id="meiliIndexTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active"
+                    id="facets-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#facets"
+                    type="button"
+                    role="tab">
+                Facets
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link"
+                    id="settings-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#settings"
+                    type="button"
+                    role="tab">
+                Settings (configured)
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link"
+                    id="raw-info-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#raw-info"
+                    type="button"
+                    role="tab">
+                Raw index info
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link"
+                    id="stats-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#stats"
+                    type="button"
+                    role="tab">
+                Stats (API)
+            </button>
+        </li>
+    </ul>
 
-{#    <andypf-json-viewer data='{"test": "Hello World"}'></andypf-json-viewer>#}
-{#    <andypf-json-viewer>{"name": "Helmut"}</andypf-json-viewer>#}
+    <div class="tab-content" id="meiliIndexTabsContent">
+        {# ---------------- FACETS TAB ---------------- #}
+        <div class="tab-pane fade show active" id="facets" role="tabpanel" aria-labelledby="facets-tab">
+            {% if facetCounts is empty %}
+                <div class="alert alert-info">
+                    No facet counts available. Make sure <code>settings.facets</code> is configured and the index is populated.
+                </div>
+            {% else %}
+                <div class="card">
+                    <div class="card-header border-bottom-0">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                            <div class="fw-semibold">Facet fields</div>
+                            <small class="text-muted">
+                                Showing up to the top 25 values per facet.
+                            </small>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <ul class="nav nav-pills flex-wrap mb-3" id="facetFieldTabs" role="tablist">
+                            {% for fieldName, counts in facetCounts %}
+                                {% set fieldId = 'facet-' ~ fieldName|replace({' ': '-', '.': '-', '[': '-', ']': '-'}) %}
+                                <li class="nav-item mb-2" role="presentation">
+                                    <button class="nav-link {{ loop.first ? 'active' }}"
+                                            id="{{ fieldId }}-tab"
+                                            data-bs-toggle="pill"
+                                            data-bs-target="#{{ fieldId }}"
+                                            type="button"
+                                            role="tab">
+                                        {{ fieldName }}
+                                        <span class="badge bg-secondary ms-1">
+                                            {{ counts|length }}
+                                        </span>
+                                    </button>
+                                </li>
+                            {% endfor %}
+                        </ul>
 
-{#    {% for facetName, details in settings.facets|default([]) %}#}
-{#        <li>#}
-{#            <a href="{{ path('survos_facet_show', {indexName: indexName, fieldName: facetName}) }}">#}
-{#                {{ facetName }}#}
-{#            </a>#}
-{#            {{ dump(facetCounts) }}#}
-{#        </li>#}
-{#    {% endfor %}#}
-{#    <a class="btn btn-primary" href="{{ path('meili_insta', {indexName: indexName}) }}">#}
-{#        SEARCH#}
-{#    </a>#}
+                        <div class="tab-content" id="facetFieldTabsContent">
+                            {% for fieldName, counts in facetCounts %}
+                                {% set fieldId = 'facet-' ~ fieldName|replace({' ': '-', '.': '-', '[': '-', ']': '-'}) %}
+                                <div class="tab-pane fade {{ loop.first ? 'show active' }}" id="{{ fieldId }}" role="tabpanel">
+                                    <h5 class="mb-3">
+                                        {{ fieldName }}
+                                        <small class="text-muted">
+                                            (showing first {{ min(25, counts|length) }} values)
+                                        </small>
+                                    </h5>
 
-    {% set riccox = 'http://localhost:24900/ins/1/index/' ~ indexName %}
-    <a class="btn btn-primary" href="{{ riccox }}">
-        Tasks
-    </a>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-striped table-hover align-middle mb-0">
+                                            <thead class="table-light">
+                                            <tr>
+                                                <th style="width: 70%;">Label</th>
+                                                <th style="width: 30%;" class="text-end">Count</th>
+                                            </tr>
+                                            </thead>
+                                            <tbody>
+                                            {% for c in counts|slice(0,25) %}
+                                                <tr>
+                                                    <td>
+                                                        {{ c.label is same as(null) or c.label == '' ? '∅ (null/empty)' : c.label }}
+                                                    </td>
+                                                    <td class="text-end">
+                                                        <span class="badge bg-primary">
+                                                            {{ c.count }}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            {% else %}
+                                                <tr>
+                                                    <td colspan="2" class="text-muted text-center">
+                                                        No values found for this facet.
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
 
-    <h3>{{ settings.embedders|length }} Embedders</h3>
-    {% for e in settings.embedders %}
-        <a class="btn btn-success" href="{{ path('meili_insta_embed', {indexName: indexName, embedder: e}) }}">
-            Semantic Search with {{ e }}
-        </a>
-    {% endfor %}
+        {# ---------------- SETTINGS TAB ---------------- #}
+        <div class="tab-pane fade" id="settings" role="tabpanel" aria-labelledby="settings-tab">
+            <div class="card">
+                <div class="card-header">
+                    <strong>Configured settings (MeiliService)</strong>
+                </div>
+                <div class="card-body">
+                    <pre class="mb-0"><code>{{ settings|json_pretty }}</code></pre>
+                </div>
+            </div>
+        </div>
 
-{#    {{ dump(indexName) }}#}
-{#    {{ dump(settings) }}#}
-{#    {{ dump(adminContext.dashboardTitle) }}#}
-{#    {{ dump(adminContext.getDashboardRouteName) }}#}
+        {# ---------------- RAW INFO TAB ---------------- #}
+        <div class="tab-pane fade" id="raw-info" role="tabpanel" aria-labelledby="raw-info-tab">
+            <div class="card">
+                <div class="card-header">
+                    <strong>Raw index info (Meilisearch /indexes/{{ indexName }})</strong>
+                </div>
+                <div class="card-body">
+                    <pre class="mb-0"><code>{{ rawInfo|json_pretty }}</code></pre>
+                </div>
+            </div>
+        </div>
 
+        {# ---------------- STATS TAB ---------------- #}
+        <div class="tab-pane fade" id="stats" role="tabpanel" aria-labelledby="stats-tab">
+            <div class="card">
+                <div class="card-header">
+                    <strong>Stats (Meilisearch /indexes/{{ indexName }}/stats)</strong>
+                </div>
+                <div class="card-body">
+                    <pre class="mb-0"><code>{{ stats|json_pretty }}</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
 {% endblock %}

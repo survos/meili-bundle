@@ -41,7 +41,7 @@ class MeiliController extends AbstractController
         // configured
         $settings = $this->meiliService->settings[$indexName];
         // live
-        $index = $this->meiliService->getIndex($indexName, autoCreate: false);
+//        $index = $this->meiliService->getIndex($indexName, autoCreate: false);
         $indexApi  = $this->meiliService->getIndexEndpoint($indexName);
         $results = $indexApi->search(null, [
             'limit' => 0,
