@@ -1,7 +1,7 @@
 {# A tiny, framework-free header bar that the bundle owns. #}
 {% set embedders = indexConfig.embedders|default([]) %}
 <div class="meili-bar">
-  <a href="/">/ (hack)</a>
+  <a href="/">/</a>
   {% for indexName, indexSettings in allSettings|default([]) %}
       <li>
         <a href="{{ path('meili_insta', {indexName: indexSettings.prefixedName}) }}">
