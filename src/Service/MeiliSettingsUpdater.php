@@ -7,7 +7,7 @@ use Meilisearch\Client;
 use Meilisearch\Endpoints\Indexes;
 use Psr\Log\LoggerInterface;
 use ReflectionClass;
-use Survos\MeiliBundle\Attribute\MeiliIndex;
+use Survos\MeiliBundle\Metadata\MeiliIndex;
 
 /**
  * Creates index if needed (using primaryKey), and applies settings (including 'embedders') in one call.
@@ -17,7 +17,10 @@ final class MeiliSettingsUpdater
     public function __construct(
         private readonly Client $client,
         private readonly ?LoggerInterface $logger = null,
-    ) {}
+    ) {
+        dd("is this called?  It looks like it might have been an experiment");
+
+    }
 
     /**
      * Update index settings from an entity class' #[MeiliIndex] attribute.

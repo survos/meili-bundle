@@ -1,4 +1,4 @@
-<?php
+<?php // sync live data with IndexInfo doctrine entities
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
@@ -12,7 +12,6 @@ use Survos\MeiliBundle\Entity\IndexInfo;
 use Survos\MeiliBundle\Message\UpdateIndexInfoMessage;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
-use Symfony\Component\ObjectMapper\ObjectMapperInterface;
 
 final class IndexSyncService implements LoggerAwareInterface
 {
@@ -21,7 +20,6 @@ final class IndexSyncService implements LoggerAwareInterface
         private readonly MeiliService $meili,
         private readonly EntityManagerInterface $em,
         private readonly IndexInfoRepository $repo,
-        private readonly ?ObjectMapperInterface $mapper=null,
     ) {}
 
     /**
@@ -61,7 +59,6 @@ final class IndexSyncService implements LoggerAwareInterface
             // Map server payload → entity (we do NOT set uid; it's already set)
             $source = (object) $row;
             dd($row);
-            $this->mapper->map($source, $indexInfo);
 
             // Normalize date strings to DateTimeImmutable if needed
             if (isset($row['createdAt']) && is_string($row['createdAt'])) {

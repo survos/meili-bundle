@@ -39,7 +39,7 @@ class MeiliBaseCommand extends Command implements LoggerAwareInterface
 
 
     /** @return string[] array of PREFIXED index names */
-    protected function resolveTargets(?string $index, ?string $class): array
+    protected function resolveTargets(?string $index, ?string $class, ?array $locales=null): array
     {
 
         $names = [];

@@ -36,7 +36,7 @@ use Symfony\Component\Yaml\Yaml;
 //    aliases: ['meili:index'],
     description: 'Populate meili from a doctrine entity, could be per-locale'
 )]
-class IndexCommand extends MeiliBaseCommand
+class PopulateCommand extends MeiliBaseCommand
 {
     private SymfonyStyle $io;
 
@@ -136,7 +136,8 @@ class IndexCommand extends MeiliBaseCommand
         $sync ??= true;
         // default behaviors
         $fetch ??= true; // unless explicitly turned off
-        $perLocale = $perLocale ?? (count($this->enabledLocales) > 0);
+        $perLocale ??= (count($this->enabledLocales) > 0);
+
 
         // optional filter
         $filterArray = $filter ? (is_array($parsed = Yaml::parse($filter)) ? $parsed : null) : null;
@@ -151,12 +152,13 @@ class IndexCommand extends MeiliBaseCommand
             return Command::FAILURE;
         }
 
-        $targets = $this->resolveTargets($indexName, $class);
-
         // Locales to handle
         $locales = $onlyLocales
             ? array_values(array_filter(array_map('trim', explode(',', $onlyLocales))))
             : $this->enabledLocales;
+
+        $targets = $this->resolveTargets($indexName, $class, $perLocale ? $locales : null);
+
 
 
         foreach ($targets as $uId) {
@@ -233,47 +235,6 @@ class IndexCommand extends MeiliBaseCommand
         return self::SUCCESS;
     }
 
-    /**
-     * Configure a Meilisearch index *for one language*.
-     * - no nested _translations
-     * - searchableAttributes = fields tagged #[Translatable] (or #[Searchable] fallback)
-     * - best-effort indexLanguages (ignore if unsupported)
-     */
-    private function configureIndexOLD(string $class, Indexes $index, string $language): void
-    {
-        $cfg = $this->settingsService->getSettingsFromAttributes($class);
-
-        // primary key (usually set at index creation; keep here for visibility)
-        $ids = $this->settingsService->getFieldsWithAttribute($cfg, 'is_primary');
-        $primaryKey = $ids[0] ?? 'id';
-
-        // translatable text fields (flat)
-        $searchable = $this->textFieldResolver->resolveSearchable($class);
-
-        // filterable/sortable from attributes
-        $filterable = $this->settingsService->getFieldsWithAttribute($cfg, 'browsable');
-        $sortable   = $this->settingsService->getFieldsWithAttribute($cfg, 'sortable');
-
-        // best-effort: set indexLanguages (newer Meili servers)
-        try {
-            $index->updateSettings(['indexLanguages' => [$language]]);
-        } catch (\Throwable $e) {
-            // ignore on older servers
-        }
-//        dd($searchable, $filterable, $sortable);
-
-        $index->updateSettings([
-            'displayedAttributes'  => ['*'],
-            'searchableAttributes' => $searchable ?: ['*'],
-            'filterableAttributes' => $filterable,
-            'sortableAttributes'   => $sortable,
-            'faceting' => [
-                'sortFacetValuesBy' => ['*' => 'count'],
-                'maxValuesPerFacet' => $this->meiliService->getConfig()['maxValuesPerFacet'],
-            ],
-            // 'primaryKey' => $primaryKey, // normally set when creating the index
-        ]);
-    }
 
     /**
      * Producer: stream entity primary keys and dispatch BatchIndexEntitiesMessage

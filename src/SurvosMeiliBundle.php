@@ -20,7 +20,7 @@ use Survos\MeiliBundle\Command\SyncIndexesCommand;
 use Survos\MeiliBundle\Compiler\MeiliIndexPass;
 use Survos\MeiliBundle\Components\InstantSearchComponent;
 use Survos\MeiliBundle\Command\CreateCommand;
-use Survos\MeiliBundle\Command\IndexCommand;
+use Survos\MeiliBundle\Command\PopulateCommand;
 use Survos\MeiliBundle\Command\SettingsCommand;
 use Survos\MeiliBundle\Controller\MeiliAdminController;
 use Survos\MeiliBundle\Controller\MeiliController;
@@ -106,7 +106,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
 
         $container->services()->alias('meili_service', MeiliService::class);
 
-        foreach ([IndexCommand::class,
+        foreach ([PopulateCommand::class,
                      ExportCommand::class,
                      IterateIndexesCommand::class,
                      MeiliSchemaCreateCommand::class,

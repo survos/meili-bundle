@@ -46,6 +46,7 @@
                     <div class="card h-100 index-card">
                         <div class="card-header">
                             <h4 class="mb-0">
+                                @todo: icon
                                 {{ ux_icon('mdi:database-search') }}
                                 {{ settings.rawName }}
                             </h4>
@@ -56,7 +57,7 @@
                             <div class="mb-4">
                                 <a href="{{ path('meili_admin_meili_show_index', {indexName: indexName}) }}"
                                    class="btn btn-secondary w-100 justify-content-center">
-                                    {{ ux_icon('oui:nav-overview') }}
+{#                                    {{ ux_icon('oui:nav-overview') }}#}
                                     Index Details
                                 </a>
                             </div>
@@ -64,13 +65,13 @@
                             {# Full Text Search #}
                             <div class="mb-4">
                                 <h6 class="text-muted mb-2">
-                                    {{ ux_icon('mdi:magnify-expand') }}
+{#                                    {{ ux_icon('mdi:magnify-expand') }}#}
                                     Text/Facet Search
                                 </h6>
                                 <a href="{{ path('meili_insta', {indexName: indexName}) }}"
                                    target="_blank"
                                    class="btn btn-secondary w-100 mb-2 justify-content-center">
-                                    {{ ux_icon('mdi:search') }}
+{#                                    {{ ux_icon('mdi:search') }}#}
                                     Open Search {{ indexName }}
                                 </a>
 

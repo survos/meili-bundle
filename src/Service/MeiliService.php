@@ -270,7 +270,7 @@ final class MeiliService
             $index = $client->index($indexName);
 //            dd($index);
             $task = $client->deleteIndex($indexName);
-            $task = $task->wait();
+            $task = $task->wafit();
             $this->logger->warning("Index " . $indexName . " has been deleted. " . $task->getStatus()->value);
         } catch (ApiException $exception) {
             if ($exception->errorCode == 'index_not_found') {
@@ -580,47 +580,6 @@ final class MeiliService
         $base      = $locale ? sprintf('%s_%s', $short, $locale) : $short;
         $indexName = $this->getPrefixedIndexName($base);
         return $this->getIndex($indexName);
-    }
-
-//    #[AsMessageHandler]
-    public function batchIndexEntities(BatchIndexEntitiesMessage $message): void
-    {
-        assert(false, "moved to " . BatchIndexEntitiesMessageHandler::class);
-        $locale = $msg->locale ?? null;
-        $work = function () use ($message) {
-            dd($message);
-            // 1) Load records by ids
-            // 2) Normalize with groups (already defined in your entity attributes)
-            // 3) Ensure your "_translations.$locale.*" (or plain fields) are present
-            // 4) Add to the target index (use $msg->indexName if you passed it)
-        };
-
-        if ($locale && $this->localeScope) {
-            $this->localeScope->withDisplayLocale($locale, $work);
-        } else {
-            $work();
-        }
-        $metadata = $this->entityManager->getClassMetadata($message->entityClass);
-
-        $repo = $this->entityManager->getRepository($message->entityClass);
-        $identifierField = $metadata->getSingleIdentifierFieldName();
-        $groups = $this->settingsService->getNormalizationGroups($message->entityClass);
-        $meiliIndex = $this->getMeiliIndex($message->entityClass, $message->locale);
-        $payloadThreshold = 50_000_000; // in bytes
-        $documents = [];
-        $payloadSize = 0;
-        dd($message);
-
-        // argh, lost this in the merge!
-        if ($message->reload) {
-//            $data  = $this->loadAndFlush($message);
-            $this->loadAndFlush($message, $repo, $identifierField, $groups, $payloadSize, $documents, $payloadThreshold, $meiliIndex);
-        } else {
-            $documents = $message->entityData;
-            $this->flushToMeili($meiliIndex, $documents, count($documents));
-
-        }
-
     }
 
     private function flushToMeili($meiliIndex, array $documents): void

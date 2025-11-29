@@ -12,7 +12,9 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Yethee\Tiktoken\EncoderProvider;
 
-#[AsCommand('meili:estimate', 'Estimate tokens and cost for Meili embedders using JSONL data')]
+#[AsCommand('meili:estimate', 'Estimate tokens and cost for Meili embedders using JSONL data',
+    aliases: ['meili:cost']
+)]
 final class MeilEstimatorCommand extends MeiliBaseCommand
 {
     public function __invoke(
@@ -37,13 +39,15 @@ final class MeilEstimatorCommand extends MeiliBaseCommand
         }
 
         // Optional profile for recordCount estimate: data/<index>.jsonl.profile.json
-        $profilePath  = $jsonlPath . '.profile.json';
+        $profilePath  = str_replace('.jsonl', '.profile.json', $jsonlPath); // $jsonlPath . '.profile.json';
+        assert(file_exists($profilePath), $profilePath . ' does not exist');
         $totalRecords = null;
         if (is_file($profilePath)) {
-            try {
                 $profile = json_decode(file_get_contents($profilePath) ?: '{}', true, 512, \JSON_THROW_ON_ERROR);
                 $totalRecords = $profile['recordCount'] ?? null;
+            try {
             } catch (\Throwable) {
+                dd(file_get_contents($profilePath));
                 // ignore profile errors; we can fall back to sample-only
             }
         }
