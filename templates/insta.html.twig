@@ -418,6 +418,7 @@
 {% endblock %}
 
 {% block body %}
+    {% set debug = app.request.query.get('debug', false) %}
 
   {# === Keep these blocks intact (critical for controllers/templates) === #}
   {% set globals = {
@@ -425,7 +426,7 @@
     serverApiKey: apiKey,
     indexName: indexName,
     _sc_modal: '@survos/meili-bundle/json',
-    debug: app.request.get('debug', false) ? true : false
+    debug: debug
   } %}
 
   {% set icons = {
@@ -448,7 +449,9 @@
   {% set templateUrl = path('meili_template', { templateName: templateName }) %}
 
   {# set default to false during production or when this is completely debugged #}
-  {% set sanity = app.request.get('sanity', true) %}
+  {% set sanity = app.request.query.get('sanity', true) %}
+{#    {{ dump(app.request.query.get('debug')) }}#}
+    {% set grid = app.request.query.get('class', 'grid-' ~ app.request.query.get('grid')|default(2)) %}
 
   <div
     {{ stimulus_controller(_sc, {
@@ -458,7 +461,7 @@
       sanity: sanity,
 
       embedderName: embedder,
-      hitClass: app.request.get('class', 'grid-' ~ app.request.get('grid')|default(2)),
+      hitClass: 'grid-' ~ grid,
 
       sortingJson: sorting|default([])|json_encode,
       globalsJson: globals|json_encode,
@@ -468,8 +471,9 @@
       templateUrl: templateUrl,
       q: q,
       searchAsYouType: searchAsYouType ? true : false,
-      scoreThreshold: app.request.get('minScore')|default(0)
-    }) }}
+      scoreThreshold: app.request.query.get('minScore')|default(0)
+    })
+    }}
     class="container-fluid py-3">
 
     <div class="insta-grid row" {{ stimulus_controller(_sc_modal, { serverUrl: server, serverApiKey: apiKey, indexName: indexName, globalsJson: globals|json_encode }) }}>

@@ -270,7 +270,7 @@ final class MeiliService
             $index = $client->index($indexName);
 //            dd($index);
             $task = $client->deleteIndex($indexName);
-            $task = $task->wafit();
+            $task = $task->wait();
             $this->logger->warning("Index " . $indexName . " has been deleted. " . $task->getStatus()->value);
         } catch (ApiException $exception) {
             if ($exception->errorCode == 'index_not_found') {
