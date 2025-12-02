@@ -39,5 +39,20 @@
         </a>
       {% endif %}
     {% endif %}
+
+      {% import '@SurvosMeili/babel/_locale_switcher.html.twig' as Babel %}
+
+      {# Determine current route and params dynamically #}
+      {% set _route = app.request.attributes.get('_route') %}
+      {% set _params = app.request.attributes.get('_route_params') %}
+
+      {{ Babel.locale_switcher(
+          locales = app.enabled_locales,
+          currentLocale = app.request.locale,
+          routeName = _route,
+          routeParams = _params
+      ) }}
+
+      @locale?
   </div>
 </div>

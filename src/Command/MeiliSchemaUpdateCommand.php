@@ -58,11 +58,63 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
     ): int {
         $wait ??= true;
 
-        $targets = $this->resolveTargets($indexName, $class);
+        $baseTargets = $this->resolveTargets($indexName, $class);
+
+        $targets = [];
+        foreach ($baseTargets as $baseUid) {
+            $settings = $this->meili->getIndexSetting($baseUid);
+
+            if ($this->meili->isMultiLingual) {
+                foreach ($this->localeContext->getEnabled() as $locale) {
+                    $targets[] = [
+                        'uid' => $this->meili->localizedUid($baseUid, $locale),
+                        'base' => $baseUid,
+                        'locale' => $locale,
+                        'settings' => $settings,
+                    ];
+                }
+            } else {
+                $targets[] = [
+                    'uid' => $baseUid,
+                    'base' => $baseUid,
+                    'locale' => null,
+                    'settings' => $settings,
+                ];
+            }
+        }
+
         if ($targets === []) {
             $io->warning('No matching indexes. Use --index or --class to filter. or --all?');
             return Command::SUCCESS;
         }
+
+        foreach ($targets as $t) {
+            $uid        = $t['uid'];
+            $settings   = $t['settings'];
+            $locale     = $t['locale'];
+
+            $io->section("Processing {$uid} (locale={$locale})");
+
+            if ($reset) {
+                $this->meili->reset($uid);
+            }
+
+            if ($force) {
+                $index = $this->meili->getOrCreateIndex(
+                    $uid,
+                    $settings['primaryKey'],
+                    wait: $wait
+                );
+                $task = $index->updateSettings($settings['schema']);
+                if ($wait) {
+                    $task = $task->wait();
+                }
+            } else {
+                $io->warning("Use --force to apply settings to {$uid}");
+            }
+        }
+
+        dd();
 
         if ($dumpSettings) {
             foreach ($targets as $uId) {

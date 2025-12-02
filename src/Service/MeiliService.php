@@ -68,6 +68,14 @@ final class MeiliService
 //        assert($this->meiliKey);
     }
 
+    public string $isMultiLingual { get => $this->config['multiLingual'] ; }
+
+    public function localizedUid(string $baseUid, string $locale): string
+    {
+        return "{$baseUid}_{$locale}";
+    }
+
+
 //    public function getAllIndexSettings(): array
 //    {
 //        $settingsWithActualIndexName = [];
@@ -269,6 +277,29 @@ final class MeiliService
         try {
             $index = $client->index($indexName);
 //            dd($index);
+            $task = $client->deleteIndex($indexName);
+            $task = $task->wait();
+            $this->logger->warning("Index " . $indexName . " has been deleted. " . $task->getStatus()->value);
+        } catch (ApiException $exception) {
+            if ($exception->errorCode == 'index_not_found') {
+                try {
+//                    $this->io()->info("Index $indexName does not exist.");
+                } catch (\Exception) {
+                    //
+                }
+//                    continue;
+            } else {
+                dd($exception);
+            }
+        }
+    }
+
+    public function purge(string $indexName)
+    {
+        $client = $this->getMeiliClient();
+        try {
+            $index = $client->index($indexName);
+            $task = $index->deleteAllDocuments();
             $task = $client->deleteIndex($indexName);
             $task = $task->wait();
             $this->logger->warning("Index " . $indexName . " has been deleted. " . $task->getStatus()->value);

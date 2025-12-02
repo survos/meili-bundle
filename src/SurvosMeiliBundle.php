@@ -199,6 +199,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->scalarNode('searchKey')->defaultValue('%env(default::MEILI_SEARCH_KEY)%')->end()
             ->scalarNode('meiliPrefix')->defaultValue('%env(default::MEILI_PREFIX)%')->end()
             ->booleanNode('passLocale')->defaultFalse()->end()
+            ->booleanNode('multiLingual')->info("turn on multi-lingual indexing")->defaultFalse()->end()
             ->integerNode('maxValuesPerFacet')->defaultValue(1000)->end()
 
             // Optional external tools, e.g. OpenAI playground, dashboards, etc.

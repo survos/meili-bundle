@@ -5,6 +5,7 @@ namespace Survos\MeiliBundle\Bridge\EasyAdmin;
 
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Config\MenuItem;
+use Survos\BabelBundle\Service\LocaleContext;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
@@ -13,6 +14,7 @@ final class MeiliEasyAdminMenuFactory
     public function __construct(
         private MeiliService $meiliService,
         private EntityManagerInterface $em,
+        private LocaleContext $localeContext,
         private UrlGeneratorInterface $urlGenerator,
     ) {
     }
@@ -67,9 +69,26 @@ final class MeiliEasyAdminMenuFactory
                         ])
                     )->setLinkTarget('_blank'),
 
+
                     // Semantic search variants
                     ...$this->getSemanticSearchItems($indexName, $meiliSetting),
                 ]);
+
+            if ($this->meiliService->isMultiLingual)
+            {
+                foreach ($this->localeContext->getEnabled() as $locale) {
+                    yield MenuItem::linkToUrl(
+                        'Full-Text Search ' . $locale,
+                        'fas fa-search',
+                        $this->urlGenerator->generate('meili_insta_locale', [
+                            '_locale' => $locale,
+                            'indexName' => $indexName,
+                        ])
+                    )->setLinkTarget('_blank');
+                }
+            }
+
+
         }
     }
 

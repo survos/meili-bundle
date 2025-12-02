@@ -8,6 +8,7 @@ use Meilisearch\Client;
 use Psr\Log\LoggerAwareInterface;
 use Psr\Log\LoggerAwareTrait;
 use Psr\Log\LoggerInterface;
+use Survos\BabelBundle\Service\LocaleContext;
 use Survos\MeiliBundle\Meili\MeiliTaskStatus;
 use Survos\MeiliBundle\Meili\MeiliTaskType;
 use Survos\MeiliBundle\Service\MeiliPayloadBuilder;
@@ -26,6 +27,7 @@ class MeiliBaseCommand extends Command implements LoggerAwareInterface
     use LoggerAwareTrait;
     public function __construct(
         public readonly MeiliService $meili,
+        protected ?LocaleContext $localeContext=null, // require if multiLingual: true
         protected ?ResolvedEmbeddersProvider $embeddersProvider=null,
         protected ?EntityManagerInterface $entityManager=null,
         protected ?NormalizerInterface $normalizer=null,
@@ -60,22 +62,6 @@ class MeiliBaseCommand extends Command implements LoggerAwareInterface
             }
             $names[] = $setting['prefixedName'];
         }
-        return $names;
-        $names = array_keys($this->meili->getRawIndexSettings());
-
-        if ($index) {
-            $names = array_filter($names, static fn($n) => $n === $index);
-            dump($names);
-        }
-        if ($class) {
-            $names = array_values(array_filter($names, function ($n) use ($class) {
-                dd($n, $class);
-                return ($this->indexEntities[$n] ?? null) === $class
-                    || str_ends_with($this->indexEntities[$n] ?? '', '\\' . ltrim($class, '\\'));
-            }));
-            dump($names);
-        }
-        dd($index, $class, $names);
         return $names;
     }
 

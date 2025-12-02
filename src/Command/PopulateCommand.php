@@ -4,16 +4,15 @@ declare(strict_types=1);
 namespace Survos\MeiliBundle\Command;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Jwage\PhpAmqpLibMessengerBundle\Transport\AmqpStamp;
 use Meilisearch\Endpoints\Indexes;
 use Psr\Log\LoggerInterface;
+use Survos\BabelBundle\Service\LocaleContext;
 use Survos\CoreBundle\Service\SurvosUtils;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
 use Survos\MeiliBundle\Service\DoctrinePrimaryKeyStreamer;
 use Survos\MeiliBundle\Service\MeiliPayloadBuilder;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\SettingsService;
-use Survos\MeiliBundle\Util\BabelLocaleScope;
 use Survos\MeiliBundle\Util\EmbedderConfig;
 use Survos\MeiliBundle\Util\ResolvedEmbeddersProvider;
 use Survos\MeiliBundle\Util\TextFieldResolver;
@@ -25,7 +24,6 @@ use Symfony\Component\Console\Helper\ProgressBar;
 use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
-use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\TransportNamesStamp;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
@@ -33,7 +31,6 @@ use Symfony\Component\Yaml\Yaml;
 
 #[AsCommand(
     name: 'meili:populate',
-//    aliases: ['meili:index'],
     description: 'Populate meili from a doctrine entity, could be per-locale'
 )]
 class PopulateCommand extends MeiliBaseCommand
@@ -48,18 +45,21 @@ class PopulateCommand extends MeiliBaseCommand
         protected ?LoggerInterface $logger,
         private TextFieldResolver $textFieldResolver,
         protected ResolvedEmbeddersProvider $resolvedEmbeddersProvider,
-//        #[Autowire('%kernel.project_dir%')]
-//        protected readonly string $projectDir,
-
-        protected ?NormalizerInterface $normalizer=null,
-        protected ?MeiliPayloadBuilder $payloadBuilder=null,
-
+        protected ?NormalizerInterface $normalizer = null,
+        protected ?MeiliPayloadBuilder $payloadBuilder = null,
+        protected ?LocaleContext $localeContext = null,
         #[Autowire('%kernel.enabled_locales%')] private array $enabledLocales = [],
         #[Autowire('%kernel.default_locale%')] private string $defaultLocale = 'en',
-        private ?BabelLocaleScope $localeScope = null, // optional (no-op if Babel not installed)
+        #[Autowire('%kernel.project_dir%')] ?string $projectDir = null,
     ) {
-
-        parent::__construct($meiliService,$resolvedEmbeddersProvider, $entityManager, $this->normalizer, $this->payloadBuilder);
+        parent::__construct(
+            meili: $meiliService,
+            embeddersProvider: $resolvedEmbeddersProvider,
+            entityManager: $entityManager,
+            normalizer: $this->normalizer,
+            payloadBuilder: $this->payloadBuilder,
+            projectDir: $projectDir,
+        );
     }
 
     /**
@@ -105,8 +105,8 @@ class PopulateCommand extends MeiliBaseCommand
         #[Option('Create/Update index settings before indexing', 'update-settings')]
         ?bool $updateSettings = null,
 
-        #[Option('Delete and recreate index settings (implies update-settings)', 'reset')]
-        ?bool $reset = null,
+        #[Option('Purge existing documents')]
+        ?bool $purge = null,
 
         #[Option('Fetch and queue documents for indexing', 'fetch')]
         ?bool $fetch = null,
@@ -129,22 +129,33 @@ class PopulateCommand extends MeiliBaseCommand
 
         #[Option('Comma-separated subset of locales to index (default: enabled_locales)', 'only-locales')]
         ?string $onlyLocales = null,
-
     ): int {
         $this->io = $io;
 
         $sync ??= true;
-        // default behaviors
-        $fetch ??= true; // unless explicitly turned off
-        $perLocale ??= (count($this->enabledLocales) > 0);
+        $fetch ??= true;
+        $wait ??= true;
+        $perLocale ??= (\count($this->enabledLocales) > 0);
 
+        $io->note(sprintf(
+            'populate: indexName=%s class=%s perLocale=%s onlyLocales=%s sync=%s',
+            $indexName ?? '<auto>',
+            $class ?? '<auto>',
+            $perLocale ? 'yes' : 'no',
+            $onlyLocales ?? '<all>',
+            $sync ? 'yes' : 'no'
+        ));
 
         // optional filter
         $filterArray = $filter ? (is_array($parsed = Yaml::parse($filter)) ? $parsed : null) : null;
 
         // normalize class
         if ($class && !class_exists($class)) {
-            $class = "App\\Entity\\$class";
+            $guess = "App\\Entity\\$class";
+            if (class_exists($guess)) {
+                $io->writeln(sprintf('Class "%s" not found, using "%s"', $class, $guess), SymfonyStyle::VERBOSITY_VERBOSE);
+                $class = $guess;
+            }
         }
         $all ??= true;
         if (!$class && !$all) {
@@ -157,84 +168,164 @@ class PopulateCommand extends MeiliBaseCommand
             ? array_values(array_filter(array_map('trim', explode(',', $onlyLocales))))
             : $this->enabledLocales;
 
-        $targets = $this->resolveTargets($indexName, $class, $perLocale ? $locales : null);
+        if ($this->meiliService->isMultiLingual) {
+            $io->writeln(sprintf(
+                'MultiLingual mode: enabledLocales=[%s]',
+                implode(', ', $this->enabledLocales)
+            ));
+        } else {
+            $io->writeln('MultiLingual mode: OFF');
+        }
 
+        $baseTargets = $this->resolveTargets($indexName, $class);
 
+        if ($baseTargets === []) {
+            $io->warning('No matching base targets (check indexName / class filters).');
+            return Command::SUCCESS;
+        }
 
-        foreach ($targets as $uId) {
-            {
-                $settings = $this->meiliService->getIndexSetting($uId);
-                    $this->io->title($uId);
+        $io->section('Resolved base targets');
+        foreach ($baseTargets as $baseUid) {
+            $io->writeln(sprintf('- %s', $baseUid));
+        }
 
-                    if ($reset) {
-                        if ($dry) {
-                            $io->error('you cannot have both --reset and --dry');
-                            return Command::FAILURE;
-                        }
-                        $task = $this->meiliService->reset($uId);
-                        $updateSettings = true;
-                    }
+        $targets = [];
+        foreach ($baseTargets as $baseUid) {
+            $settings    = $this->meiliService->getIndexSetting($baseUid);
+            $entityClass = $settings['class'];
 
-                    $index = $this->meiliService->getOrCreateIndex($uId, autoCreate: false);
-                    if (!$index) {
-                        $this->io->error("Index {$uId} not found, run meili:settings to create");
-                        return Command::FAILURE;
-                    }
-
-                    if ($fetch && !$dry) {
-                        $entityClass = $settings['class'];
-                        // Producer side: stream primary keys in batches; consumer will load+normalize with the same locale
-                        $runner = function () use ($entityClass,
-                            $index, $batchSize, $uId,
-                            $sync,
-                            $limit, $filterArray, $dump, $transport, $pk,
-                        ) {
-                            return $this->indexClass(
-                                class: $entityClass,
-                                index: $index,
-                                batchSize: $batchSize,
-                                indexName: $uId,
-                                limit: $limit ?? 0,
-                                filter: $filterArray,
-                                dump: $dump,
-                                primaryKey: $index->getPrimaryKey(),
-                                max: $limit,
-                                transport: $sync ? 'sync' : $transport,
-                                pk: $pk,
-                                locale: null, // $languageForIndex
-                            );
-                        };
-
-                        // If Babel is present, scope locale even while producing (mostly no-op here but consistent)
-                        $stats = $this->localeScope
-                            ? $this->localeScope->withLocale($languageForIndex, $runner)
-                            : $runner();
-
-                        $this->io->success($uId . ' Document count: ' . $stats['numberOfDocuments']);
-
-                        if ($wait) {
-                            $this->meiliService->waitUntilFinished($index);
-                        }
-                    }
-
-                    if ($this->io->isVeryVerbose()) {
-                        $stats = $index->stats();
-                        $this->io->title("$uId stats");
-                        $this->io->write(json_encode($stats, JSON_PRETTY_PRINT));
-                    }
-
-                    if ($this->io->isVerbose()) {
-                        $this->io->title("$uId settings");
-                        $this->io->write(json_encode($index->getSettings(), JSON_PRETTY_PRINT));
-                    }
-
-                    $this->io->success($this->getName() . ' ' . $entityClass . ' finished indexing to ' . $uId);
+            if ($perLocale && $this->meiliService->isMultiLingual && $locales) {
+                foreach ($locales as $locale) {
+                    $localizedUid = $this->meiliService->localizedUid($baseUid, $locale);
+                    $targets[] = [
+                        'uid'    => $localizedUid,
+                        'class'  => $entityClass,
+                        'locale' => $locale,
+                        'base'   => $baseUid,
+                    ];
                 }
+            } else {
+                $targets[] = [
+                    'uid'    => $baseUid,
+                    'class'  => $entityClass,
+                    'locale' => null,
+                    'base'   => $baseUid,
+                ];
             }
+        }
+
+        $io->section('Expanded targets (per-locale)');
+        foreach ($targets as $t) {
+            $io->writeln(sprintf(
+                '- base=%s uid=%s class=%s locale=%s',
+                $t['base'],
+                $t['uid'],
+                $t['class'],
+                $t['locale'] ?? '<default>'
+            ));
+        }
+
+        if ($this->meiliService->isMultiLingual && !$this->localeContext) {
+            $io->warning('MultiLingual is ON but LocaleContext is not available (no BabelBundle?). Locale scoping will NOT be applied.');
+        }
+
+        foreach ($targets as $t) {
+            $uid    = $t['uid'];
+            $class  = $t['class'];
+            $locale = $t['locale'];
+
+            $io->section(sprintf(
+                'Indexing target uid=%s class=%s locale=%s',
+                $uid,
+                $class,
+                $locale ?? '<default>'
+            ));
+
+            $index = $this->meiliService->getOrCreateIndex($uid);
+
+            if ($purge && !$dry) {
+                $io->warning(sprintf('Purging all documents from index "%s"', $uid));
+                $index->deleteAllDocuments();
+            }
+
+            if (!$fetch || $dry) {
+                $io->note(sprintf(
+                    'Skipping fetch/index (fetch=%s, dry=%s) for uid=%s',
+                    $fetch ? 'true' : 'false',
+                    $dry ? 'true' : 'false',
+                    $uid
+                ));
+                continue;
+            }
+
+            // capture locals for closure
+            $runner = function () use (
+                $class,
+                $index,
+                $batchSize,
+                $uid,
+                $sync,
+                $limit,
+                $filterArray,
+                $dump,
+                $transport,
+                $pk,
+                $locale
+            ) {
+                $this->io->writeln(sprintf(
+                    'runner(): class=%s uid=%s locale=%s batchSize=%d limit=%s transport=%s',
+                    $class,
+                    $uid,
+                    $locale ?? '<default>',
+                    $batchSize,
+                    $limit === null ? '<null>' : (string) $limit,
+                    $sync ? 'sync' : ($transport ?? '<null>')
+                ), SymfonyStyle::VERBOSITY_VERBOSE);
+
+                return $this->indexClass(
+                    class:      $class,
+                    index:      $index,
+                    batchSize:  $batchSize,
+                    indexName:  $uid,
+                    limit:      $limit ?? 0,
+                    filter:     $filterArray,
+                    dump:       $dump,
+                    primaryKey: $index->getPrimaryKey(),
+                    max:        $limit,
+                    transport:  $sync ? 'sync' : $transport,
+                    pk:         $pk,
+                    locale:     $locale,
+                );
+            };
+
+            if ($locale && $this->localeContext) {
+                $io->writeln(sprintf(
+                    'Using LocaleContext->run(%s) for uid=%s',
+                    $locale,
+                    $uid
+                ));
+                $stats = $this->localeContext->run($locale, $runner);
+            } else {
+                if ($locale && !$this->localeContext) {
+                    $io->warning(sprintf(
+                        'Locale "%s" requested but LocaleContext is missing; running runner() without Babel scoping.',
+                        $locale
+                    ));
+                }
+                $stats = $runner();
+            }
+
+            $io->success(sprintf(
+                'Index "%s" locale=%s: %d documents processed.',
+                $uid,
+                $locale ?? '<default>',
+                $stats['numberOfDocuments'] ?? 0
+            ));
+        }
+
         $this->io->success($this->getName() . ' complete.');
         return self::SUCCESS;
     }
-
 
     /**
      * Producer: stream entity primary keys and dispatch BatchIndexEntitiesMessage
@@ -255,13 +346,23 @@ class PopulateCommand extends MeiliBaseCommand
         ?string $pk = null,
         ?string $locale = null,
     ): array {
+        $indexName ??= $index->getUid();
+
+        $this->io->writeln(sprintf(
+            'indexClass(): class=%s index=%s locale=%s batchSize=%d limit=%d transport=%s',
+            $class,
+            $indexName,
+            $locale ?? '<default>',
+            $batchSize,
+            $limit,
+            $transport ?? '<null>'
+        ), SymfonyStyle::VERBOSITY_VERBOSE);
+
         $stamps = [];
         if ($transport) {
             $stamps[] = new TransportNamesStamp($transport);
-        } else {
-            // default to amqp queue named "meili"
-            $stamps[] = new AmqpStamp('meili');
         }
+
         if ($limit && ($batchSize > $limit)) {
             $batchSize = $limit;
         }
@@ -273,13 +374,25 @@ class PopulateCommand extends MeiliBaseCommand
         $generator = $streamer->stream($batchSize);
 
         // progress estimate
-        $approx = $this->meiliService->getApproxCount($class) ?: $this->entityManager->getRepository($class)->count();
+        $approx = $this->meiliService->getApproxCount($class)
+            ?: $this->entityManager->getRepository($class)->count();
         $progressBar = new ProgressBar($this->io, $approx);
         $progressBar->start();
-        $this->io->title($class);
+        $this->io->title(sprintf('Indexing %s into %s (locale=%s)', $class, $indexName, $locale ?? '<default>'));
 
         foreach ($generator as $chunk) {
-            $progressBar->advance(\count($chunk));
+            $count = \count($chunk);
+            $progressBar->advance($count);
+
+            if ($this->io->isVeryVerbose()) {
+                $this->io->writeln(sprintf(
+                    'Dispatching chunk of %d ids to index=%s locale=%s',
+                    $count,
+                    $indexName,
+                    $locale ?? '<default>'
+                ));
+            }
+
             $message = new BatchIndexEntitiesMessage(
                 $class,
                 entityData: $chunk,
@@ -289,13 +402,18 @@ class PopulateCommand extends MeiliBaseCommand
                 locale: $locale,
                 indexName: $indexName,
             );
-            // Pass locale + index name so consumer writes to correct index & scopes Babel before normalization
-            $this->messageBus->dispatch(
-                $message,
-                $stamps
-            );
+
+            $this->messageBus->dispatch($message, $stamps);
 
             if ($max && ($progressBar->getProgress() >= $max)) {
+                if ($this->io->isVeryVerbose()) {
+                    $this->io->writeln(sprintf(
+                        'Reached max=%d, stopping producer loop for index=%s locale=%s',
+                        $max,
+                        $indexName,
+                        $locale ?? '<default>'
+                    ));
+                }
                 break;
             }
         }
@@ -319,8 +437,8 @@ class PopulateCommand extends MeiliBaseCommand
     public function showIndexSettings(Indexes $index): void
     {
         if ($this->io->isVeryVerbose()) {
-            $table=  new Table($this->io);
-            $table->setHeaders(['Attributes','Values']);
+            $table = new Table($this->io);
+            $table->setHeaders(['Attributes', 'Values']);
             try {
                 $settings = $index->getSettings();
                 foreach ($settings as $var => $val) {
