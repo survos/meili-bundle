@@ -1,0 +1,192 @@
+# MeiliBundle UI translations (English, ICU format)
+# Domain: meili
+
+# Generic labels
+dashboard: 'Admin Panel'
+semantic_label: "Semantic: {embedder}"
+index: Index
+indexes: Indexes
+index_name: Index name
+index_uid: Index UID
+index_settings: Index settings
+index_status: Index status
+
+document: Document
+documents: Documents
+field: Field
+fields: Fields
+facet: Facet
+facets: Facets
+filter: Filter
+filters: Filters
+search: Search
+search_query: Search query
+result: Result
+results: Results
+hit: Hit
+hits: Hits
+
+# Semantic / vector
+semantic: Semantic
+semantic_search: Semantic search
+semantic_ratio: Semantic ratio
+semantic_boost: Semantic boost
+semantic_score: Semantic score
+embedding: Embedding
+embeddings: Embeddings
+embedder: Embedder
+embedders: Embedders
+vector: Vector
+vectors: Vectors
+
+# Locale / language
+locale: Locale
+locales: Locales
+language: Language
+languages: Languages
+default_locale: Default locale
+current_locale: Current locale
+per_locale_indexing: Per-locale indexing
+
+# Buttons / actions
+apply: Apply
+cancel: Cancel
+reset: Reset
+refresh: Refresh
+update: Update
+details: Details
+back: Back
+next: Next
+previous: Previous
+
+update_settings: Update settings
+reset_settings: Reset settings
+show_settings: Show settings
+test_settings: Test settings
+
+populate_index: Populate index
+repopulate_index: Repopulate index
+purge_documents: Purge documents
+delete_index: Delete index
+create_index: Create index
+
+run_search: Run search
+clear_filters: Clear filters
+clear_query: Clear query
+copy_curl: Copy cURL
+copy_json: Copy JSON
+
+# Sections in the Meili UI
+filterable: Filterable
+filterable_fields: Filterable fields
+searchable_fields: Searchable fields
+sortable_fields: Sortable fields
+displayed_fields: Displayed fields
+ranking_rules: Ranking rules
+semantic_section: Semantic configuration
+debug_section: Debug information
+stats_section: Index statistics
+
+# Status / messages
+no_results: No results
+no_filters: No filters configured.
+no_filterable_fields: No filterable fields configured.
+no_searchable_fields: No searchable fields configured.
+no_sortable_fields: No sortable fields configured.
+no_displayed_fields: No displayed fields configured.
+
+loading: Loading…
+updating: Updating…
+completed: Completed
+failed: Failed
+queued: Queued
+processing: Processing
+
+# Counts (ICU pluralization)
+documents_count: >
+  {count, plural,
+    =0 {No documents}
+    one {# document}
+    other {# documents}
+  }
+
+fields_count: >
+  {count, plural,
+    =0 {No fields}
+    one {# field}
+    other {# fields}
+  }
+
+indexes_count: >
+  {count, plural,
+    =0 {No indexes}
+    one {# index}
+    other {# indexes}
+  }
+
+hits_count: >
+  {count, plural,
+    =0 {No hits}
+    one {# hit}
+    other {# hits}
+  }
+
+facets_count: >
+  {count, plural,
+    =0 {No facets}
+    one {# facet}
+    other {# facets}
+  }
+
+filters_count: >
+  {count, plural,
+    =0 {No filters}
+    one {# filter}
+    other {# filters}
+  }
+
+embedders_count: >
+  {count, plural,
+    =0 {No embedders}
+    one {# embedder}
+    other {# embedders}
+  }
+
+# Settings / schema-related
+primary_key: Primary key
+primary_key_name: Primary key name
+searchable_attributes: Searchable attributes
+filterable_attributes: Filterable attributes
+sortable_attributes: Sortable attributes
+displayed_attributes: Displayed attributes
+
+ranking_score_threshold: Ranking score threshold
+typo_tolerance: Typo tolerance
+synonyms: Synonyms
+stop_words: Stop words
+distinct_attribute: Distinct attribute
+
+# Debug / developer
+debug_request: Debug request
+debug_response: Debug response
+raw_settings: Raw settings
+raw_schema: Raw schema
+raw_payload: Raw payload
+tasks: Tasks
+task_uid: Task UID
+task_status: Task status
+task_type: Task type
+
+# Time / duration
+duration_ms: "{value} ms"
+duration_seconds: "{value} s"
+last_updated_at: Last updated at
+created_at: Created at
+
+# Paging / navigation
+page: Page
+page_of_total: "Page {current} of {total}"
+per_page: Per page
+hits_per_page: Hits per page
+show_more: Show more
+show_less: Show less

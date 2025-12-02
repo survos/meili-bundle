@@ -7,6 +7,7 @@ use ReflectionClass;
 use Survos\CoreBundle\HasAssetMapperInterface;
 use Survos\CoreBundle\Traits\HasAssetMapperTrait;
 use Survos\MeiliBundle\Api\Filter\MultiFieldSearchFilter;
+use Survos\MeiliBundle\Bridge\EasyAdmin\MeiliEasyAdminDashboardHelper;
 use Survos\MeiliBundle\Command\ExportCommand;
 use Survos\MeiliBundle\Command\FastSyncIndexesCommand;
 use Survos\MeiliBundle\Command\IterateIndexesCommand;
@@ -123,6 +124,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         }
 
         foreach ([IndexSyncService::class,
+                     MeiliEasyAdminDashboardHelper::class,
                      MeiliNdjsonUploader::class,
                      MeiliFieldHeuristic::class,
                      SyncIndexesCommand::class,

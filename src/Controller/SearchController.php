@@ -17,8 +17,6 @@ use Symfony\Component\Routing\RouterInterface;
 #[Route('/search')]
 class SearchController extends AbstractController
 {
-    protected $helper;
-
     public function __construct(
         #[Autowire('%kernel.project_dir%/templates/js/')]  private string $jsTemplateDir,
         private readonly MeiliService $meiliService,
@@ -37,77 +35,77 @@ class SearchController extends AbstractController
         ?string $q = null,
         bool $useProxy = false,
     ): Response|array {
-        $locale = $request->getLocale();
+        // Treat route parameter as the *base* index name (compiler-pass key / settings key)
+        $baseIndexName = $indexName;
+        $locale        = $request->getLocale();
 
-        if ($this->meiliService->passLocale) {
-            $indexName .= "_$locale";
+        // Resolve the actual Meilisearch UID once, based on bundle configuration
+        if ($this->meiliService->isMultiLingual) {
+            $meiliIndexUid = $this->meiliService->localizedUid($baseIndexName, $locale);
+        } else {
+            $meiliIndexUid = $baseIndexName;
         }
 
-        $index    = $this->meiliService->getIndexEndpoint($indexName);
+        // Meili endpoint is always referenced by UID
+        $index = $this->meiliService->getIndexEndpoint($meiliIndexUid);
         try {
             $settings = $index->getSettings();
         } catch (\Exception $exception) {
-            dd($exception, $indexName, $this->meiliService->getMeiliClient());
+            dd($exception, $meiliIndexUid, $this->meiliService->getMeiliClient());
         }
 
-        $raw          = $this->meiliService->getIndexSetting($indexName);
-        $templateName = $raw['rawName'] ?? $indexName;
+        // Index configuration comes from the *base* index settings
+        $indexConfig = $this->meiliService->getIndexSetting($baseIndexName);
+        assert($indexConfig, "Missing config for base index {$baseIndexName}");
 
-        $sorting = [];
-        $sorting[] = ['label' => 'Relevance', 'value' => $indexName];
+        $templateName = $indexConfig['rawName'] ?? $baseIndexName;
+
+        $sorting   = [];
+        $sorting[] = ['label' => 'Relevance', 'value' => $meiliIndexUid];
         foreach (($settings['sortableAttributes'] ?? []) as $attr) {
             foreach (['asc', 'desc'] as $dir) {
                 $sorting[] = [
                     'label' => sprintf('%s %s', $attr, $dir),
-                    'value' => sprintf('%s:%s:%s', $indexName, $attr, $dir),
+                    'value' => sprintf('%s:%s:%s', $meiliIndexUid, $attr, $dir),
                 ];
             }
         }
 
-        $indexConfig = $this->meiliService->getIndexSetting($indexName);
-        assert($indexConfig, "Missing config for $indexName");
         $stats = $index->stats();
-//        $results = $index->search(null, [
-//            'facets' => array_keys($indexConfig['facets'] ?? []),
-//        ]);
 
         $params = [
-            'server'           => $useProxy
+            // Server / API key
+            'server'      => $useProxy
                 ? $this->router->generate('meili_proxy', [], UrlGeneratorInterface::ABSOLUTE_URL)
                 : $this->meiliService->getHost(),
-            'apiKey'           => $this->meiliService->getPublicApiKey(),
-            'indexName'        => $indexName,
-            'indexConfig'      => $indexConfig,
-            'settings'         => $settings,
-            'allSettings'      => $this->meiliService->getAllSettings(),
-            'primaryKey'       => $indexConfig['primaryKey'],
-            'q'                => $q,
-            'facets'           => $settings['filterableAttributes'] ?? [],
-            'sorting'          => $sorting,
-            'endpoint'         => null,
-            'embedder'         => $embedder,
-            'templateName'     => $templateName,
-            'related'          => [],
-            'indexStats' => $stats,
-            // NEW: turn off type-as-you-type when an embedder is active
-            'searchAsYouType'  => $embedder === null,
+            'apiKey'      => $this->meiliService->getPublicApiKey(),
+
+            // Index identifiers
+            'indexName'     => $meiliIndexUid,  // actual Meili UID
+            'baseIndexName' => $baseIndexName,  // base key for settings / config
+
+            // Settings / config
+            'indexConfig' => $indexConfig,
+            'settings'    => $settings,
+            'allSettings' => $this->meiliService->getAllSettings(),
+            'primaryKey'  => $indexConfig['primaryKey'],
+
+            // UI state
+            'q'           => $q,
+            'facets'      => $settings['filterableAttributes'] ?? [],
+            'sorting'     => $sorting,
+            'endpoint'    => null,
+            'embedder'    => $embedder,
+            'templateName'=> $templateName,
+            'related'     => [],
+            'indexStats'  => $stats,
+
+            // Turn off type-as-you-type when an embedder is active
+            'searchAsYouType' => $embedder === null,
         ];
 
         return $params;
     }
-
-//    #[Route('/old/template/{templateName}', name: 'OLD_meili_template')]
-//    public function jsTemplate(string $templateName): Response|array
-//    {
-//        $templateName = preg_replace('/_..$/', '', $templateName);
-//        $jsTwigTemplate = $this->jsTemplateDir . $templateName . '.html.twig';
-//        if (!file_exists($jsTwigTemplate)) {
-//            // fix: correct variable name in message
-//            return new Response("Missing $jsTwigTemplate template", 404);
-//        }
-//        $template = file_get_contents($jsTwigTemplate);
-//        return new Response($template);
-//    }
 
     #[AdminRoute(path: '/show/{indexName}/{pk}', name: 'meili_show_liquid')]
     public function showIndex(AdminContext $context, string $indexName): Response

@@ -18,9 +18,10 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Symfony\UX\Chartjs\Builder\ChartBuilderInterface;
 use Symfony\UX\Chartjs\Model\Chart;
+use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractDashboardController;
 
 #[Route('/meili')]
-class MeiliController extends AbstractController
+class MeiliController extends AbstractDashboardController // AbstractController
 {
     protected $helper;
 

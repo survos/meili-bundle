@@ -3,7 +3,6 @@
 namespace Survos\MeiliBundle\Controller;
 
 use Adbar\Dot;
-use cebe\openapi\Reader;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminRoute;
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use Survos\MeiliBundle\Service\MeiliService;
@@ -12,7 +11,6 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapQueryParameter;
-use Symfony\Component\PropertyAccess\PropertyAccessor;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\UX\Chartjs\Builder\ChartBuilderInterface;
@@ -140,10 +138,10 @@ class MeiliAdminController extends AbstractController
     " JQUERY_INTEGRATION": false,
     " TEMPLATE_ONLY_GLIMMER_COMPONENTS": true
   },
-  "APP": { 
+  "APP": {
     "meilisearch": { "url": "http://localhost:7700", "key": "MASTER_KEY" },
-    "name": "meiliadmin", 
-    "version": "0.0.0+bd7f85d7" 
+    "name": "meiliadmin",
+    "version": "0.0.0+bd7f85d7"
   }
 }
 END

@@ -1,5 +1,6 @@
+{# meili-bundle/templates/ez/dashboard.html.twig #}
 {% extends '@EasyAdmin/page/content.html.twig' %}
-
+{% trans_default_domain 'meili' %}
 {% block title %}Search Dashboard{% endblock %}
 
 {% block head_stylesheets %}
@@ -37,8 +38,11 @@
 {% endblock %}
 
 {% block page_content %}
+
+{#    {{ ea.templatePath('layout') }}#}
+{#    {{ dump(ea) }}#}
     <div class="container-fluid p-0">
-        <h1 class="mb-3">Search Indexes</h1>
+        <h1 class="mb-3">{{ 'indexes'|trans }}</h1>
 
         <div class="row g-4">
             {% for indexName, settings in settings %}
@@ -91,12 +95,13 @@
                                 <div class="mb-4">
                                     <h6 class="text-muted mb-2">
                                         {{ ux_icon('mdi:filter') }}
-                                        Filterable Fields
+                                        {{ 'filterable'|trans }}
                                     </h6>
                                     <div class="d-flex flex-wrap gap-2">
+                                        {% set domain = settings.rawName %}
                                         {% for filterField in settings.schema.filterableAttributes %}
-                                            <span class="badge bg-primary-subtle text-dark field-badge">
-                                                {{ filterField }}
+                                            <span class="badge bg-primary-subtle text-dark field-badge" title="{{ '%s.description'|format(filterField)|trans(domain: domain) }}">
+                                                {{ '%s.label'|format(filterField)|trans(domain: domain) }}
                                             </span>
                                         {% endfor %}
                                     </div>
@@ -125,7 +130,7 @@
                         </div>
 
                         <div class="card-footer text-muted small">
-                            Index: <code>{{ indexName }}</code>
+                            {{ 'index'|trans }}: <code>{{ indexName }}</code>
                         </div>
                     </div>
                 </div>

@@ -766,5 +766,14 @@ ORDER BY n.nspname, c.relname;");
         }
     }
 
+    public function resolveUid(string $baseIndexName, ?string $locale): string
+    {
+        if (!$this->isMultiLingual || !$this->passLocale || !$locale) {
+            return $baseIndexName;
+        }
+
+        return $this->localizedUid($baseIndexName, $locale);
+    }
+
 }
 
