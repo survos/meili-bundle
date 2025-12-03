@@ -33,10 +33,11 @@
             {% set schema = settings.schema %}
             <tr>
                 <td>
-                    <a href="{{ path('meili_admin_meili_show_index', {
-                        indexName: name}) }}">
-                        {{ name }}
-                    </a>
+                    @todo: show_index with route!
+{#                    <a href="{{ path('meili_admin_meili_show_index', {#}
+{#                        indexName: name}) }}">#}
+{#                        {{ name }}#}
+{#                    </a>#}
                     <a href="{{ path('meili_insta', {indexName: name}) }}">SEARCH</a>
                 </td>
                 {% for x in ['displayed','filterable','searchable'] %}

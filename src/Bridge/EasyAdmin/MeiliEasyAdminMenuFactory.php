@@ -6,11 +6,13 @@ namespace Survos\MeiliBundle\Bridge\EasyAdmin;
 use EasyCorp\Bundle\EasyAdminBundle\Config\MenuItem;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use function Symfony\Component\Translation\t;
 
 final class MeiliEasyAdminMenuFactory
 {
     public function __construct(
         private readonly MeiliService $meiliService,
+        private MeiliEasyAdminDashboardHelper $dashboardHelper,
         private readonly UrlGeneratorInterface $urlGenerator,
     ) {
     }
@@ -20,12 +22,12 @@ final class MeiliEasyAdminMenuFactory
      *
      * @return iterable<MenuItem>
      */
-    public function createIndexMenus(): iterable
+    public function createIndexMenus(string $routePrefix): iterable
     {
         foreach ($this->meiliService->settings as $indexName => $meiliSettings) {
             $label = $meiliSettings['label'] ?? $indexName;
 
-            $subItems = $this->createIndexSubItems($indexName, $meiliSettings);
+            $subItems = $this->createIndexSubItems($indexName, $meiliSettings, $routePrefix);
 
             yield MenuItem::subMenu($label, 'fas fa-database')
                 ->setSubItems($subItems);
@@ -38,27 +40,34 @@ final class MeiliEasyAdminMenuFactory
      * @param array<string,mixed> $meiliSettings
      * @return MenuItem[]
      */
-    private function createIndexSubItems(string $indexName, array $meiliSettings): array
+    private function createIndexSubItems(string $indexName, array $meiliSettings, string $routePrefix): array
     {
         $items = [];
 
         // Overview page inside admin (your showIndex route)
         $items[] = MenuItem::linkToRoute(
-            'overview',
-            'fas fa-eye',
-            'meili_show_index',
+            t('action.detail', domain: 'EasyAdminBundle'),
+            $this->dashboardHelper->getIcon('action.detail'),
+            $routePrefix . '_show_index',
             ['indexName' => $indexName]
         );
 
+        $items[] = MenuItem::linkToRoute(
+            t('field.text_editor.view_content', domain: 'EasyAdminBundle'),
+            $this->dashboardHelper->getIcon('browse'),
+            sprintf('%s_%s_index', $routePrefix, $meiliSettings['rawName']),
+        );
+
+
         // Default instant search view (non-semantic)
         $items[] = MenuItem::linkToRoute(
-            'instant_search',
-            'fas fa-search',
+            t('action.search', domain: 'EasyAdminBundle'),
+            $this->dashboardHelper->getIcon('instant_search'),
             'meili_insta',
             [
                 'indexName' => $meiliSettings['prefixedName'] ?? $indexName,
             ]
-        );
+        )->setLinkTarget('_blank');
 
         // Semantic variations (this is your old getSemanticSearchItems logic)
         $items = array_merge(

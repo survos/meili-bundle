@@ -36,6 +36,10 @@ class MeiliBaseCommand extends Command implements LoggerAwareInterface
         protected readonly ?string $projectDir=null,
 //        protected ?LoggerInterface $logger=null,
     ) {
+        if ($this->meiliService->isMultiLingual && $this->localeContext === null) {
+            throw new \LogicException('LocaleContext is required when MultiLingual mode is enabled. Install survos/babel-bundle.');
+        }
+
         parent::__construct();
     }
 

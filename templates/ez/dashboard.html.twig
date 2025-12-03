@@ -59,9 +59,9 @@
                         <div class="card-body">
                             {# Index Management #}
                             <div class="mb-4">
-                                <a href="{{ path('meili_admin_meili_show_index', {indexName: indexName}) }}"
+                                <a href="{{ path(prefix ~ '_show_index', {indexName: indexName}) }}"
                                    class="btn btn-secondary w-100 justify-content-center">
-{#                                    {{ ux_icon('oui:nav-overview') }}#}
+                                    {{ ux_icon('oui:nav-overview') }}
                                     Index Details
                                 </a>
                             </div>
@@ -70,13 +70,16 @@
                             <div class="mb-4">
                                 <h6 class="text-muted mb-2">
 {#                                    {{ ux_icon('mdi:magnify-expand') }}#}
-                                    Text/Facet Search
+                                    {{ 'filter.title'|trans(domain: 'EasyAdminBundle') }}
+                                    {{ 'action.search'|trans(domain: 'EasyAdminBundle') }}
                                 </h6>
                                 <a href="{{ path('meili_insta', {indexName: indexName}) }}"
                                    target="_blank"
                                    class="btn btn-secondary w-100 mb-2 justify-content-center">
 {#                                    {{ ux_icon('mdi:search') }}#}
-                                    Open Search {{ indexName }}
+                                    {{ 'action.search'|trans(domain: 'EasyAdminBundle') }}
+                                    {{ indexName }}
+
                                 </a>
 
                                 {% if settings.schema.searchableAttributes|length > 0 %}
@@ -95,7 +98,7 @@
                                 <div class="mb-4">
                                     <h6 class="text-muted mb-2">
                                         {{ ux_icon('mdi:filter') }}
-                                        {{ 'filterable'|trans }}
+                                        {{ 'filter.title'|trans(domain: 'EasyAdminBundle') }}
                                     </h6>
                                     <div class="d-flex flex-wrap gap-2">
                                         {% set domain = settings.rawName %}
@@ -113,7 +116,7 @@
                                 <div>
                                     <h6 class="text-muted mb-2">
                                         {{ ux_icon('fluent:brain-circuit-20-filled') }}
-                                        Semantic Search
+                                        {{ 'action.search'|trans(domain: 'EasyAdminBundle') }}
                                     </h6>
                                     <div class="d-flex gap-2">
                                         {% for embedder in settings.embedders %}

@@ -20,7 +20,7 @@ use Symfony\UX\Chartjs\Builder\ChartBuilderInterface;
 use Symfony\UX\Chartjs\Model\Chart;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractDashboardController;
 
-#[Route('/meili')]
+//#[Route('/meili')]
 class MeiliController extends AbstractDashboardController // AbstractController
 {
     protected $helper;
@@ -33,7 +33,7 @@ class MeiliController extends AbstractDashboardController // AbstractController
 //        $this->helper = $helper;
     }
 
-    #[AdminRoute(path: '/index/overview/{indexName}', name: 'meili_show_index')]
+    #[AdminRoute(path: '/index/overview/{indexName}', name: 'show_index')]
     public function showIndex(
         AdminContext $context,
         string $indexName,

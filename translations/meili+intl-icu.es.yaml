@@ -1,0 +1,5 @@
+# MeiliBundle UI translations (English, ICU format)
+# Domain: meili
+
+# Generic labels
+dashboard: 'panel administrativa'

@@ -13,27 +13,42 @@ final class MeiliEasyAdminDashboardHelper
         private readonly MeiliService $meiliService,
         #[Autowire('%kernel.enabled_locales%')]
         private readonly array $enabledLocales = [],
+        // idea: we could configure the icons in survos_meili to override font awesome
     ) {
+    }
+
+    public function getIcon(string $key): string
+    {
+        $icons = [
+            'home' => 'fa fa-home',
+            'browse' => 'fas fa-list',
+            'instant_search' => 'fa-brands fa-searchengin',
+            'action.detail' => 'fa fa-eye',
+            'field.text_editor.view_content' => 'fa fa-cogs',
+        ];
+        return $icons[$key] ?? 'fa fa-bug';
+
     }
 
     public function configureDashboard(Dashboard $dashboard): Dashboard
     {
         return $dashboard
-            // translations live in the bundle
-            ->setTranslationDomain('meili')
+            // translations live in the bundle, but are usually overwritten by the app translations (field names, etc.)
+//            ->setTranslationDomain('meili')
             ->setLocales($this->enabledLocales)
             ->setTitle('Meili Dashboard');
     }
 
     public function getDashboardTemplate(): string
     {
-        // bundle-owned EasyAdmin dashboard template
+        // bundle-owned EasyAdmin dashboard template.  default translation domain is meili
         return '@SurvosMeili/ez/dashboard.html.twig';
     }
 
-    public function getDashboardParameters(): array
+    public function getDashboardParameters(string $dashboardPrefix): array
     {
         return [
+            'prefix' => $dashboardPrefix,
             'settings' => $this->meiliService->settings,
         ];
     }

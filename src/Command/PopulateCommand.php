@@ -41,18 +41,19 @@ class PopulateCommand extends MeiliBaseCommand
         protected ?EntityManagerInterface $entityManager,
         private MessageBusInterface $messageBus,
         private SettingsService $settingsService,
-        private MeiliService $meiliService,
+        protected MeiliService $meiliService,
         protected ?LoggerInterface $logger,
         private TextFieldResolver $textFieldResolver,
         protected ResolvedEmbeddersProvider $resolvedEmbeddersProvider,
         protected ?NormalizerInterface $normalizer = null,
         protected ?MeiliPayloadBuilder $payloadBuilder = null,
-        protected ?LocaleContext $localeContext = null,
+        ?LocaleContext $localeContext = null,
         #[Autowire('%kernel.enabled_locales%')] private array $enabledLocales = [],
         #[Autowire('%kernel.default_locale%')] private string $defaultLocale = 'en',
         #[Autowire('%kernel.project_dir%')] ?string $projectDir = null,
     ) {
         parent::__construct(
+            localeContext: $localeContext,
             meili: $meiliService,
             embeddersProvider: $resolvedEmbeddersProvider,
             entityManager: $entityManager,
@@ -311,6 +312,8 @@ class PopulateCommand extends MeiliBaseCommand
                         'Locale "%s" requested but LocaleContext is missing; running runner() without Babel scoping.',
                         $locale
                     ));
+                    dump($this->localeContext);
+                    assert(false);
                 }
                 $stats = $runner();
             }
