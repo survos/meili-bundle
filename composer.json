@@ -44,7 +44,9 @@
         "survos/babel-bundle": "^2.0",
         "yethee/tiktoken": "^1.0",
         "liquid/liquid": "^1.4",
-        "easycorp/easyadmin-bundle": "^4.26"
+        "easycorp/easyadmin-bundle": "^4.26",
+        "twig/intl-extra": "^3.22",
+        "twig/extra-bundle": "^3.22"
     },
     "suggest": {
         "api-platform/core": "Required for admin dashboard integration",

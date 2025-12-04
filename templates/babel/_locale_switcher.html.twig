@@ -2,13 +2,14 @@
 <div class="dropdown meili-locale-switcher">
     <a class="btn btn-sm btn-light dropdown-toggle" data-bs-toggle="dropdown" href="#">
         🌐 {{ currentLocale|upper }}
+        {{ currentLocale|language_name }}
     </a>
     <ul class="xdropdown-menu xdropdown-menu-end ">
         {% for locale in locales %}
             <li>
                 <a class="xxdropdown-item {{ locale == currentLocale ? 'active' : '' }}"
                    href="{{ path(routeName, routeParams|merge({'_locale': locale})) }}">
-                    {{ locale|upper }}
+                    {{ locale|language_name(locale) }}
                 </a>
             </li>
         {% endfor %}
