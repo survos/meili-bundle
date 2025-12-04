@@ -114,8 +114,6 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
             }
         }
 
-        dd();
-
         if ($dumpSettings) {
             foreach ($targets as $uId) {
                 // internal, from compiler pass, no network call
@@ -140,7 +138,7 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 
 // constructor-inject ResolvedEmbeddersProvider $embedders
 
-
+        if (false)
         foreach ($targets as $uId) {
 
             $io->section(sprintf('Processing index "%s"', $uId));
