@@ -3,13 +3,15 @@
 <div class="meili-bar">
   <a href="/">/</a>
   {% for indexName, indexSettings in allSettings|default([]) %}
+      {# @todo: handle locale #}
       <li>
         <a href="{{ path('meili_insta', {indexName: indexSettings.prefixedName}) }}">
           {{ ux_icon('mdi:search') }}
           {{ indexName }}</a>
       </li>
   {% endfor %}
-  <div class="meili-bar-left">
+
+      <div class="meili-bar-left">
     {% if indexName %}
       <span class="meili-chip">
         Index: <strong>{{ indexName }}</strong>
@@ -43,8 +45,13 @@
       {% import '@SurvosMeili/babel/_locale_switcher.html.twig' as Babel %}
 
       {# Determine current route and params dynamically #}
-      {% set _route = app.request.attributes.get('_route') %}
-      {% set _params = app.request.attributes.get('_route_params') %}
+
+      {% set _route = 'meili_insta_locale' %}
+      {% set _params = {
+          indexName: baseIndexName
+      } %}
+{#      {% set _route = app.current_route %}#}
+{#      {% set _params = app.current_route_parameters %}#}
 
       {{ Babel.locale_switcher(
           locales = app.enabled_locales,
@@ -53,6 +60,5 @@
           routeParams = _params
       ) }}
 
-      @locale?
   </div>
 </div>
