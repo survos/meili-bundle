@@ -6,6 +6,7 @@ namespace Survos\MeiliBundle\Bridge\EasyAdmin;
 use EasyCorp\Bundle\EasyAdminBundle\Config\MenuItem;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use Zenstruck\Bytes;
 use function Symfony\Component\Translation\t;
 
 final class MeiliEasyAdminMenuFactory
@@ -26,10 +27,14 @@ final class MeiliEasyAdminMenuFactory
     {
         foreach ($this->meiliService->settings as $indexName => $meiliSettings) {
             $label = $meiliSettings['label'] ?? $indexName;
+            $entityClass = $meiliSettings['class'];
+            $count = $this->meiliService->getApproxCount($entityClass);
 
             $subItems = $this->createIndexSubItems($indexName, $meiliSettings, $routePrefix);
 
-            yield MenuItem::subMenu($label, 'fas fa-database')
+            $icon = $meiliSettings['ui']['icon'] ?? 'database';
+            yield MenuItem::subMenu($label, $icon)
+                ->setBadge($count)
                 ->setSubItems($subItems);
         }
     }
@@ -45,15 +50,9 @@ final class MeiliEasyAdminMenuFactory
         $items = [];
 
         // Overview page inside admin (your showIndex route)
-        $items[] = MenuItem::linkToRoute(
-            t('action.detail', domain: 'EasyAdminBundle'),
-            $this->dashboardHelper->getIcon('action.detail'),
-            $routePrefix . '_show_index',
-            ['indexName' => $indexName]
-        );
 
         $items[] = MenuItem::linkToRoute(
-            t('field.text_editor.view_content', domain: 'EasyAdminBundle'),
+            t('action.detail', domain: 'EasyAdminBundle'),
             $this->dashboardHelper->getIcon('browse'),
             sprintf('%s_%s_index', $routePrefix, $meiliSettings['rawName']),
         );
@@ -73,6 +72,13 @@ final class MeiliEasyAdminMenuFactory
         $items = array_merge(
             $items,
             $this->createSemanticSearchItems($indexName, $meiliSettings)
+        );
+
+        $items[] = MenuItem::linkToRoute(
+            t('page_title.dashboard', domain: 'EasyAdminBundle'),
+            $this->dashboardHelper->getIcon('action.detail'),
+            $routePrefix . '_show_index',
+            ['indexName' => $indexName]
         );
 
         return $items;
@@ -96,7 +102,7 @@ final class MeiliEasyAdminMenuFactory
         foreach ($embedders as $embedder) {
             $items[] = MenuItem::linkToUrl(
                 'Semantic: ' . ucfirst(str_replace('_', ' ', (string) $embedder)),
-                'fas fa-brain',
+                'semantic',
                 $this->urlGenerator->generate('meili_insta_embed', [
                     'indexName' => $indexName,
                     'embedder'  => $embedder,

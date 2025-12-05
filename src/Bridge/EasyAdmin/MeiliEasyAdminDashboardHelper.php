@@ -19,6 +19,8 @@ final class MeiliEasyAdminDashboardHelper
 
     public function getIcon(string $key): string
     {
+        return $key;
+        // old way.  now put these in the ux_icon config
         $icons = [
             'home' => 'fa fa-home',
             'browse' => 'fas fa-list',
@@ -49,7 +51,7 @@ final class MeiliEasyAdminDashboardHelper
     {
         return [
             'prefix' => $dashboardPrefix,
-            'settings' => $this->meiliService->settings,
+            'allSettings' => $this->meiliService->settings,
         ];
     }
 }

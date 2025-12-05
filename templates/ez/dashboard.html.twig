@@ -45,14 +45,23 @@
         <h1 class="mb-3">{{ 'indexes'|trans }}</h1>
 
         <div class="row g-4">
-            {% for indexName, settings in settings %}
+            {% for indexName, settings in allSettings %}
                 <div class="col-12 col-md-6 col-xl-4">
                     <div class="card h-100 index-card">
                         <div class="card-header">
                             <h4 class="mb-0">
-                                @todo: icon
-                                {{ ux_icon('mdi:database-search') }}
+                                {% set ui = settings.ui %}
+                                {% set icon = ui.icon|default(false) %}
+                                {% if icon %}
+                                    {{ ux_icon(icon) }}
+                                    {% else %}
+                                        {{ ux_icon('mdi:database-search') }}
+                                {% endif %}
                                 {{ settings.rawName }}
+                                <span class="btn btn-primary float-end">
+                                Count: {{ approximate_count(settings.class) }}
+
+                                </span>
                             </h4>
                         </div>
 
@@ -102,6 +111,7 @@
                                     </h6>
                                     <div class="d-flex flex-wrap gap-2">
                                         {% set domain = settings.rawName %}
+                                        {# @todo: handle different translation styles #}
                                         {% for filterField in settings.schema.filterableAttributes %}
                                             <span class="badge bg-primary-subtle text-dark field-badge" title="{{ '%s.description'|format(filterField)|trans(domain: domain) }}">
                                                 {{ '%s.label'|format(filterField)|trans(domain: domain) }}

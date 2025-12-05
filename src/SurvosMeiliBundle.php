@@ -47,6 +47,7 @@ use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\DependencyInjection\Extension\PrependExtensionInterface;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
@@ -115,7 +116,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                      MeilEstimatorCommand::class,
                      MeiliSchemaValidateCommand::class,
                      MeiliFlushFileCommand::class,
-                    MeiliSuggestSettingsCommand::class,
+                     MeiliSuggestSettingsCommand::class,
                  ] as $class) {
             $builder->autowire($class)
                 ->setPublic(true)
@@ -200,6 +201,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->scalarNode('transport')->defaultValue('%env(default::MEILI_TRANSPORT)%')->end()
             ->scalarNode('searchKey')->defaultValue('%env(default::MEILI_SEARCH_KEY)%')->end()
             ->scalarNode('meiliPrefix')->defaultValue('%env(default::MEILI_PREFIX)%')->end()
+            ->scalarNode('translationStyle')->defaultValue('simple')->end()
             ->booleanNode('passLocale')->defaultFalse()->end()
             ->booleanNode('multiLingual')->info("turn on multi-lingual indexing")->defaultFalse()->end()
             ->integerNode('maxValuesPerFacet')->defaultValue(1000)->end()
@@ -277,7 +279,6 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->booleanNode('disableOnNumbers')->defaultFalse()->end()
             ->end()
             ->end()
-
             ->arrayNode('faceting')
             ->addDefaultsIfNotSet()
             ->children()
@@ -289,14 +290,12 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->end()
             ->end()
             ->end()
-
             ->arrayNode('pagination')
             ->addDefaultsIfNotSet()
             ->children()
             ->integerNode('maxTotalHits')->defaultValue(1000)->end()
             ->end()
             ->end()
-
             ->booleanNode('facetSearch')->defaultTrue()->end()
             ->scalarNode('prefixSearch')->defaultValue('indexingTime')->end()
             ->end()
@@ -312,6 +311,27 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
 
     public function prependExtension(ContainerConfigurator $container, ContainerBuilder $builder): void
     {
+
+        if ($builder->hasExtension('ux_icons')) {
+            // Prepend our aliases so the app can still override them
+            // @todo: move these to be configured in survos_meili!
+            $builder->prependExtensionConfig('ux_icons', [
+                'aliases' => [
+
+                    'home' => 'material-symbols:home-outline',
+                    'browse' => 'mdi:list-box-outline',
+                    'instant_search' => 'mdi:tag-search-outline',
+                    'action.detail' => 'mdi:show-outline',
+                    'field.text_editor.view_content' => 'mdi:cogs',
+                    'semantic-web' => 'mdi:semantic-web',
+                    'semantic' => 'simple-icons:semanticscholar',
+                    'database' => 'mdi:database',
+                    'search' => 'tabler:search',
+                    'meili' => 'tabler:search', // etc.
+                ],
+            ]);
+        }
+
         if (!$this->isAssetMapperAvailable($builder)) {
             return;
         }

@@ -450,7 +450,7 @@
   {# Columns priority: indexConfig.ui.columns -> request ?cols= -> 3 #}
   {% set cols =
     (indexConfig.ui.columns is defined and indexConfig.ui.columns ? indexConfig.ui.columns
-      : (app.request.get('cols') ?? 3)
+      : (app.request.query.get('cols') ?? 3)
     )
   %}
 
@@ -533,7 +533,7 @@
                   <input
                     id="min-score-mult"
                     type="number" min="0" max="100" step="1"
-                    value="{{ (app.request.get('minScore', 0) * 100)|round(0, 'floor') }}"
+                    value="{{ (app.request.query.get('minScore', 0) * 100)|round(0, 'floor') }}"
                     class="form-control form-control-sm bg-white"
                     style="width: 110px;"
                     {{ stimulus_target(_sc, 'scoreMultiplier') }}
@@ -542,7 +542,7 @@
 
                   <input type="hidden"
                     {{ stimulus_target(_sc, 'scoreThreshold') }}
-                    value="{{ app.request.get('minScore', 0) }}">
+                    value="{{ app.request.query.get('minScore', 0) }}">
                 </div>
               </div>
             </div>
@@ -601,9 +601,17 @@
                 {% set widget = conf.widget ?? conf.type ?? 'RefinementList' %}
                 <div class="facet-block mb-3" data-facet-block>
                   <div class="facet-header">
+                      {% set fieldDescription = false %}
+                      {% if translationStyle == 'simple' %}
                       {% set label = (name ~ '.label')|trans(domain: indexConfig.rawName) %}
                       {% set fieldDescription = (name ~ '.description')|trans(domain: indexConfig.rawName) %}
-                    <h3 class="facet-title h6 m-0" title="{{ fieldDescription }}">{{ label }}</h3>
+                      {% elseif translationStyle == 'compound' %}
+                      {% set label = (name ~ '.label')|trans(domain: indexConfig.rawName) %}
+                      {% set fieldDescription = (name ~ '.description')|trans(domain: indexConfig.rawName) %}
+                          {% else %}
+                              {% set label = name %}
+                              {% endif %}
+                    <h3 class="facet-title h6 m-0" {% if fieldDescription %}title="{{ fieldDescription }} {% endif %}">{{ label }}</h3>
                     <span class="facet-actions">
                       <button class="facet-collapse btn btn-ghost btn-xxs p-0"
                               type="button"

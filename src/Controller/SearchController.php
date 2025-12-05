@@ -99,7 +99,8 @@ class SearchController extends AbstractController
             'templateName'=> $templateName,
             'related'     => [],
             'indexStats'  => $stats,
-
+            'multiLingual' =>$this->meiliService->isMultiLingual,
+            'translationStyle' => $this->meiliService->getConfig()['translationStyle']??null,
             // Turn off type-as-you-type when an embedder is active
             'searchAsYouType' => $embedder === null,
         ];

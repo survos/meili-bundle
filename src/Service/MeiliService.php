@@ -29,6 +29,7 @@ use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Component\HttpClient\Psr18Client as SymfonyPsr18Client;
 
+use Twig\Attribute\AsTwigFunction;
 use Zenstruck\Bytes;
 use function Symfony\Component\String\u;
 use Symfony\Component\HttpClient\Psr18Client;
@@ -633,6 +634,7 @@ final class MeiliService
         }
     }
 
+    #[AsTwigFunction('approximate_count')]
     /** Duplicated from WorkflowHelperService!  Maybe need a doctrine helper?  Or extensions? */
     public function getApproxCount(string $class): ?int
     {
