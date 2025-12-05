@@ -1,13 +1,13 @@
 {% macro locale_switcher(locales, currentLocale, routeName, routeParams) %}
-<div class="dropdown meili-locale-switcher">
-    <a class="btn btn-sm btn-light dropdown-toggle" data-bs-toggle="dropdown" href="#">
+<div class="dropdown">
+    <button type="button" class="btn btn-sm btn-light dropdown-toggle" data-bs-toggle="dropdown">
         🌐 {{ currentLocale|upper }}
         {{ currentLocale|language_name }}
-    </a>
-    <ul class="xdropdown-menu xdropdown-menu-end ">
+    </button>
+    <ul class="dropdown-menu">
         {% for locale in locales %}
             <li>
-                <a class="xxdropdown-item {{ locale == currentLocale ? 'active' : '' }}"
+                <a class="dropdown-item {{ locale == currentLocale ? 'active' : '' }}"
                    href="{{ path(routeName, routeParams|merge({'_locale': locale})) }}">
                     {{ locale|language_name(locale) }}
                 </a>

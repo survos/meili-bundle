@@ -121,6 +121,17 @@ export default class extends Controller {
         showRankingScoreDetails: true
       }
     };
+
+    // Initialize Bootstrap Dropdown
+    document.body.addEventListener('click', function(event) {
+      const toggle = event.target.closest('[data-bs-toggle="dropdown"]');
+      if (!toggle) {
+          return;
+      }
+      event.preventDefault();
+      const instance = bootstrap.Dropdown.getOrCreateInstance(toggle);
+      instance.toggle();
+    });
   }
 
   async connect() {

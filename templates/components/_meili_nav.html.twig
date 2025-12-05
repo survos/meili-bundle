@@ -42,7 +42,12 @@
       {% endif %}
     {% endif %}
 
-      {% import '@SurvosMeili/babel/_locale_switcher.html.twig' as Babel %}
+
+
+  </div>
+</div>
+
+{% import '@SurvosMeili/babel/_locale_switcher.html.twig' as Babel %}
 
       {# Determine current route and params dynamically #}
 
@@ -59,6 +64,3 @@
           routeName = _route,
           routeParams = _params
       ) }}
-
-  </div>
-</div>
