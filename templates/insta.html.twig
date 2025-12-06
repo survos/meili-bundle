@@ -246,6 +246,7 @@
       font-size: 0.75rem;
       font-weight: 500;
       height: 3rem;
+      margin-inline-start: 0.5rem;
       padding: 0rem 0.5rem !important;
       text-transform: uppercase;
     }
@@ -387,8 +388,6 @@
       font-weight: 900;
     }
 
-
-
     .insta-grid .ais-InfiniteHits-item .card-body .blockquote {
       display: -webkit-box;
       -webkit-box-orient: vertical;
@@ -423,7 +422,19 @@
       display: none;
     }
 
+    .insta-grid .ais-ClearRefinements-button--disabled {
+      display: none;
+    }
 
+    .insta-grid .ais-SortBy-select {
+      border-radius: 999px;
+      font-size: 0.875rem;
+      padding-left: 0.75rem;
+    }
+
+    .insta-grid .ais-SortBy-select:focus-visible {
+      outline-color: rgba(0, 150, 219, 0.75);
+    }
   </style>
 {% endblock %}
 
@@ -651,6 +662,7 @@
           {# ---------- Main (search, hits) ---------- #}
           <main class="col-12 col-md-8 col-lg-9">
 
+            {#
             <div class="semantic-toolbar d-flex align-items-center gap-2 mb-3 overflow-x-auto justify-content-end">
               <div class="row g-3 align-items-center">
                 <div class="col-auto">
@@ -661,8 +673,9 @@
                 </div>
               </div>
             </div>
+            #}
 
-            <div class="mb-3 d-flex gap-2 align-items-center">
+            <div class="mb-3 d-flex align-items-center">
               <div class="flex-grow-1" {{ stimulus_target(_sc, 'searchBox') }}></div>
 
               <button type="button"
@@ -677,8 +690,20 @@
               <div {{ stimulus_target(_sc, 'reset') }}></div>
             </div>
 
-            <div class="mb-2 small text-muted" {{ stimulus_target(_sc, 'stats') }}></div>
+            <div class="mb-2 d-flex gap-2 align-items-center justify-content-between">
+              <div class="small text-muted" {{ stimulus_target(_sc, 'stats') }}></div>
+              <div class="row g-2 align-items-center">
+                <div class="col-auto">
+                  <label class="col-form-label">Sort By</label>
+                </div>
+                <div class="col-auto">
+                  <div {{ stimulus_target(_sc, 'sortBy') }}></div>
+                </div>
+              </div>
+            </div>
+            <!--
             <div class="mb-2" {{ stimulus_target(_sc, 'notice') }}></div>
+            -->
 
             <div
               {{ stimulus_target(_sc, 'hits') }}
