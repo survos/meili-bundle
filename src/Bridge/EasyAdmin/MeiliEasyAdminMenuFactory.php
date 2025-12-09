@@ -78,7 +78,7 @@ final class MeiliEasyAdminMenuFactory
             t('page_title.dashboard', domain: 'EasyAdminBundle'),
             $this->dashboardHelper->getIcon('action.detail'),
             $routePrefix . '_show_index',
-            ['indexName' => $indexName]
+            ['indexName' =>  $meiliSettings['prefixedName'] ?? $indexName,]
         );
 
         return $items;

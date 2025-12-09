@@ -39,11 +39,24 @@ class MeiliController extends AbstractDashboardController // AbstractController
         string $indexName,
     ): Response {
 
+        $baseIndexName = $indexName;
+        $locale = $context->getRequest()->getLocale();
+
+        // Resolve the actual Meilisearch UID once, based on bundle configuration
+        if ($this->meiliService->isMultiLingual) {
+            $meiliIndexUid = $this->meiliService->localizedUid($baseIndexName, $locale);
+        } else {
+            $meiliIndexUid = $baseIndexName;
+        }
+
         // configured
         $settings = $this->meiliService->settings[$indexName];
+
         // live
 //        $index = $this->meiliService->getIndex($indexName, autoCreate: false);
-        $indexApi  = $this->meiliService->getIndexEndpoint($indexName);
+        $indexApi  = $this->meiliService->getIndexEndpoint($meiliIndexUid);
+        // live, not configured
+        $liveSettings = $indexApi->getSettings();
         $results = $indexApi->search(null, [
             'limit' => 0,
             'facets' => ['*']
