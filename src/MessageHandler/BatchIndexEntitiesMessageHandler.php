@@ -36,11 +36,13 @@ final class BatchIndexEntitiesMessageHandler
         // Compute effective locale and *persist* it back to the message,
         // so everything downstream (including apply/yield) sees the same value.
         $effectiveLocale = $message->locale ?: $this->localeContext?->getDefault();
+
         if ($effectiveLocale !== $message->locale) {
-            if ($message->locale) {
-                dd($effectiveLocale, $message->locale);
-                $message->locale = $effectiveLocale;
-            }
+            $this->logger?->info('Normalizing message locale', [
+                'original'  => $message->locale,
+                'effective' => $effectiveLocale,
+            ]);
+            $message->locale = $effectiveLocale;
         }
 
         $this->logger?->info('BatchIndexEntitiesMessageHandler: received message', [
@@ -82,26 +84,51 @@ final class BatchIndexEntitiesMessageHandler
 
             return;
         }
-
-        //
-        // ⭐ FALLBACK (legacy path): derive indexNames from indexedByClass()
-        //
+//
+// 🌱 DEFAULT / MAPPED PATH: derive indexName(s) from indexedByClass()
+//
         $classIndexes = $this->meiliService->indexedByClass();
-        $indexes = $classIndexes[$message->entityClass] ?? [];
+        $indexes      = $classIndexes[$message->entityClass] ?? [];
+        $count        = \count($indexes);
 
-        $this->logger?->error('Fallback: deriving indexes from indexedByClass()', [
-            'entityClass' => $message->entityClass,
-            'count'       => \count($indexes),
-        ]);
+        if ($count === 0) {
+            // This really IS exceptional.
+            $this->logger?->warning('No Meili index mapping found for entityClass', [
+                'entityClass' => $message->entityClass,
+            ]);
+            return;
+        }
+
+// Heuristic: if locale is null, this is the normal "plain index" case.
+// Only treat it as "legacy fallback" (and log louder) when locale is set but
+// the producer still didn't provide an indexName.
+        $plainIndex = ($message->locale === null);
+
+        $this->logger?->info(
+            $plainIndex
+                ? 'Using default index mapping from indexedByClass()'
+                : 'Deriving localized index mapping from indexedByClass() (legacy producer)',
+            [
+                'entityClass' => $message->entityClass,
+                'count'       => $count,
+                'locale'      => $message->locale,
+            ]
+        );
 
         foreach ($indexes as $indexName => $index) {
             $message->indexName = $indexName;
 
-            $runner = function () use ($message, $indexName) {
-                $this->logger?->warning('Fallback: applying derived index', [
-                    'indexName' => $indexName,
-                    'locale'    => $message->locale,
-                ]);
+            $runner = function () use ($message, $indexName, $plainIndex) {
+                $this->logger?->info(
+                    $plainIndex
+                        ? 'Applying mapped index for entityClass'
+                        : 'Applying derived localized index for entityClass (legacy producer)',
+                    [
+                        'indexName' => $indexName,
+                        'locale'    => $message->locale,
+                    ]
+                );
+
                 $this->apply($message);
             };
 
@@ -111,6 +138,7 @@ final class BatchIndexEntitiesMessageHandler
                 $runner();
             }
         }
+
     }
 
     private function apply(BatchIndexEntitiesMessage $message): void
