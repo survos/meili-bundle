@@ -301,7 +301,7 @@ final class BatchIndexEntitiesMessageHandler
             }
 
             $doc = $this->payloadBuilder->build($entity, $persisted);
-            $targetLocale = $this->localeContext->get();
+            $targetLocale = $this->localeContext?->get();
             $doc = SurvosUtils::removeNullsAndEmptyArrays($doc);
 
             if (!\is_array($doc)) {
