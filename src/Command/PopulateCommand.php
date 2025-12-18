@@ -156,26 +156,36 @@ class PopulateCommand extends MeiliBaseCommand
                 $plan['sourceOfTruth'],
             ];
 
-            // Base index once (source/original). No suffixed source index.
-            $targets[] = [
-                'uid'    => $baseUid,
-                'class'  => $entityClass,
-                'locale' => $plan['baseLocale'],
-                'base'   => $baseUid,
-                'kind'   => 'base',
-            ];
-
             if ($perLocale && $this->meiliService->isMultiLingual) {
-                foreach ($plan['targetLocales'] as $loc) {
+                // Create one index per locale, INCLUDING the source locale
+                $allLocales = array_values(array_unique(array_filter(array_merge(
+                    [$plan['baseLocale'] ?? null],
+                    $plan['targetLocales']
+                ))));
+
+                foreach ($allLocales as $loc) {
+                    if (!$loc) {
+                        continue;
+                    }
                     $targets[] = [
                         'uid'    => $this->meiliService->localizedUid($baseUid, $loc),
                         'class'  => $entityClass,
                         'locale' => $loc,
                         'base'   => $baseUid,
-                        'kind'   => 'target',
+                        'kind'   => ($loc === ($plan['baseLocale'] ?? null)) ? 'source' : 'target',
                     ];
                 }
+            } else {
+                // Single index mode (no locale suffixes)
+                $targets[] = [
+                    'uid'    => $baseUid,
+                    'class'  => $entityClass,
+                    'locale' => $plan['baseLocale'],
+                    'base'   => $baseUid,
+                    'kind'   => 'base',
+                ];
             }
+
         }
 
         if ($io->isVerbose()) {
