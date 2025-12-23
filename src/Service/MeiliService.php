@@ -639,8 +639,15 @@ final class MeiliService
     public function getApproxCount(string $class): ?int
     {
         static $counts = null;
-        $repo = $this->entityManager->getRepository($class);
 
+        if (!class_exists($class)) {
+            return -1;
+        }
+        try {
+            $repo = $this->entityManager->getRepository($class);
+        } catch (\Exception $e) {
+            return -2;
+        }
         try {
             if (is_null($counts)) {
                 $rows = $this->entityManager->getConnection()->fetchAllAssociative(

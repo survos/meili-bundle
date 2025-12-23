@@ -33,9 +33,10 @@ final class MeiliEasyAdminMenuFactory
             $subItems = $this->createIndexSubItems($indexName, $meiliSettings, $routePrefix);
 
             $icon = $meiliSettings['ui']['icon'] ?? 'database';
-            yield MenuItem::subMenu($label, $icon)
+            $menuItem = MenuItem::subMenu($label, $icon)
                 ->setBadge($count)
                 ->setSubItems($subItems);
+            yield $menuItem;
         }
     }
 

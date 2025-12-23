@@ -13,6 +13,7 @@ use Survos\MeiliBundle\Command\FastSyncIndexesCommand;
 use Survos\MeiliBundle\Command\IterateIndexesCommand;
 use Survos\MeiliBundle\Command\MeilEstimatorCommand;
 use Survos\MeiliBundle\Command\MeiliFlushFileCommand;
+use Survos\MeiliBundle\Command\MeiliRegistryCommand;
 use Survos\MeiliBundle\Command\MeiliSchemaCreateCommand;
 use Survos\MeiliBundle\Command\MeiliSchemaUpdateCommand;
 use Survos\MeiliBundle\Command\MeiliSchemaValidateCommand;
@@ -32,6 +33,7 @@ use Survos\MeiliBundle\EventListener\DoctrineEventListener;
 use Survos\MeiliBundle\Filter\MeiliSearch\AbstractSearchFilter;
 use Survos\MeiliBundle\MessageHandler\BatchIndexEntitiesMessageHandler;
 use Survos\MeiliBundle\Metadata\MeiliIndex;
+use Survos\MeiliBundle\Registry\MeiliRegistry;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
 use Survos\MeiliBundle\Service\IndexFastSyncService;
 use Survos\MeiliBundle\Service\IndexSyncService;
@@ -109,6 +111,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         $container->services()->alias('meili_service', MeiliService::class);
 
         foreach ([PopulateCommand::class,
+                     MeiliRegistryCommand::class,
                      ExportCommand::class,
                      IterateIndexesCommand::class,
                      MeiliSchemaCreateCommand::class,
@@ -127,6 +130,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         foreach ([IndexSyncService::class,
                      MeiliEasyAdminDashboardHelper::class,
                      MeiliNdjsonUploader::class,
+                     MeiliRegistry::class,
                      MeiliFieldHeuristic::class,
                      SyncIndexesCommand::class,
                      IndexFastSyncService::class,
@@ -382,6 +386,17 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             $def = $container->getDefinition(MeiliService::class);
             $def->setArgument('$indexedEntities', $indexedClasses);
         }
+
+        if ($container->hasDefinition(MeiliRegistry::class)) {
+            $def = $container->getDefinition(MeiliRegistry::class);
+            // IMPORTANT: use setArgument() with the correct argument names from the constructor
+            $def->setArgument('$indexEntities', '%meili.index_entities%');
+            $def->setArgument('$indexSettings', '%meili.index_settings%');
+
+            // Prefix: you can inject '' and let registry handle it, OR wire from your config.
+            // In your MeiliService you already derive prefix from config['meiliPrefix'].
+            // The simplest is to pass empty and have MeiliRegistry not apply any prefix.
+            $def->setArgument('$prefix', '');        }
 
         if (0) {
             $container->registerForAutoconfiguration(LoggerAwareInterface::class)

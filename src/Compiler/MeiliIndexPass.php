@@ -159,15 +159,36 @@ final class MeiliIndexPass implements CompilerPassInterface
             }
         }
 
-        $container->setParameter('meili.index_names', array_keys($indexEntities));
-        $container->setParameter('meili.index_entities', $indexEntities);
-        $container->setParameter('meili.index_settings', $indexSettings);
+// Merge with any previously-registered indexes (e.g. Pixie)
+        $prevEntities = $container->hasParameter('meili.index_entities')
+            ? (array) $container->getParameter('meili.index_entities') : [];
+
+        $prevSettings = $container->hasParameter('meili.index_settings')
+            ? (array) $container->getParameter('meili.index_settings') : [];
+
+        $prevNames = $container->hasParameter('meili.index_names')
+            ? (array) $container->getParameter('meili.index_names') : [];
+
+// Decide precedence: usually "new pass wins" for collisions
+        $mergedEntities = array_replace($prevEntities, $indexEntities);
+        $mergedSettings = array_replace_recursive($prevSettings, $indexSettings);
+
+        $mergedNames = array_values(array_unique(array_merge(
+            $prevNames,
+            array_keys($mergedEntities)
+        )));
+        sort($mergedNames);
+
+        $container->setParameter('meili.index_names', $mergedNames);
+        $container->setParameter('meili.index_entities', $mergedEntities);
+        $container->setParameter('meili.index_settings', $mergedSettings);
 
         if ($container->hasDefinition(MeiliService::class)) {
             $def = $container->getDefinition(MeiliService::class);
-            $def->setArgument('$indexedEntities', $indexEntities);
-            $def->setArgument('$indexSettings', $indexSettings);
+            $def->setArgument('$indexedEntities', $mergedEntities);
+            $def->setArgument('$indexSettings', $mergedSettings);
         }
+
     }
 
     /** @return iterable<class-string> */
