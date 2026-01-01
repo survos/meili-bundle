@@ -11,7 +11,6 @@ use Meilisearch\Contracts\TasksQuery;
 use Meilisearch\Contracts\TasksResults;
 use Meilisearch\Endpoints\Indexes;
 use Meilisearch\Exceptions\ApiException;
-use Meilisearch\Exceptions\JsonDecodingException;
 use Psr\Http\Client\ClientInterface;
 use Psr\Log\LoggerInterface;
 use Survos\CoreBundle\Service\SurvosUtils;
@@ -107,6 +106,19 @@ final class MeiliService
         return $response;
 
     }
+
+    public function shouldAutoIndex(string $entityClass): bool
+    {
+        $settingsByIndex = $this->indexSettings[$entityClass] ?? [];
+        foreach ($settingsByIndex as $indexName => $cfg) {
+            if (($cfg['autoIndex'] ?? true) === true) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
     public function getRawIndexSetting(string $rawName): ?array
     {
         SurvosUtils::assertKeyExists($rawName, $this->rawSettings);

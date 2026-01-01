@@ -34,6 +34,15 @@ final class MeiliIndex
         public ?string $class = null,
         public ?string $primaryKey = null,
 
+        /**
+         * If true, Survos\MeiliBundle\EventListener\DoctrineEventListener will auto-dispatch
+         * BatchIndexEntitiesMessage / BatchRemoveEntitiesMessage on entity changes.
+         *
+         * If false, the entity is "known to Meili" (schema/settings exist) but indexing is
+         * entirely manual (e.g. Pixie rows via pixie:index).
+         */
+        public bool $autoIndex = true,
+
         /** Fields persisted/normalized for the index payload (serializer source) */
         public Fields|array $persisted = [],
 

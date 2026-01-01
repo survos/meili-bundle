@@ -6,7 +6,6 @@ use Psr\Log\LoggerAwareInterface;
 use ReflectionClass;
 use Survos\CoreBundle\HasAssetMapperInterface;
 use Survos\CoreBundle\Traits\HasAssetMapperTrait;
-use Survos\MeiliBundle\Api\Filter\MultiFieldSearchFilter;
 use Survos\MeiliBundle\Bridge\EasyAdmin\MeiliEasyAdminDashboardHelper;
 use Survos\MeiliBundle\Command\ExportCommand;
 use Survos\MeiliBundle\Command\FastSyncIndexesCommand;
@@ -21,7 +20,6 @@ use Survos\MeiliBundle\Command\MeiliSuggestSettingsCommand;
 use Survos\MeiliBundle\Command\SyncIndexesCommand;
 use Survos\MeiliBundle\Compiler\MeiliIndexPass;
 use Survos\MeiliBundle\Components\InstantSearchComponent;
-use Survos\MeiliBundle\Command\CreateCommand;
 use Survos\MeiliBundle\Command\PopulateCommand;
 use Survos\MeiliBundle\Command\SettingsCommand;
 use Survos\MeiliBundle\Controller\MeiliAdminController;
@@ -56,7 +54,7 @@ use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Survos\MeiliBundle\Bridge\EasyAdmin\MeiliEasyAdminMenuFactory;
 
-class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterface, CompilerPassInterface
+class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterface
 {
     use HasAssetMapperTrait;
 
@@ -110,8 +108,15 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
 
         $container->services()->alias('meili_service', MeiliService::class);
 
+        $builder->autowire(MeiliRegistry::class)
+            ->setPublic(true)
+            ->setAutoconfigured(true)
+            ->setArgument('$indexEntities', '%meili.index_entities%')
+            ->setArgument('$indexSettings', '%meili.index_settings%')
+            ->setArgument('$prefix', '%survos_meili.prefix%');
+
+
         foreach ([PopulateCommand::class,
-                     MeiliRegistryCommand::class,
                      ExportCommand::class,
                      IterateIndexesCommand::class,
                      MeiliSchemaCreateCommand::class,
@@ -130,7 +135,6 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         foreach ([IndexSyncService::class,
                      MeiliEasyAdminDashboardHelper::class,
                      MeiliNdjsonUploader::class,
-                     MeiliRegistry::class,
                      MeiliFieldHeuristic::class,
                      SyncIndexesCommand::class,
                      IndexFastSyncService::class,
@@ -165,10 +169,13 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         }
 
         $builder->autowire(MeiliController::class)
+            ->setAutowired(true)
             ->addTag('container.service_subscriber')
             ->addTag('controller.service_arguments')
+            ->setArgument('$meiliService', new Reference('meili_service'))
             ->setArgument('$chartBuilder', new Reference('chartjs.builder', ContainerInterface::NULL_ON_INVALID_REFERENCE))
-            ->setAutoconfigured(true)
+            ->addTag('ea.admin_route_controller')     // <— required for #[AdminRoute]
+//            ->setAutoconfigured(true) // so that #[AdminRoute(path: '/index/overview/{indexName}', name: 'show_index')] is registerd
             ->setPublic(true);
 
         $builder->autowire(SearchController::class)
@@ -362,47 +369,47 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
     public function build(ContainerBuilder $container): void
     {
         parent::build($container);
-        $container->addCompilerPass($this);
         $container->addCompilerPass(new MeiliIndexPass());
     }
 
-    public function process(ContainerBuilder $container): void
-    {
-        $attributeClass = MeiliIndex::class;
-
-        $entityDir = $container->getParameter('kernel.project_dir') . '/src/Entity';
-        $indexedClasses = [];
-        foreach ($this->getClassesInDirectory($entityDir) as $class) {
-            assert(class_exists($class), "Missing $class in $entityDir");
-            $ref = new ReflectionClass($class);
-            if ($ref->getAttributes($attributeClass)) {
-                $indexedClasses[] = $class;
-            }
-        }
-
-        $container->setParameter('meili.indexed_entities', $indexedClasses);
-
-        if ($container->hasDefinition(MeiliService::class)) {
-            $def = $container->getDefinition(MeiliService::class);
-            $def->setArgument('$indexedEntities', $indexedClasses);
-        }
-
-        if ($container->hasDefinition(MeiliRegistry::class)) {
-            $def = $container->getDefinition(MeiliRegistry::class);
-            // IMPORTANT: use setArgument() with the correct argument names from the constructor
-            $def->setArgument('$indexEntities', '%meili.index_entities%');
-            $def->setArgument('$indexSettings', '%meili.index_settings%');
-
-            // Prefix: you can inject '' and let registry handle it, OR wire from your config.
-            // In your MeiliService you already derive prefix from config['meiliPrefix'].
-            // The simplest is to pass empty and have MeiliRegistry not apply any prefix.
-            $def->setArgument('$prefix', '');        }
-
-        if (0) {
-            $container->registerForAutoconfiguration(LoggerAwareInterface::class)
-                ->addMethodCall('setLogger', [new Reference('logger')]);
-        }
-    }
+//    public function process(ContainerBuilder $container): void
+//    {
+//        $attributeClass = MeiliIndex::class;
+//
+//        $entityDir = $container->getParameter('kernel.project_dir') . '/src/Entity';
+//        $indexedClasses = [];
+//        dump($entityDir, $this->getClassesInDirectory($entityDir));
+//        foreach ($this->getClassesInDirectory($entityDir) as $class) {
+//            assert(class_exists($class), "Missing $class in $entityDir");
+//            $ref = new ReflectionClass($class);
+//            if ($ref->getAttributes($attributeClass)) {
+//                $indexedClasses[] = $class;
+//            }
+//        }
+//
+//        $container->setParameter('meili.indexed_entities', $indexedClasses);
+//
+//        if ($container->hasDefinition(MeiliService::class)) {
+//            $def = $container->getDefinition(MeiliService::class);
+//            $def->setArgument('$indexedEntities', $indexedClasses);
+//        }
+//
+//        if ($container->hasDefinition(MeiliRegistry::class)) {
+//            $def = $container->getDefinition(MeiliRegistry::class);
+//            // IMPORTANT: use setArgument() with the correct argument names from the constructor
+//            $def->setArgument('$indexEntities', '%meili.index_entities%');
+//            $def->setArgument('$indexSettings', '%meili.index_settings%');
+//
+//            // Prefix: you can inject '' and let registry handle it, OR wire from your config.
+//            // In your MeiliService you already derive prefix from config['meiliPrefix'].
+//            // The simplest is to pass empty and have MeiliRegistry not apply any prefix.
+//            $def->setArgument('$prefix', '');        }
+//
+//        if (0) {
+//            $container->registerForAutoconfiguration(LoggerAwareInterface::class)
+//                ->addMethodCall('setLogger', [new Reference('logger')]);
+//        }
+//    }
 
     private function getClassesInDirectory(string $dir): array
     {

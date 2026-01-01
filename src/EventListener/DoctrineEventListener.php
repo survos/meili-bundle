@@ -85,11 +85,13 @@ class DoctrineEventListener
     {
         // Batch index operations by entity class
         foreach ($this->pendingIndexOperations as $entityClass => $objects) {
-            // this isn't necessary, because they won't be added if not indexed. Debugging when messages were in doctrine too
-//            if (!in_array($entityClass, $this->meiliService->indexedEntities)) {
-//                $this->logger?->warning(sprintf("Skipping entity class %s (not indexed)", $entityClass));
-//                continue;
-//            }
+            // This keeps pixie and babel from accidentally getting added.
+            if (!$this->meiliService->shouldAutoIndex($entityClass)) {
+                continue;
+            }
+            // @AI: The problem is here!  pixieBundle\\Row is in this list, and shouldn't be.
+//            dd($entityClass, $this->meiliService->indexedEntities);
+
             $groups = $this->settingsService->getNormalizationGroups($entityClass);
             $normalized = $this->normalizer->normalize($objects, 'array', ['groups' => $groups]);
             SurvosUtils::removeNullsAndEmptyArrays($normalized);
