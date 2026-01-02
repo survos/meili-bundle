@@ -124,7 +124,7 @@ final class MeiliEasyAdminMenuFactory
         foreach ($this->meiliService->tools as $tool) {
             yield MenuItem::linkToUrl(
                 $tool['label'] ?? 'tool',
-                'fas fa-chart-line',
+                'tabler:chart-bar',
                 $tool['url'] ?? '#'
             );
         }
