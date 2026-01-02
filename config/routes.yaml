@@ -3,3 +3,7 @@ survos_meili:
     resource:
         path: '@SurvosMeiliBundle/src/Controller/'
         namespace: Survos\MeiliBundle\Controller
+        exclude:
+            - '../src/Controller/MeiliAdminController.php'
+            - '../src/Controller/SearchController.php'
+            - '../src/Controller/AbstractMeiliController.php'

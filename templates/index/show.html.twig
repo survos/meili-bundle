@@ -55,7 +55,26 @@
                 </div>
             </div>
         </div>
-        {# Add more small stat cards if you like, e.g. fieldsDistribution|length #}
+        <div class="col-md-3 mb-3">
+            <div class="card h-100">
+                <div class="card-body py-3">
+                    <div class="text-muted small mb-1">Facet Fields</div>
+                    <div class="h4 mb-0">
+                        {{ facetCounts|length }}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card h-100">
+                <div class="card-body py-3">
+                    <div class="text-muted small mb-1">Fields</div>
+                    <div class="h4 mb-0">
+                        {{ stats.fieldDistribution|length }}
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <ul class="nav nav-tabs mb-3" id="meiliIndexTabs" role="tablist">
@@ -122,15 +141,15 @@
                         <ul class="nav nav-pills flex-wrap mb-3" id="facetFieldTabs" role="tablist">
                             {% for fieldName, counts in facetCounts %}
                                 {% set fieldId = 'facet-' ~ fieldName|replace({' ': '-', '.': '-', '[': '-', ']': '-'}) %}
-                                <li class="nav-item mb-2" role="presentation">
-                                    <button class="nav-link {{ loop.first ? 'active' }}"
+                                <li class="nav-item mb-2 me-1" role="presentation">
+                                    <button class="nav-link {{ loop.first ? 'active' }} d-flex align-items-center gap-2"
                                             id="{{ fieldId }}-tab"
                                             data-bs-toggle="pill"
                                             data-bs-target="#{{ fieldId }}"
                                             type="button"
                                             role="tab">
                                         {{ fieldName }}
-                                        <span class="badge bg-secondary ms-1">
+                                        <span style="background-color: #6c757d; color: #fff; padding: 0.25em 0.5em; border-radius: 0.25rem; font-size: 0.75em;">
                                             {{ counts|length }}
                                         </span>
                                     </button>
@@ -144,41 +163,74 @@
                                 <div class="tab-pane fade {{ loop.first ? 'show active' }}" id="{{ fieldId }}" role="tabpanel">
                                     <h5 class="mb-3">
                                         {{ fieldName }}
-{#                                        {{ '%s.label'|format(fieldName)|trans }}#}
                                         <small class="text-muted">
-                                            (showing first {{ min(25, counts|length) }} values)
+                                            ({{ counts|length }} unique values)
                                         </small>
                                     </h5>
 
-                                    <div class="table-responsive">
-                                        <table class="table table-sm table-striped table-hover align-middle mb-0">
-                                            <thead class="table-light">
-                                            <tr>
-                                                <th style="width: 70%;">Label</th>
-                                                <th style="width: 30%;" class="text-end">Count</th>
-                                            </tr>
-                                            </thead>
-                                            <tbody>
-                                            {% for c in counts|slice(0,25) %}
-                                                <tr>
-                                                    <td>
-                                                        {{ c.label is same as(null) or c.label == '' ? '∅ (null/empty)' : c.label }}
-                                                    </td>
-                                                    <td class="text-end">
-                                                        <span class="badge bg-primary">
-                                                            {{ c.count }}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            {% else %}
-                                                <tr>
-                                                    <td colspan="2" class="text-muted text-center">
-                                                        No values found for this facet.
-                                                    </td>
-                                                </tr>
-                                            {% endfor %}
-                                            </tbody>
-                                        </table>
+                                    <div class="row">
+                                        {# Chart column #}
+                                        {% if facetCharts is defined and facetCharts[fieldName] is defined %}
+                                            <div class="col-lg-5 mb-3">
+                                                <div class="card h-100">
+                                                    <div class="card-header py-2">
+                                                        <small class="fw-semibold">Distribution (top 10)</small>
+                                                    </div>
+                                                    <div class="card-body p-2">
+
+                                                        <div style="position: relative; height: 300px; width: 100%;">
+                                                            {{ render_chart(facetCharts[fieldName], {'style': 'display: block; width: 100%; height: 100%;'}) }}
+                                                        </div>
+
+{#                                                        <div style="height: 300px;">#}
+{#                                                            {{ render_chart(facetCharts[fieldName], {#}
+{#                                                                'style': 'display: block; height: 300px; width: 100%;',#}
+{#                                                                'class': 'w-100'#}
+{#                                                            }) }}#}
+{#                                                        </div>#}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        {% endif %}
+
+                                        {# Table column #}
+                                        <div class="{{ facetCharts is defined and facetCharts[fieldName] is defined ? 'col-lg-7' : 'col-12' }}">
+                                            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                                <table class="table table-sm table-striped table-hover align-middle mb-0">
+                                                    <thead class="table-light sticky-top">
+                                                    <tr>
+                                                        <th style="width: 70%;">Label</th>
+                                                        <th style="width: 30%;" class="text-end">Count</th>
+                                                    </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                    {% for c in counts|slice(0, 25) %}
+                                                        <tr>
+                                                            <td>
+                                                                {{ c.label is same as(null) or c.label == '' ? '∅ (null/empty)' : c.label }}
+                                                            </td>
+                                                            <td class="text-end">
+                                                                <span style="background-color: #0d6efd; color: #fff; padding: 0.25em 0.6em; border-radius: 0.25rem; font-size: 0.85em; font-weight: 500;">
+                                                                    {{ c.count|number_format }}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    {% else %}
+                                                        <tr>
+                                                            <td colspan="2" class="text-muted text-center">
+                                                                No values found for this facet.
+                                                            </td>
+                                                        </tr>
+                                                    {% endfor %}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            {% if counts|length > 25 %}
+                                                <div class="text-muted small mt-2">
+                                                    Showing 25 of {{ counts|length }} values.
+                                                </div>
+                                            {% endif %}
+                                        </div>
                                     </div>
                                 </div>
                             {% endfor %}

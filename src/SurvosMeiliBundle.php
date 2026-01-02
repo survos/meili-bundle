@@ -23,7 +23,7 @@ use Survos\MeiliBundle\Components\InstantSearchComponent;
 use Survos\MeiliBundle\Command\PopulateCommand;
 use Survos\MeiliBundle\Command\SettingsCommand;
 use Survos\MeiliBundle\Controller\MeiliAdminController;
-use Survos\MeiliBundle\Controller\MeiliController;
+use Survos\MeiliBundle\Controller\AbstractMeiliController;
 use Survos\MeiliBundle\Controller\MeiliProxyController;
 use Survos\MeiliBundle\Controller\SearchController;
 use Survos\MeiliBundle\Controller\TemplateController;
@@ -156,7 +156,8 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             $builder->autowire($class)
                 ->addTag('container.service_subscriber')
                 ->addTag('controller.service_arguments')
-                ->setAutoconfigured(true)
+                ->addTag('ea.admin_route_controller')     // <— required for #[AdminRoute]
+                ->setAutoconfigured(false)
                 ->setPublic(true);
         }
 
@@ -168,15 +169,18 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                 ->setPublic(true);
         }
 
-        $builder->autowire(MeiliController::class)
-            ->setAutowired(true)
-            ->addTag('container.service_subscriber')
-            ->addTag('controller.service_arguments')
-            ->setArgument('$meiliService', new Reference('meili_service'))
-            ->setArgument('$chartBuilder', new Reference('chartjs.builder', ContainerInterface::NULL_ON_INVALID_REFERENCE))
-            ->addTag('ea.admin_route_controller')     // <— required for #[AdminRoute]
-//            ->setAutoconfigured(true) // so that #[AdminRoute(path: '/index/overview/{indexName}', name: 'show_index')] is registerd
-            ->setPublic(true);
+        $builder->autowire(AbstractMeiliController::class)
+//            ->setAutowired(true)
+            ->setAutoconfigured(false)
+            ->setAbstract(true)
+            ->setAutowired(true);
+//            ->addTag('container.service_subscriber')
+//            ->addTag('controller.service_arguments')
+//            ->setArgument('$meiliService', new Reference('meili_service'))
+//            ->setArgument('$chartBuilder', new Reference('chartjs.builder', ContainerInterface::NULL_ON_INVALID_REFERENCE))
+//            ->addTag('ea.admin_route_controller')     // <— required for #[AdminRoute]
+////            ->setAutoconfigured(true) // so that #[AdminRoute(path: '/index/overview/{indexName}', name: 'show_index')] is registerd
+//            ->setPublic(true);
 
         $builder->autowire(SearchController::class)
             ->addTag('container.service_subscriber')

@@ -110,8 +110,8 @@ class SearchController extends AbstractController
         return $params;
     }
 
-    #[AdminRoute(path: '/show/{indexName}/{pk}', name: 'meili_show_liquid')]
-    public function showIndex(AdminContext $context, string $indexName): Response
+    #[AdminRoute(path: '/show/liquid/{indexName}', name: 'meili_show_liquid')]
+    public function showLiquid(AdminContext $context, string $indexName): Response
     {
         return new Response();
     }

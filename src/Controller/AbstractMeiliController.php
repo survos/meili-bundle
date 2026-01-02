@@ -3,8 +3,13 @@
 namespace Survos\MeiliBundle\Controller;
 
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminRoute;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Assets;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Dashboard;
+use EasyCorp\Bundle\EasyAdminBundle\Config\MenuItem;
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use Meilisearch\Exceptions\ApiException;
+use Survos\MeiliBundle\Bridge\EasyAdmin\MeiliEasyAdminDashboardHelper;
+use Survos\MeiliBundle\Bridge\EasyAdmin\MeiliEasyAdminMenuFactory;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Bridge\Twig\Attribute\Template;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -14,112 +19,121 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapQueryParameter;
 use Symfony\Component\HttpKernel\Attribute\MapQueryString;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Symfony\UX\Chartjs\Builder\ChartBuilderInterface;
 use Symfony\UX\Chartjs\Model\Chart;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractDashboardController;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminDashboard;
+use Symfony\Contracts\Service\Attribute\Required;
+use function Symfony\Component\Translation\t;
 
 //#[Route('/meili')]
-#[AdminDashboard('/ez', '/default-meili')]
-class MeiliController extends AbstractDashboardController // AbstractController
+//#[AdminDashboard('/ez', '/default-meili')]
+abstract class AbstractMeiliController extends AbstractDashboardController
 {
 
+    const MEILI_ROUTE = 'meili_admin';
     protected $helper;
 
-    public function __construct(
-        private MeiliService           $meiliService,
-        private ?ChartBuilderInterface $chartBuilder = null,
-    )
+//    public function __construct(
+//        private MeiliService           $meiliService,
+//        private ?ChartBuilderInterface $chartBuilder = null,
+//    )
+//    {
+////        $this->helper = $helper;
+//    }
+
+
+    #[Required]
+    public MeiliService $meiliService;
+    protected ?ChartBuilderInterface $chartBuilder = null;
+    #[Required]
+    public UrlGeneratorInterface $urlGenerator;
+
+    #[Required]
+    public MeiliEasyAdminMenuFactory $menuFactory;
+
+    #[Required]
+    public MeiliEasyAdminDashboardHelper $dashboardHelper;
+
+    #[Required]
+    public KernelInterface $kernel;
+
+
+    #[Required]
+    public function setChartBuilder(?ChartBuilderInterface $chartBuilder = null): void
     {
-//        $this->helper = $helper;
+        $this->chartBuilder = $chartBuilder;
     }
 
-    #[AdminRoute(path: '/index/overview/{indexName}', name: 'show_index')]
-    public function showIndex(
-        AdminContext $context,
-        string $indexName,
-    ): Response {
-
-        $baseIndexName = $indexName;
-        $locale = $context->getRequest()->getLocale();
-
-        // Resolve the actual Meilisearch UID once, based on bundle configuration
-        if ($this->meiliService->isMultiLingual) {
-            $meiliIndexUid = $this->meiliService->localizedUid($baseIndexName, $locale);
-        } else {
-            $meiliIndexUid = $baseIndexName;
-        }
-
-        // configured
-        $settings = $this->meiliService->settings[$indexName];
-
-        // live
-//        $index = $this->meiliService->getIndex($indexName, autoCreate: false);
-        $indexApi  = $this->meiliService->getIndexEndpoint($meiliIndexUid);
-        // live, not configured
-        $liveSettings = $indexApi->getSettings();
-        $results = $indexApi->search(null, [
-            'limit' => 0,
-            'facets' => ['*']
-        ]);
-
-// Access facet distribution
-        $facetDistribution = $results->getFacetDistribution();
-        try {
-            $rawInfo = $indexApi->fetchRawInfo(); // NOT a task
-        } catch (ApiException $e) {
-            if ($e->getCode() == 404) {
-                $index = $this->meiliService->getOrCreateIndex($indexName, $settings['primaryKey']);
-
-//                $task = $indexApi->create($actualIndexName, );
-//                dd($indexApi, $task);
-                $task = $index->updateSettings($settings['schema']);
-                $info = $indexApi->getSettings();
-                // this is an object, NOT a json structure.  No way to get it via the client
-                foreach ($info as $key => $value) {
-                    if (is_object($value)) {
-                        unset($info[$key]);
-                    }
-                }
-
-            }
-        }
-        $rawInfo = $indexApi->fetchRawInfo(); // NOT a task
-        $stats = $indexApi->stats();
-        $facetCounts = [];
-
-        foreach ($settings['facets'] as $fieldName => $details) {
-
-            $params = ['limit' => 0,
-                'facets' => [$fieldName]];
-            $data = $indexApi->rawSearch("", $params);
-//        dd($data, indexName: $indexName, tableName: $tableName, fieldName: $fieldName, params: $params, dist: $data['facetDistribution'][$fieldName]);
-
-            $facetDistributionCounts = $data['facetDistribution'][$fieldName]??[];
-//        $translations = $projectService->getNonObjectTranslations($project->getCode(), $field->getCoreCode(), $locale); // , '=');
-            $counts = [];
-            foreach ($facetDistributionCounts as $label => $count) {
-                $counts[] = [
-                    'label' => $label,
-                    'count' => $count
-                ];
-            }
-            $facetCounts[$fieldName] = $counts;
-        }
-//        $info = $this->meiliService->getMeiliClient()->getRawIndex($actualIndexName);
-
-        return $this->render('@SurvosMeili/index/show.html.twig', [
-            'indexName' => $indexName,
-            'facetCounts' => $facetCounts,
-            'rawInfo' => $rawInfo,
-            'stats' => $stats,
-            'settings' => $settings,
-            'adminContext' => $context,
-        ]);
+    public function getMeiliRoute(): string
+    {
+        return self::MEILI_ROUTE;
     }
 
+    public function index(): Response
+    {
+        return $this->render(
+            $this->dashboardHelper->getDashboardTemplate(),
+            $this->dashboardHelper->getDashboardParameters($this->getMeiliRoute())
+        );
+    }
+
+    public function configureDashboard(): Dashboard
+    {
+        return $this->dashboardHelper
+            ->configureDashboard(Dashboard::new())
+            ;
+    }
+
+
+    /**
+     * @return iterable<MenuItem>
+     */
+    public function configureMenuItems(): iterable
+    {
+        $translationDomain = 'meili'; /// change this for application-specific translations
+
+        // Main navigation
+        yield MenuItem::linkToDashboard(
+            t('page_title.dashboard', [], 'EasyAdminBundle'),
+            $this->dashboardHelper->getIcon('home')
+        );
+
+//        yield MenuItem::section('content_management', 'fas fa-folder-open');
+        yield from $this->menuFactory->createIndexMenus(self::MEILI_ROUTE);
+
+//        yield MenuItem::section('tools', 'fas fa-wrench');
+        yield from $this->menuFactory->createToolsMenuItems();
+
+//        yield MenuItem::linkToUrl('search_analytics', 'fas fa-chart-line', '#')
+////            ->setPermission('ROLE_ADMIN')
+//        ;
+    }
+
+
+    public function configureAssets(): Assets
+    {
+        return Assets::new()
+            ->useCustomIconSet() // use ux_icons
+            ->addAssetMapperEntry($this->getAssetEntityName())  // Your main .js entry, must be configured in importap. Use admin to avoid tabler/bootstrap conflicts
+            ;
+    }
+
+
+    public function getAssetEntityName(): string {
+        $importMapPath = $this->kernel->getProjectDir() . '/importmap.php';
+        if (file_exists($importMapPath)) {
+            $entries = include $importMapPath;
+            if (isset($entries['admin'])) {
+                return 'admin';
+            }
+        }
+        return 'app';
+    }
 
     #[Route(path: '/realtime/abc/{indexName}.{_format}', name: 'survos_meili_realtime_stats', methods: ['GET'])]
     #[Template('@SurvosMeili/_realtime.html.twig')]

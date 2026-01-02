@@ -78,7 +78,7 @@ final class MeiliEasyAdminMenuFactory
         $items[] = MenuItem::linkToRoute(
             t('page_title.dashboard', domain: 'EasyAdminBundle'),
             $this->dashboardHelper->getIcon('action.detail'),
-            $routePrefix . '_show_index',
+            $routePrefix . '_' . 'meili_index_dashboard',
             ['indexName' =>  $meiliSettings['prefixedName'] ?? $indexName,]
         );
 
