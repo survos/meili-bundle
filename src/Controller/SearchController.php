@@ -18,15 +18,13 @@ use Symfony\Component\Routing\RouterInterface;
 class SearchController extends AbstractController
 {
     public function __construct(
-        #[Autowire('%kernel.project_dir%/templates/js/')]  private string $jsTemplateDir,
+        #[Autowire('%kernel.project_dir%/templates/js/')] private string $jsTemplateDir,
         private readonly MeiliService $meiliService,
         private readonly RouterInterface $router,
     ) {
     }
 
     #[Route('/index/{indexName}', name: 'meili_insta', options: ['expose' => true])]
-    // @Todo: figure out the locale solution!
-//    #[Route('/{_locale}/index/{indexName}', name: 'meili_insta_locale', options: ['expose' => true])]
     #[Route('/index/{indexName}', name: 'meili_insta_locale', options: ['expose' => true])]
     #[Route('/embedder/{indexName}/{embedder}', name: 'meili_insta_embed', options: ['expose' => true])]
     #[Template('@SurvosMeili/insta.html.twig')]
@@ -37,32 +35,30 @@ class SearchController extends AbstractController
         ?string $q = null,
         bool $useProxy = false,
     ): Response|array {
-        // Treat route parameter as the *base* index name (compiler-pass key / settings key)
+        // Route parameter is the BASE name (registry key)
         $baseIndexName = $indexName;
-        $locale        = $request->getLocale();
+        $locale = $request->getLocale();
 
-        // Resolve the actual Meilisearch UID once, based on bundle configuration
-        if ($this->meiliService->isMultiLingual) {
-            $meiliIndexUid = $this->meiliService->localizedUid($baseIndexName, $locale);
-        } else {
-            $meiliIndexUid = $baseIndexName;
-        }
+        // Resolve the actual Meilisearch UID using the new naming resolver logic
+        $meiliIndexUid = $this->meiliService->uidForBase($baseIndexName, $locale);
 
-        // Meili endpoint is always referenced by UID
-        $index = $this->meiliService->getIndexEndpoint($meiliIndexUid);
-        try {
-            $settings = $index->getSettings();
-        } catch (\Exception $exception) {
-            dd($exception, $meiliIndexUid, $this->meiliService->getMeiliClient());
-        }
-
-        // Index configuration comes from the *base* index settings
+        // Index configuration is base-keyed
         $indexConfig = $this->meiliService->getIndexSetting($baseIndexName);
         assert($indexConfig, "Missing config for base index {$baseIndexName}");
 
-        $templateName = $indexConfig['rawName'] ?? $baseIndexName;
+        // Locale-agnostic template selection
+        $templateName = $indexConfig['template'] ?? $baseIndexName;
 
-        $sorting   = [];
+        // Fetch server settings using the UID
+        $index = $this->meiliService->getIndexEndpoint($meiliIndexUid);
+        try {
+            $settings = $index->getSettings();
+        } catch (\Throwable $exception) {
+            // useful when index isn't created yet / wrong uid
+            throw $exception;
+        }
+
+        $sorting = [];
         $sorting[] = ['label' => 'Relevance', 'value' => $meiliIndexUid];
         foreach (($settings['sortableAttributes'] ?? []) as $attr) {
             foreach (['asc', 'desc'] as $dir) {
@@ -75,39 +71,38 @@ class SearchController extends AbstractController
 
         $stats = $index->stats();
 
-        $params = [
+        return [
             // Server / API key
-            'server'      => $useProxy
+            'server' => $useProxy
                 ? $this->router->generate('meili_proxy', [], UrlGeneratorInterface::ABSOLUTE_URL)
                 : $this->meiliService->getHost(),
-            'apiKey'      => $this->meiliService->getPublicApiKey(),
+            'apiKey'  => $this->meiliService->getPublicApiKey(),
 
             // Index identifiers
-            'indexName'     => $meiliIndexUid,  // actual Meili UID
-            'baseIndexName' => $baseIndexName,  // base key for settings / config
+            'indexName'     => $meiliIndexUid,  // actual Meili UID (what JS uses)
+            'baseIndexName' => $baseIndexName,  // base key (registry)
 
             // Settings / config
             'indexConfig' => $indexConfig,
             'settings'    => $settings,
             'allSettings' => $this->meiliService->getAllSettings(),
-            'primaryKey'  => $indexConfig['primaryKey'],
+            'primaryKey'  => $indexConfig['primaryKey'] ?? 'id',
 
             // UI state
-            'q'           => $q,
-            'facets'      => $settings['filterableAttributes'] ?? [],
-            'sorting'     => $sorting,
-            'endpoint'    => null,
-            'embedder'    => $embedder,
-            'templateName'=> $templateName,
-            'related'     => [],
-            'indexStats'  => $stats,
-            'multiLingual' =>$this->meiliService->isMultiLingual,
-            'translationStyle' => $this->meiliService->getConfig()['translationStyle']??null,
+            'q'              => $q,
+            'facets'         => $settings['filterableAttributes'] ?? [],
+            'sorting'        => $sorting,
+            'endpoint'       => null,
+            'embedder'       => $embedder,
+            'templateName'   => $templateName,
+            'related'        => [],
+            'indexStats'     => $stats,
+            'multiLingual'   => $this->meiliService->isMultiLingual,
+            'translationStyle' => $this->meiliService->getConfig()['translationStyle'] ?? null,
+
             // Turn off type-as-you-type when an embedder is active
             'searchAsYouType' => $embedder === null,
         ];
-
-        return $params;
     }
 
     #[AdminRoute(path: '/show/liquid/{indexName}', name: 'meili_show_liquid')]

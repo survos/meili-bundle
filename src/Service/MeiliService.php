@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
 
@@ -14,131 +15,83 @@ use Meilisearch\Exceptions\ApiException;
 use Psr\Http\Client\ClientInterface;
 use Psr\Log\LoggerInterface;
 use Survos\CoreBundle\Service\SurvosUtils;
-use Survos\MeiliBundle\Meili\MeiliTaskStatus;
-use Survos\MeiliBundle\Meili\MeiliTaskType;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
 use Survos\MeiliBundle\Message\BatchRemoveEntitiesMessage;
-use Survos\MeiliBundle\MessageHandler\BatchIndexEntitiesMessageHandler;
-use Survos\MeiliBundle\Metadata\MeiliIndex;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
-use Symfony\Component\HttpClient\HttpClient;
+use Symfony\Component\HttpClient\Psr18Client as SymfonyPsr18Client;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
-use Symfony\Component\HttpClient\Psr18Client as SymfonyPsr18Client;
-
 use Twig\Attribute\AsTwigFunction;
-use Zenstruck\Bytes;
-use function Symfony\Component\String\u;
-use Symfony\Component\HttpClient\Psr18Client;
-use Nyholm\Psr7\Factory\Psr17Factory;
 
 final class MeiliService
 {
-    public array $settings = [];
-    public array $rawSettings = [];
+    /**
+     * Base-keyed settings, regardless of origin (pixie, doctrine, etc).
+     * @var array<string,array<string,mixed>> baseName => settings
+     */
+    private array $baseSettings = [];
+
+    /**
+     * Back-compat: per-class settings as provided by compiler pass.
+     * @var array<class-string, array<string,array<string,mixed>>> class => [baseName => settings]
+     */
+    private readonly array $indexSettings;
+
     public function __construct(
         protected ParameterBagInterface $bag,
-        private SettingsService $settingsService,
-        private EntityManagerInterface $entityManager,
-        private NormalizerInterface $normalizer,
-        private ?string                 $meiliHost='http://localhost:7700',
-        private ?string                 $adminKey=null,
-        private ?string                 $searchKey=null, // public!
-        private array                   $config = [],
-        private array                   $groupsByClass = [],
-        private ?LoggerInterface        $logger = null,
-        private ?HttpClientInterface $symfonyHttpClient=null,
-        protected ?ClientInterface      $httpClient = null,
+        private readonly SettingsService $settingsService,
+        private readonly EntityManagerInterface $entityManager,
+        private readonly NormalizerInterface $normalizer,
+
+        private readonly IndexNameResolver $nameResolver,
+
+        private ?string $meiliHost = 'http://localhost:7700',
+        private ?string $adminKey = null,
+        private ?string $searchKey = null, // public
+        private array $config = [],
+        private array $groupsByClass = [],
+        private ?LoggerInterface $logger = null,
+        private ?HttpClientInterface $symfonyHttpClient = null,
+        protected ?ClientInterface $httpClient = null,
+
         private(set) readonly array $indexedEntities = [],
-        private readonly array $indexSettings=[],
 
+        array $indexSettings = [],
     ) {
+        $this->indexSettings = $indexSettings;
+
+        // Build a base-name settings map for fast lookup.
         foreach ($this->indexSettings as $class => $indexes) {
-            foreach ($indexes as $rawName => $settings) {
-
-                $settings['rawName'] = $rawName;
-                $settings['prefixedName'] = $this->getPrefix() . $rawName;
-                $this->settings[$this->getPrefix() . $rawName] = $settings;
-                $this->rawSettings[$rawName] = $settings;
+            foreach ($indexes as $baseName => $settings) {
+                if (!is_array($settings)) {
+                    continue;
+                }
+                $settings['baseName'] = $baseName;
+                $settings['class'] = $settings['class'] ?? $class;
+                $this->baseSettings[$baseName] = $settings;
             }
         }
-//        dd($this->indexSettings, $this->getPrefix());
-//        assert($this->meiliKey);
     }
 
-    public string $isMultiLingual { get => $this->config['multiLingual'] ; }
+    // ---------------------------------------------------------------------
+    // Core config / feature flags
+    // ---------------------------------------------------------------------
 
-    public function localizedUid(string $baseUid, string $locale): string
+    public bool $isMultiLingual
     {
-        return "{$baseUid}_{$locale}";
+        get => $this->nameResolver->isMultiLingual();
     }
 
-
-//    public function getAllIndexSettings(): array
-//    {
-//        $settingsWithActualIndexName = [];
-//        foreach ($this->indexSettings as $indexName => $settings) {
-//            $settingsWithActualIndexName[$this->getPrefix() . $indexName] = $settings;
-//        }
-//        return $settingsWithActualIndexName;
-//    }
-
-    // raw because no prefix
-    public function getRawIndexSettings(): array
+    public bool $passLocale
     {
-        return $this->rawSettings;
+        get => $this->nameResolver->passLocale();
     }
-
-    public function getAllSettings(): array
-    {
-        return $this->rawSettings;
-    }
-
-    public function indexedByClass(): array
-    {
-        $response = [];
-        foreach ($this->settings as $index=>$settings) {
-            // we don't really need to repeat the settings, but this saves another lookup
-            $response[$settings['class']][$index] = $settings;
-        }
-        return $response;
-
-    }
-
-    public function shouldAutoIndex(string $entityClass): bool
-    {
-        $settingsByIndex = $this->indexSettings[$entityClass] ?? [];
-        foreach ($settingsByIndex as $indexName => $cfg) {
-            if (($cfg['autoIndex'] ?? true) === true) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-
-    public function getRawIndexSetting(string $rawName): ?array
-    {
-        SurvosUtils::assertKeyExists($rawName, $this->rawSettings);
-        return $this->rawSettings[$rawName] ?? null;
-    }
-    public function getIndexSetting(string $indexName): ?array
-    {
-        SurvosUtils::assertKeyExists($indexName, $this->settings);
-        return $this->settings[$indexName] ?? null;
-    }
-
-    public function getAdminKey(): ?string { return $this->adminKey; }
 
     public function getConfig(): array
     {
         return $this->config;
     }
-
-    public bool $passLocale { get => $this->config['passLocale'] ?? false; }
-    public array $tools { get => $this->config['tools']; }
 
     public function setConfig(array $config): void
     {
@@ -150,14 +103,210 @@ final class MeiliService
         return $this->meiliHost;
     }
 
-    public function getPublicApiKey(): ?string
+    public function getAdminKey(): ?string
     {
-        return $this->searchKey; // @todo: 2 keys
+        return $this->adminKey;
     }
 
-    public function getTasks(?string $indexUid = null, array $statuses = [], array $types=[], int $limit=100): TasksResults
+    public function getPublicApiKey(): ?string
+    {
+        return $this->searchKey;
+    }
+
+    public function getPrefix(): ?string
+    {
+        // For now keep reading from config; prefix application is done in MeiliRegistry::uidFor via IndexNameResolver.
+        return $this->config['meiliPrefix'] ?? null;
+    }
+
+    // ---------------------------------------------------------------------
+    // Locale + naming (Pixie-first, bundle-generic)
+    // ---------------------------------------------------------------------
+
+    /**
+     * Canonical locale policy resolver for a base index key.
+     * Prefers registry metadata (locales.source/targets) and falls back to enabled locales.
+     *
+     * @return array{source:string, targets:string[], all:string[]}
+     */
+    public function resolveLocalesForBase(string $baseName, string $fallbackLocale): array
+    {
+        return $this->nameResolver->localesFor($baseName, $fallbackLocale);
+    }
+
+    /**
+     * base + locale => raw (unprefixed)
+     */
+    public function rawForBase(string $baseName, ?string $locale): string
+    {
+        return $this->nameResolver->rawFor($baseName, $locale);
+    }
+
+    /**
+     * base + locale => uid (prefix applied)
+     */
+    public function uidForBase(string $baseName, ?string $locale): string
+    {
+        return $this->nameResolver->uidFor($baseName, $locale);
+    }
+
+    /**
+     * raw => uid (prefix applied)
+     */
+    public function uidForRaw(string $rawName): string
+    {
+        return $this->nameResolver->uidForRaw($rawName);
+    }
+
+    // ---------------------------------------------------------------------
+    // Registry-backed settings access
+    // ---------------------------------------------------------------------
+
+    /**
+     * Base-keyed settings (preferred).
+     */
+    public function getIndexSetting(string $baseName): ?array
+    {
+        return $this->baseSettings[$baseName] ?? null;
+    }
+
+    /**
+     * Legacy name retained: this now returns base-keyed settings.
+     * (Previously it was a prefixed-name lookup.)
+     */
+    public function getRawIndexSettings(): array
+    {
+        return $this->baseSettings;
+    }
+
+    public function getAllSettings(): array
+    {
+        return $this->baseSettings;
+    }
+
+    /**
+     * For diagnostics and listener logic: class => [uid => settings].
+     * Note: uid keys here are prefixed and locale-expanded only if caller requests that.
+     */
+    public function indexedByClass(): array
+    {
+        $out = [];
+        foreach ($this->baseSettings as $baseName => $settings) {
+            $class = (string)($settings['class'] ?? '');
+            if ($class === '') {
+                continue;
+            }
+            // Keep keyed by baseName; callers should compute uidForBase() when needed.
+            $out[$class][$baseName] = $settings;
+        }
+        return $out;
+    }
+
+    /**
+     * True if at least one index for this class is configured for auto-indexing.
+     * Pixie uses autoIndex=false.
+     */
+    public function shouldAutoIndex(string $entityClass): bool
+    {
+        $settingsByIndex = $this->indexSettings[$entityClass] ?? [];
+        foreach ($settingsByIndex as $cfg) {
+            if (is_array($cfg) && (($cfg['autoIndex'] ?? true) === true)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // ---------------------------------------------------------------------
+    // Meilisearch client + endpoints
+    // ---------------------------------------------------------------------
+
+    public function getMeiliClient(?string $host = null, ?string $apiKey = null): Client
+    {
+        static $clients = [];
+
+        $host ??= $this->meiliHost;
+        $apiKey ??= $this->adminKey;
+
+        $key = (string)$host . '|' . (string)$apiKey;
+        if (!isset($clients[$key])) {
+            $symfonyWithGzip = $this->symfonyHttpClient
+                ? $this->symfonyHttpClient->withOptions([])
+                : null;
+
+            $psr18 = $symfonyWithGzip
+                ? new SymfonyPsr18Client($symfonyWithGzip)
+                : new SymfonyPsr18Client();
+
+            $psr17Factory = new \Http\Discovery\Psr17Factory();
+
+            $clients[$key] = new Client(
+                $host ?? 'http://localhost:7700',
+                $apiKey,
+                $psr18,
+                $psr17Factory
+            );
+        }
+
+        return $clients[$key];
+    }
+
+    public function getIndexEndpoint(string $uid): Indexes
+    {
+        return $this->getMeiliClient()->index($uid);
+    }
+
+    /**
+     * Get or create an index by UID (already prefixed).
+     */
+    public function getOrCreateIndex(string $uid, string $primaryKey = 'id', bool $autoCreate = true, bool $wait = false): Indexes
+    {
+        $client = $this->getMeiliClient();
+
+        try {
+            $client->getIndex($uid);
+        } catch (ApiException $exception) {
+            if ($exception->httpStatus === 404) {
+                if ($autoCreate) {
+                    $task = $client->createIndex($uid, ['primaryKey' => $primaryKey]);
+                    if ($wait) {
+                        $task->wait();
+                    }
+                }
+            } else {
+                throw $exception;
+            }
+        }
+
+        return $client->index($uid);
+    }
+
+    /**
+     * Ensure base+locale index exists and apply indexLanguages when possible.
+     * Pixie should call this (via its own wrapper) using baseName and locale.
+     */
+    public function ensureBaseLocaleIndex(string $baseName, string $locale, string $primaryKey = 'id', bool $autoCreate = true): Indexes
+    {
+        $uid = $this->uidForBase($baseName, $locale);
+        $idx = $this->getOrCreateIndex($uid, $primaryKey, $autoCreate);
+
+        try {
+            $idx->updateSettings(['indexLanguages' => [strtolower($locale)]]);
+        } catch (\Throwable $e) {
+            $this->logger?->debug('indexLanguages not supported', ['uid' => $uid, 'locale' => $locale]);
+        }
+
+        return $idx;
+    }
+
+    // ---------------------------------------------------------------------
+    // Tasks / maintenance
+    // ---------------------------------------------------------------------
+
+    public function getTasks(?string $indexUid = null, array $statuses = [], array $types = [], int $limit = 100): TasksResults
     {
         $tasksQuery = new TasksQuery();
+
         if ($indexUid !== null) {
             $tasksQuery->setIndexUids([$indexUid]);
         }
@@ -167,487 +316,94 @@ final class MeiliService
         if ($limit) {
             $tasksQuery->setLimit($limit);
         }
-
-        if (count($statuses) > 0) {
+        if ($statuses) {
             $tasksQuery->setStatuses($statuses);
         }
+
         return $this->getMeiliClient()->getTasks($tasksQuery);
-
     }
 
-    /**
-     * Convenience debug logger (namespaced). No-ops if logger is null.
-     */
-    private function dlog(string $msg, array $ctx = []): void
+    public function reset(string $uid): void
     {
-        $this->logger?->debug('meili: ' . $msg, $ctx);
-    }
-
-    /**
-     * Resolve a final index name for an entity + locale, honoring the bundle prefix.
-     * If $explicit is given we use that (still prefixing if needed).
-     * Otherwise we default to {Short}_{locale} (or just {Short} if $locale is null).
-     */
-    public function resolveIndexName(string $entityClass, ?string $locale = null, ?string $explicit = null): string
-    {
-        if ($explicit) {
-            return $this->getPrefixedIndexName($explicit);
-        }
-        $short = (new \ReflectionClass($entityClass))->getShortName();
-        $base  = $locale ? sprintf('%s_%s', $short, $locale) : $short;
-        return $this->getPrefixedIndexName($base);
-    }
-
-    /**
-     * Get or create the target index for an entity+locale (or explicit name),
-     * and best-effort set its language for stemming/tokenization.
-     */
-    public function getOrCreateLocaleIndex(
-        string $entityClass,
-        ?string $locale,
-        ?string $explicitIndexName,
-        string $primaryKeyName = 'id',
-        bool $autoCreate = true
-    ): Indexes {
-        $name  = $this->resolveIndexName($entityClass, $locale, $explicitIndexName);
-        $index = $this->getOrCreateIndex($name, $primaryKeyName, $autoCreate);
-        if ($locale) {
-            try {
-                $index->updateSettings(['indexLanguages' => [$locale]]);
-            } catch (\Throwable $e) {
-                $this->dlog('indexLanguages not supported on server', ['index' => $name, 'locale' => $locale]);
-            }
-        }
-        return $index;
-    }
-
-    /**
-     * Build an IndexPlan to keep params tidy across call sites.
-     */
-    public function makePlan(
-        string $entityClass,
-        ?string $locale,
-        ?string $explicitIndexName,
-        string $primaryKeyName = 'id',
-        ?string $transport = null
-    ): \Survos\MeiliBundle\Model\IndexPlan {
-        $name = $this->resolveIndexName($entityClass, $locale, $explicitIndexName);
-        return new \Survos\MeiliBundle\Model\IndexPlan(
-            entityClass:     $entityClass,
-            locale:          $locale,
-            indexName:       $name,
-            primaryKeyName:  $primaryKeyName,
-            transport:       $transport
-        );
-    }
-
-    /**
-     * Dispatch a BatchIndexEntitiesMessage for a prepared plan and a set of ids.
-     * Keeps message wiring in one place. Returns the created message.
-     *
-     * @param list<scalar> $ids
-     */
-    public function dispatchBatchForPlan(
-        \Survos\MeiliBundle\Model\IndexPlan $plan,
-        array $ids,
-        bool $reload = true,
-        ?\Symfony\Component\Messenger\MessageBusInterface $bus = null
-    ): \Survos\MeiliBundle\Message\BatchIndexEntitiesMessage {
-        $this->dlog('dispatch batch', [
-            'index' => $plan->indexName,
-            'locale'=> $plan->locale,
-            'class' => $plan->entityClass,
-            'count' => \count($ids),
-        ]);
-
-        $msg = new \Survos\MeiliBundle\Message\BatchIndexEntitiesMessage(
-            entityClass:     $plan->entityClass,
-            entityData:      $ids,
-            reload:          $reload,
-            transport:       $plan->transport,
-            primaryKeyName:  $plan->primaryKeyName,
-            locale:          $plan->locale,
-            indexName:       $plan->indexName
-        );
-
-        if ($bus) {
-            $stamps = [];
-            if ($plan->transport) {
-                $stamps[] = new \Symfony\Component\Messenger\Stamp\TransportNamesStamp($plan->transport);
-            } else {
-                $stamps[] = new \Jwage\PhpAmqpLibMessengerBundle\Transport\AmqpStamp('meili');
-            }
-            dd($msg);
-            $bus->dispatch($msg, $stamps);
-        }
-
-        return $msg;
-    }
-
-    public function reset(string $indexName)
-    {
-        $client = $this->getMeiliClient();
         try {
-            $index = $client->index($indexName);
-//            dd($index);
-            $task = $client->deleteIndex($indexName);
-            $task = $task->wait();
-            $this->logger->warning("Index " . $indexName . " has been deleted. " . $task->getStatus()->value);
+            $client = $this->getMeiliClient();
+            $task = $client->deleteIndex($uid);
+            $task->wait();
+            $this->logger?->warning(sprintf('Index %s deleted.', $uid));
         } catch (ApiException $exception) {
-            if ($exception->errorCode == 'index_not_found') {
-                try {
-//                    $this->io()->info("Index $indexName does not exist.");
-                } catch (\Exception) {
-                    //
-                }
-//                    continue;
-            } else {
-                dd($exception);
+            if (($exception->errorCode ?? null) === 'index_not_found' || $exception->httpStatus === 404) {
+                return;
             }
+            throw $exception;
         }
     }
 
-    public function purge(string $indexName)
+    public function purge(string $uid): void
     {
-        $client = $this->getMeiliClient();
         try {
-            $index = $client->index($indexName);
-            $task = $index->deleteAllDocuments();
-            $task = $client->deleteIndex($indexName);
-            $task = $task->wait();
-            $this->logger->warning("Index " . $indexName . " has been deleted. " . $task->getStatus()->value);
+            $client = $this->getMeiliClient();
+            $index = $client->index($uid);
+            $index->deleteAllDocuments();
+            $client->deleteIndex($uid)->wait();
+            $this->logger?->warning(sprintf('Index %s purged+deleted.', $uid));
         } catch (ApiException $exception) {
-            if ($exception->errorCode == 'index_not_found') {
-                try {
-//                    $this->io()->info("Index $indexName does not exist.");
-                } catch (\Exception) {
-                    //
-                }
-//                    continue;
-            } else {
-                dd($exception);
+            if (($exception->errorCode ?? null) === 'index_not_found' || $exception->httpStatus === 404) {
+                return;
             }
+            throw $exception;
         }
-    }
-
-    public function getRelated(array $facets, string $indexName, string $locale): array
-    {
-        $lookups = [];
-        if (str_ends_with($indexName, '_obj'))
-        {
-            foreach ($facets as $facet) {
-                if (!in_array($facet, ['type','cla','cat'])) {
-                    continue;
-                }
-                $related = str_replace('_obj', '_' . $facet, $indexName);
-                $index = $this->getIndexEndpoint($related);
-                $docs = $index->getDocuments();
-                foreach ($docs as $doc) {
-                    $lookups[$facet][$doc['id']] = $doc['t'][$locale]['label'];
-                }
-            }
-        }
-        return $lookups;
-
-    }
-
-//    public function waitForTask(Task|array|int $taskLike, ?Indexes $index = null, bool $stopOnError = true, mixed $dataToDump = null): Task
-//    {
-//        assert($taskLike instanceof Task, "pass the Task object.");
-//        // Normalize to Task + id
-//        $task = match (true) {
-//            $taskLike instanceof Task => $taskLike,
-//            \is_array($taskLike)      => Task::fromArray($taskLike),
-//            \is_int($taskLike)        => Task::fromArray(['taskUid' => $taskLike]),
-//            default                   => throw new \InvalidArgumentException('Unsupported task input.'),
-//        };
-//
-//        $taskId = $task->taskUid;
-//
-//        // If we already have its terminal state, return early
-//        if ($task->finished) {
-//            return $task;
-//        }
-//
-//        // Path A: We have an Indexes instance (SDK helper)
-//        if ($index instanceof Indexes) {
-//            $arr = $index->waitForTask($taskId);
-//            return $task->updateFromArray($arr);
-//        }
-//
-//        // Path B: Poll the client directly (for index-creation & admin ops)
-//        // NOTE: implement getMeiliClient()->getTask(int $uid): array in this service.
-//        do {
-//            $arr = $this->getMeiliClient()->getTask($taskId);
-//            $task->updateFromArray($arr);
-//
-//            $this->logger?->info(sprintf('Task %d status: %s', $taskId, $task->status));
-//
-//            if (!$task->finished) {
-//                sleep(1);
-//            }
-//        } while (!$task->finished);
-//
-//        if ($task->failed && $stopOnError) {
-//            $this->logger?->warning(
-//                \json_encode($dataToDump ?? [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
-//            );
-//
-//            $message = $task->error['message'] ?? 'Unknown Meilisearch task error.';
-//            throw new \RuntimeException(sprintf('Task %d failed: %s', $taskId, $message));
-//        }
-//
-//        return $task;
-//    }
-
-    public function getPrefix(): ?string
-    {
-        return $this->getConfig()['meiliPrefix']??null;
-    }
-
-    public function getPrefixedIndexName(string $indexName)
-    {
-        if (class_exists($indexName)) {
-            $indexName = new \ReflectionClass($indexName)->getShortName();
-        }
-        if ($prefix = $this->getPrefix())
-        {
-            if (!str_starts_with($indexName, $prefix)) {
-                $indexName = $prefix . $indexName;
-            }
-        }
-        return $indexName;
     }
 
     /**
-     * @param \Meilisearch\Endpoints\Indexes $index
-     * @param SymfonyStyle $io
-     * @param string|null $indexName
-     * @return array
-     */
-    public function waitUntilFinished(Indexes $index): array
-    {
-        do {
-            $index->fetchInfo();
-//            $info = $index->fetchInfo();
-            $stats = $index->stats();
-            $isIndexing = $stats['isIndexing'];
-            $indexName = $index->getUid();
-            if ($this->logger) {
-                $this->logger->info(sprintf(
-                    "\n%s is %s with %d documents",
-                    $indexName,
-                    $isIndexing ? 'indexing' : 'ready',
-                    $stats['numberOfDocuments']
-                ));
-            }
-            if ($isIndexing) {
-                sleep(1);
-            }
-        } while ($isIndexing);
-        return $stats;
-    }
-
-
-    public function getMeiliClient(?string $host=null, ?string $apiKey=null): Client
-    {
-        // @handle multiple server/keys
-
-        static $clients=[];
-        $host ??= $this->meiliHost;
-        $apiKey ??= $this->adminKey; // in php, it's usually the admin key
-
-        if (!array_key_exists($key=$host.$apiKey, $clients)) {
-            // 1) take the original, immutable client and grab a new instance with gzip enabled
-            $symfonyWithGzip = $this->symfonyHttpClient->withOptions([
-//                'headers'   => ['Accept-Encoding' => 'gzip'],
-            ]);
-
-            // 2) wrap _that_ instance as PSR-18
-            $psr18  = new SymfonyPsr18Client($symfonyWithGzip);
-            $psr17Factory = new \Http\Discovery\Psr17Factory();
-
-            $client = new Client(
-                $host??$this->meiliHost,
-                    $apiKey??$this->adminKey,
-                $psr18,                   // PSR-18 client
-                $psr17Factory            // PSR-17 StreamFactoryInterface
-            );
-            $clients[$key] = $client;
-
-        }
-        return $clients[$key];
-    }
-
-    public function getIndex(string $indexName, string $key = 'id', bool $autoCreate = true): ?Indexes
-    {
-//        $indexName = $this->getPrefixedIndexName($indexName);
-        $this->loadExistingIndexes();
-        static $indexes = [];
-        if (!$index = $indexes[$indexName] ?? null) {
-            if ($autoCreate) {
-                $index = $this->getOrCreateIndex($indexName, $key);
-                $indexes[$indexName] = $index;
-            }
-        }
-        return $index;
-    }
-
-    /**
-     * Ultra-fast list using raw HTTP GET {host}/indexes.
-     * Returns lightweight info (uid, primaryKey, createdAt, updatedAt).
-     * No pagination: Meilisearch returns all indexes on this endpoint.
+     * Fast list of server indexes (SDK objects), keyed by UID.
+     * Useful for diagnostics.
      *
-     * @return array<int,array{
-     *   uid:string,
-     *   primaryKey:?string,
-     *   createdAt:?string,
-     *   updatedAt:?string
-     * }>
+     * @return array<string,Indexes>
      */
     public function listIndexesFast(): array
     {
-        $url = rtrim((string) $this->meiliHost, '/') . '/indexes';
-
-        $headers = [];
-        if ($this->adminKey) {
-            // Meilisearch accepts Authorization: Bearer <key>
-            $headers['Authorization'] = 'Bearer ' . $this->adminKey;
-        }
-//        dd($this->getMeiliClient()->getIndexes());
-//
-////        $x = $this->getMeiliClient()->http->get($url, $headers);
-//        try {
-//            $response = $this->getMeiliClient()->http->get($url, [
-//                'headers' => $headers,
-//                'timeout' => 10,
-//            ]);
-//        } catch (ApiException $e) {
-//
-//        } catch (JsonDecodingException $e) {
-//
-//        }
-//        dd($response);
-//
-        // Expect an array of index rows; keep only the fields we need
-//        dd($this->getMeiliClient()->getIndexes());
-
         $rows = [];
-        /** @var Indexes $row */
-        foreach ($this->getMeiliClient()->getIndexes(new IndexesQuery()->setLimit(10000)) as $uid=> $row) {
-//            dd($row->getUid(), $row, $row::class, get_class_methods($row));
-            $uid = $row->getUid();
-            $rows[$uid] = $row;
-//            [
-//                'uid'        => (string)($row['uid'] ?? ''),
-//                'primaryKey' => $row['primaryKey'] ?? null,
-//                'createdAt'  => $row['createdAt'] ?? null, // ISO 8601 string (server time)
-//                'updatedAt'  => $row['updatedAt'] ?? null, // ISO 8601 string (server time)
-//            ];
+        foreach ($this->getMeiliClient()->getIndexes((new IndexesQuery())->setLimit(10000)) as $row) {
+            if ($row instanceof Indexes) {
+                $rows[$row->getUid()] = $row;
+            }
         }
-
         return $rows;
     }
 
-    public function getIndexEndpoint(string $indexName): Indexes
-    {
-        return $this->getMeiliClient()->index($indexName);
+    // ---------------------------------------------------------------------
+    // Doctrine legacy paths (keep for later compatibility pass)
+    // ---------------------------------------------------------------------
 
+    /**
+     * Legacy: resolve an index UID for a Doctrine entity class + locale.
+     * This keeps your previous "m_Short_es" behavior but routes through the new resolver.
+     */
+    public function resolveIndexUidForEntity(string $entityClass, ?string $locale = null, ?string $explicitBase = null): string
+    {
+        $base = $explicitBase ?: (new \ReflectionClass($entityClass))->getShortName();
+        return $this->uidForBase($base, $locale);
     }
 
-    public function loadExistingIndexes()
+    private function getMeiliIndexForEntity(string $class, ?string $locale = null): Indexes
     {
-        return;
-        $client = $this->getMeiliClient();
-        do {
-            $indexes = $client->getIndexes();
-            dd($indexes);
-        } while ($nextPage);
+        $uid = $this->resolveIndexUidForEntity($class, $locale);
+        return $this->getIndexEndpoint($uid);
     }
 
-    public function getOrCreateIndex(string $indexName, string $key = 'id', bool $autoCreate = true, bool $wait=false): Indexes
-    {
-        $client = $this->getMeiliClient();
-        try {
-            // by doing a fetch, we can see if it already exists, and dispatch a create request if not
-            $index = $client->getIndex($indexName);
-        } catch (ApiException $exception) {
-            if ($exception->httpStatus === 404) {
-                if ($autoCreate) {
-                    // this dispatches a task, may not run here.
-                    $task = $this->getMeiliClient()->createIndex($indexName, ['primaryKey' => $key]);
-                    if ($wait) {
-                        $task = $task->wait();
-                    }
-//                    $this->waitForTask($task);
-                    // the API Endpoint
-//                    $index = $client->index($indexName);
-                } else {
-                    $index = null;
-                }
-            } else {
-                dd($exception, $exception::class);
-            }
-        }
-        // return the endpoint, not the fetch
-        return $client->index($indexName);
-    }
-
-
-    public function applyToIndex(string $indexName, callable $callback, int $batch = 50)
-    {
-        $index = $this->getMeiliClient()->index($indexName);
-
-        $documents = $index->getDocuments((new DocumentsQuery())->setLimit(0));
-        $total = $documents->getTotal();
-        $currentPosition = 0;
-        // dispatch MeiliRowEvents?
-//        $progressBar = $this->getProcessBar($total);
-
-        while ($currentPosition < $total) {
-            $documents = $index->getDocuments((new DocumentsQuery())->setOffset($currentPosition)->setLimit($batch));
-            $currentPosition += $documents->count();
-            foreach ($documents->getIterator() as $row) {
-//                $progressBar->advance();
-                $callback($row, $index);
-            }
-            $currentPosition++;
-        }
-//        $progressBar->finish();
-    }
-
-
-
-    private function getMeiliIndex(string $class, ?string $locale=null): Indexes
-    {
-        $short     = (new \ReflectionClass($class))->getShortName();
-        $base      = $locale ? sprintf('%s_%s', $short, $locale) : $short;
-        $indexName = $this->getPrefixedIndexName($base);
-        return $this->getIndex($indexName);
-    }
-
-    private function flushToMeili($meiliIndex, array $documents): void
+    private function flushToMeili(Indexes $meiliIndex, array $documents): void
     {
         $count = count($documents);
         try {
             $task = $meiliIndex->addDocuments($documents);
-            $this->logger?->debug(sprintf(
-                "MeiliSearch task %s created for %d documents",
-                $task['taskUid'] ?? 'unknown',
-                $count
-            ));
-        } catch (\Exception $e) {
-            $this->logger?->error(sprintf(
-                "Failed to index %d documents: %s",
-                $count,
-                $e->getMessage()
-            ));
+            $this->logger?->debug(sprintf('MeiliSearch task %s created for %d documents', $task['taskUid'] ?? 'unknown', $count));
+        } catch (\Throwable $e) {
+            $this->logger?->error(sprintf('Failed to index %d documents: %s', $count, $e->getMessage()));
             throw $e;
         }
     }
 
     #[AsTwigFunction('approximate_count')]
-    /** Duplicated from WorkflowHelperService!  Maybe need a doctrine helper?  Or extensions? */
     public function getApproxCount(string $class): ?int
     {
         static $counts = null;
@@ -655,13 +411,15 @@ final class MeiliService
         if (!class_exists($class)) {
             return -1;
         }
+
         try {
             $repo = $this->entityManager->getRepository($class);
-        } catch (\Exception $e) {
+        } catch (\Throwable) {
             return -2;
         }
+
         try {
-            if (is_null($counts)) {
+            if ($counts === null) {
                 $rows = $this->entityManager->getConnection()->fetchAllAssociative(
                     "SELECT n.nspname AS schema_name,
        c.relname AS table_name,
@@ -669,34 +427,24 @@ final class MeiliService
 FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE c.relkind = 'r'
-  AND n.nspname NOT IN ('pg_catalog', 'information_schema')  -- exclude system schemas
-ORDER BY n.nspname, c.relname;");
+  AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+ORDER BY n.nspname, c.relname;"
+                );
 
                 $counts = array_combine(
-                    array_map(fn($r) => "{$r['table_name']}", $rows),
-                    array_map(fn($r) => (int)$r['estimated_rows'], $rows)
+                    array_map(static fn($r) => (string)$r['table_name'], $rows),
+                    array_map(static fn($r) => (int)$r['estimated_rows'], $rows)
                 );
             }
-            $count = $counts[$repo->getClassMetadata()->getTableName()] ?? -1;
 
-//            // might be sqlite
-//            $count =  (int) $this->getEntityManager()->getConnection()->fetchOne(
-//                'SELECT reltuples::BIGINT FROM pg_class WHERE relname = :table',
-//                ['table' => $this->getClassMetadata()->getTableName()]
-//            );
-        } catch (\Exception $e) {
+            $table = $repo->getClassMetadata()->getTableName();
+            $count = $counts[$table] ?? -1;
+        } catch (\Throwable) {
             $count = -1;
         }
 
-        // if no analysis
-        // Fallback to exact count
         if ($count < 0) {
             $count = $repo->count();
-//            // or $repo->count[]
-//            $count = (int)$repo->createQueryBuilder('e')
-//                ->select('COUNT(e)')
-//                ->getQuery()
-//                ->getSingleScalarResult();
         }
 
         return $count;
@@ -705,96 +453,80 @@ ORDER BY n.nspname, c.relname;");
     #[AsMessageHandler]
     public function batchRemoveEntities(BatchRemoveEntitiesMessage $message): void
     {
+        $meiliIndex = $this->getMeiliIndexForEntity($message->entityClass);
+
         try {
-            $meiliIndex = $this->getMeiliIndex($message->entityClass);
-
-            $this->logger?->info(sprintf(
-                "Batch removing %d entities of class %s from MeiliSearch",
-                count($message->entityIds),
-                $message->entityClass
-            ));
-
-            $task = $meiliIndex->deleteDocuments($message->entityIds);
-
-            $this->logger?->debug(sprintf(
-                "MeiliSearch batch delete task %s created for %d %s entities",
-                $task['taskUid'] ?? 'unknown',
-                count($message->entityIds),
-                $message->entityClass
-            ));
-
-        } catch (\Exception $e) {
-            $this->logger?->error(sprintf(
-                "Failed to batch remove %d entities of class %s: %s",
-                count($message->entityIds),
-                $message->entityClass,
-                $e->getMessage()
-            ));
-
+            $this->logger?->info(sprintf('Batch removing %d entities of class %s', count($message->entityIds), $message->entityClass));
+            $meiliIndex->deleteDocuments($message->entityIds);
+        } catch (\Throwable $e) {
+            $this->logger?->error(sprintf('Failed to batch remove %d entities of class %s: %s', count($message->entityIds), $message->entityClass, $e->getMessage()));
             throw $e;
         }
     }
 
     /**
-     * @param BatchIndexEntitiesMessage $message
-     * @param \Doctrine\ORM\EntityRepository $repo
-     * @param string $identifierField
-     * @param array|null $groups
-     * @param int $payloadSize
-     * @param array $documents
-     * @param int $payloadThreshold
-     * @param Indexes $meiliIndex
-     * @return void
-     * @throws \Symfony\Component\Serializer\Exception\ExceptionInterface
+     * Doctrine indexing path; keep as-is for now (you said you will revisit later).
      */
-    public function loadAndFlush(BatchIndexEntitiesMessage $message,
-                                 EntityRepository $repo,
-                                 string $identifierField,
-                                 ?array $groups,
-                                 int $payloadSize,
-                                 array $documents,
-                                 int $payloadThreshold,
-                                 Indexes $meiliIndex): void
-    {
+    public function loadAndFlush(
+        BatchIndexEntitiesMessage $message,
+        EntityRepository $repo,
+        string $identifierField,
+        ?array $groups,
+        int $payloadSize,
+        array $documents,
+        int $payloadThreshold,
+        Indexes $meiliIndex
+    ): void {
         $batchSize = 500;
 
         foreach (array_chunk($message->entityData, $batchSize) as $chunk) {
             $entities = $repo->findBy([$identifierField => $chunk]);
 
             foreach ($entities as $entity) {
-                dd($this->indexSettings, $message);
                 $normalized = $this->normalizer->normalize($entity, 'array', ['groups' => $groups]);
                 $normalized = SurvosUtils::removeNullsAndEmptyArrays($normalized);
 
                 $json = json_encode($normalized);
                 $size = $json ? strlen($json) : 0;
+
                 $payloadSize += $size;
                 $documents[] = $normalized;
 
                 if ($payloadSize >= $payloadThreshold) {
-                    $this->flushToMeili($meiliIndex, $documents, count($documents));
+                    $this->flushToMeili($meiliIndex, $documents);
                     $documents = [];
                     $payloadSize = 0;
                     $this->entityManager->clear();
                     gc_collect_cycles();
                 }
             }
-            $this->entityManager->clear(); // clear batch
+
+            $this->entityManager->clear();
         }
 
-        if (!empty($documents)) {
-            $this->flushToMeili($meiliIndex, $documents, count($documents));
+        if ($documents) {
+            $this->flushToMeili($meiliIndex, $documents);
         }
     }
 
-    public function resolveUid(string $baseIndexName, ?string $locale): string
+    // ---------------------------------------------------------------------
+    // Convenience: apply callback to documents in an index (UID)
+    // ---------------------------------------------------------------------
+
+    public function applyToIndex(string $uid, callable $callback, int $batch = 50): void
     {
-        if (!$this->isMultiLingual || !$this->passLocale || !$locale) {
-            return $baseIndexName;
+        $index = $this->getMeiliClient()->index($uid);
+
+        $documents = $index->getDocuments((new DocumentsQuery())->setLimit(0));
+        $total = $documents->getTotal();
+
+        $currentPosition = 0;
+        while ($currentPosition < $total) {
+            $documents = $index->getDocuments((new DocumentsQuery())->setOffset($currentPosition)->setLimit($batch));
+            foreach ($documents->getIterator() as $row) {
+                $callback($row, $index);
+            }
+            $currentPosition += $documents->count();
         }
-
-        return $this->localizedUid($baseIndexName, $locale);
     }
-
 }
-

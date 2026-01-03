@@ -2,6 +2,80 @@
 
 {% block title %}{{ indexName }} — Meili Index{% endblock %}
 
+{% block head_stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/simple-datatables@latest/dist/style.css">
+    <style>
+        #facetFieldTabs .nav-link.facet-empty {
+            opacity: 0.5;
+            font-style: italic;
+            background: #fff5f5;
+            border-color: #f5c6cb transparent transparent transparent;
+        }
+        #facetFieldTabs .nav-link.facet-empty::before {
+            content: "⚠";
+            font-size: 0.7em;
+            margin-right: 3px;
+            font-style: normal;
+        }
+        #facetFieldTabs .nav-link.facet-empty .badge-count {
+            color: #dc3545;
+        }
+        #facetFieldTabs .nav-link.facet-empty:hover {
+            opacity: 0.7;
+        }
+
+        #facetFieldTabs {
+            border-bottom: 2px solid #dee2e6;
+            gap: 1px;
+            flex-wrap: wrap;
+        }
+        #facetFieldTabs .nav-item {
+            margin-bottom: -2px;
+        }
+        #facetFieldTabs .nav-link {
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-radius: 3px 3px 0 0;
+            background: #f1f3f5;
+            color: #495057;
+            padding: 0.3rem 0.6rem;
+            font-size: 0.8rem;
+            line-height: 1.2;
+        }
+        #facetFieldTabs .nav-link:hover {
+            background: #e9ecef;
+            border-color: #dee2e6 #dee2e6 transparent;
+        }
+        #facetFieldTabs .nav-link.active {
+            background: #fff;
+            border-color: #0d6efd #dee2e6 #fff #dee2e6;
+            border-left: 2px solid #0d6efd;
+            color: #0d6efd;
+            font-weight: 600;
+        }
+        #facetFieldTabs .badge-count {
+            font-size: 0.55em;
+            vertical-align: super;
+            color: #868e96;
+            font-weight: 500;
+            margin-left: 1px;
+        }
+        #facetFieldTabs .nav-link.active .badge-count {
+            color: #0d6efd;
+        }
+
+        .dataTable-wrapper .dataTable-top,
+        .dataTable-wrapper .dataTable-bottom {
+            padding: 0.5rem 0;
+        }
+        .dataTable-wrapper .dataTable-search input {
+            font-size: 0.875rem;
+            padding: 0.375rem 0.75rem;
+        }
+    </style>
+{% endblock %}
+
 {% block content_header %}
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div>
@@ -39,9 +113,7 @@
             <div class="card h-100">
                 <div class="card-body py-3">
                     <div class="text-muted small mb-1">Documents</div>
-                    <div class="h4 mb-0">
-                        {{ stats.numberOfDocuments ?? '—' }}
-                    </div>
+                    <div class="h4 mb-0">{{ stats.numberOfDocuments ?? '—' }}</div>
                 </div>
             </div>
         </div>
@@ -49,9 +121,7 @@
             <div class="card h-100">
                 <div class="card-body py-3">
                     <div class="text-muted small mb-1">Is Indexing</div>
-                    <div class="h4 mb-0">
-                        {{ stats.isIndexing ? 'Yes' : 'No' }}
-                    </div>
+                    <div class="h4 mb-0">{{ stats.isIndexing ? 'Yes' : 'No' }}</div>
                 </div>
             </div>
         </div>
@@ -59,9 +129,7 @@
             <div class="card h-100">
                 <div class="card-body py-3">
                     <div class="text-muted small mb-1">Facet Fields</div>
-                    <div class="h4 mb-0">
-                        {{ facetCounts|length }}
-                    </div>
+                    <div class="h4 mb-0">{{ facetCounts|length }}</div>
                 </div>
             </div>
         </div>
@@ -69,9 +137,7 @@
             <div class="card h-100">
                 <div class="card-body py-3">
                     <div class="text-muted small mb-1">Fields</div>
-                    <div class="h4 mb-0">
-                        {{ stats.fieldDistribution|length }}
-                    </div>
+                    <div class="h4 mb-0">{{ stats.fieldDistribution|length }}</div>
                 </div>
             </div>
         </div>
@@ -79,42 +145,22 @@
 
     <ul class="nav nav-tabs mb-3" id="meiliIndexTabs" role="tablist">
         <li class="nav-item" role="presentation">
-            <button class="nav-link active"
-                    id="facets-tab"
-                    data-bs-toggle="tab"
-                    data-bs-target="#facets"
-                    type="button"
-                    role="tab">
+            <button class="nav-link active" id="facets-tab" data-bs-toggle="tab" data-bs-target="#facets" type="button" role="tab">
                 Facets
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link"
-                    id="settings-tab"
-                    data-bs-toggle="tab"
-                    data-bs-target="#settings"
-                    type="button"
-                    role="tab">
+            <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab">
                 Settings (configured)
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link"
-                    id="raw-info-tab"
-                    data-bs-toggle="tab"
-                    data-bs-target="#raw-info"
-                    type="button"
-                    role="tab">
+            <button class="nav-link" id="raw-info-tab" data-bs-toggle="tab" data-bs-target="#raw-info" type="button" role="tab">
                 Raw index info
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link"
-                    id="stats-tab"
-                    data-bs-toggle="tab"
-                    data-bs-target="#stats"
-                    type="button"
-                    role="tab">
+            <button class="nav-link" id="stats-tab" data-bs-toggle="tab" data-bs-target="#stats" type="button" role="tab">
                 Stats (API)
             </button>
         </li>
@@ -122,72 +168,53 @@
 
     <div class="tab-content" id="meiliIndexTabsContent">
         {# ---------------- FACETS TAB ---------------- #}
-        <div class="tab-pane fade show active" id="facets" role="tabpanel" aria-labelledby="facets-tab">
+        <div class="tab-pane fade show active" id="facets" role="tabpanel">
             {% if facetCounts is empty %}
                 <div class="alert alert-info">
                     No facet counts available. Make sure <code>settings.facets</code> is configured and the index is populated.
                 </div>
             {% else %}
                 <div class="card">
-                    <div class="card-header border-bottom-0">
-                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-                            <div class="fw-semibold">Facet fields</div>
-                            <small class="text-muted">
-                                Showing up to the top 25 values per facet.
-                            </small>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <ul class="nav nav-pills flex-wrap mb-3" id="facetFieldTabs" role="tablist">
-                            {% for fieldName, counts in facetCounts %}
-                                {% set fieldId = 'facet-' ~ fieldName|replace({' ': '-', '.': '-', '[': '-', ']': '-'}) %}
-                                <li class="nav-item mb-2 me-1" role="presentation">
-                                    <button class="nav-link {{ loop.first ? 'active' }} d-flex align-items-center gap-2"
-                                            id="{{ fieldId }}-tab"
-                                            data-bs-toggle="pill"
-                                            data-bs-target="#{{ fieldId }}"
-                                            type="button"
-                                            role="tab">
-                                        {{ fieldName }}
-                                        <span style="background-color: #6c757d; color: #fff; padding: 0.25em 0.5em; border-radius: 0.25rem; font-size: 0.75em;">
-                                            {{ counts|length }}
-                                        </span>
-                                    </button>
-                                </li>
-                            {% endfor %}
-                        </ul>
+                    <div class="card-header border-bottom-0 bg-white">
+                        <nav>
+                            <ul class="nav nav-tabs card-header-tabs" id="facetFieldTabs" role="tablist">
+                                {% for fieldName, counts in facetCounts %}
+                                    {% set fieldId = 'facet-' ~ fieldName|replace({' ': '-', '.': '-', '[': '-', ']': '-'}) %}
+                                    <li class="nav-item" role="presentation">
 
+                                        <button class="nav-link {{ loop.first ? 'active' }}{{ counts|length == 0 ? ' facet-empty' }}"
+                                                id="{{ fieldId }}-tab"
+                                                data-bs-toggle="tab"
+                                                data-bs-target="#{{ fieldId }}"
+                                                type="button"
+                                                role="tab">
+                                            {{ fieldName }}
+                                            <span class="badge-count">{{ counts|length }}</span>
+                                        </button>
+
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </nav>
+                    </div>
+
+                    <div class="card-body">
                         <div class="tab-content" id="facetFieldTabsContent">
                             {% for fieldName, counts in facetCounts %}
                                 {% set fieldId = 'facet-' ~ fieldName|replace({' ': '-', '.': '-', '[': '-', ']': '-'}) %}
                                 <div class="tab-pane fade {{ loop.first ? 'show active' }}" id="{{ fieldId }}" role="tabpanel">
-                                    <h5 class="mb-3">
-                                        {{ fieldName }}
-                                        <small class="text-muted">
-                                            ({{ counts|length }} unique values)
-                                        </small>
-                                    </h5>
-
                                     <div class="row">
                                         {# Chart column #}
                                         {% if facetCharts is defined and facetCharts[fieldName] is defined %}
                                             <div class="col-lg-5 mb-3">
                                                 <div class="card h-100">
-                                                    <div class="card-header py-2">
+                                                    <div class="card-header py-2 bg-light">
                                                         <small class="fw-semibold">Distribution (top 10)</small>
                                                     </div>
                                                     <div class="card-body p-2">
-
                                                         <div style="position: relative; height: 300px; width: 100%;">
                                                             {{ render_chart(facetCharts[fieldName], {'style': 'display: block; width: 100%; height: 100%;'}) }}
                                                         </div>
-
-{#                                                        <div style="height: 300px;">#}
-{#                                                            {{ render_chart(facetCharts[fieldName], {#}
-{#                                                                'style': 'display: block; height: 300px; width: 100%;',#}
-{#                                                                'class': 'w-100'#}
-{#                                                            }) }}#}
-{#                                                        </div>#}
                                                     </div>
                                                 </div>
                                             </div>
@@ -195,41 +222,22 @@
 
                                         {# Table column #}
                                         <div class="{{ facetCharts is defined and facetCharts[fieldName] is defined ? 'col-lg-7' : 'col-12' }}">
-                                            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                                                <table class="table table-sm table-striped table-hover align-middle mb-0">
-                                                    <thead class="table-light sticky-top">
+                                            <table class="table table-sm table-striped table-hover facet-datatable">
+                                                <thead>
+                                                <tr>
+                                                    <th>Label</th>
+                                                    <th data-type="number">Count</th>
+                                                </tr>
+                                                </thead>
+                                                <tbody>
+                                                {% for c in counts %}
                                                     <tr>
-                                                        <th style="width: 70%;">Label</th>
-                                                        <th style="width: 30%;" class="text-end">Count</th>
+                                                        <td>{{ c.label is same as(null) or c.label == '' ? '∅ (null/empty)' : c.label }}</td>
+                                                        <td>{{ c.count|number_format }}</td>
                                                     </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                    {% for c in counts|slice(0, 25) %}
-                                                        <tr>
-                                                            <td>
-                                                                {{ c.label is same as(null) or c.label == '' ? '∅ (null/empty)' : c.label }}
-                                                            </td>
-                                                            <td class="text-end">
-                                                                <span style="background-color: #0d6efd; color: #fff; padding: 0.25em 0.6em; border-radius: 0.25rem; font-size: 0.85em; font-weight: 500;">
-                                                                    {{ c.count|number_format }}
-                                                                </span>
-                                                            </td>
-                                                        </tr>
-                                                    {% else %}
-                                                        <tr>
-                                                            <td colspan="2" class="text-muted text-center">
-                                                                No values found for this facet.
-                                                            </td>
-                                                        </tr>
-                                                    {% endfor %}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                            {% if counts|length > 25 %}
-                                                <div class="text-muted small mt-2">
-                                                    Showing 25 of {{ counts|length }} values.
-                                                </div>
-                                            {% endif %}
+                                                {% endfor %}
+                                                </tbody>
+                                            </table>
                                         </div>
                                     </div>
                                 </div>
@@ -241,11 +249,9 @@
         </div>
 
         {# ---------------- SETTINGS TAB ---------------- #}
-        <div class="tab-pane fade" id="settings" role="tabpanel" aria-labelledby="settings-tab">
+        <div class="tab-pane fade" id="settings" role="tabpanel">
             <div class="card">
-                <div class="card-header">
-                    <strong>Configured settings (MeiliService)</strong>
-                </div>
+                <div class="card-header"><strong>Configured settings (MeiliService)</strong></div>
                 <div class="card-body">
                     <pre class="mb-0"><code>{{ settings|json_pretty }}</code></pre>
                 </div>
@@ -253,11 +259,9 @@
         </div>
 
         {# ---------------- RAW INFO TAB ---------------- #}
-        <div class="tab-pane fade" id="raw-info" role="tabpanel" aria-labelledby="raw-info-tab">
+        <div class="tab-pane fade" id="raw-info" role="tabpanel">
             <div class="card">
-                <div class="card-header">
-                    <strong>Raw index info (Meilisearch /indexes/{{ indexName }})</strong>
-                </div>
+                <div class="card-header"><strong>Raw index info (Meilisearch /indexes/{{ indexName }})</strong></div>
                 <div class="card-body">
                     <pre class="mb-0"><code>{{ rawInfo|json_pretty }}</code></pre>
                 </div>
@@ -265,15 +269,51 @@
         </div>
 
         {# ---------------- STATS TAB ---------------- #}
-        <div class="tab-pane fade" id="stats" role="tabpanel" aria-labelledby="stats-tab">
+        <div class="tab-pane fade" id="stats" role="tabpanel">
             <div class="card">
-                <div class="card-header">
-                    <strong>Stats (Meilisearch /indexes/{{ indexName }}/stats)</strong>
-                </div>
+                <div class="card-header"><strong>Stats (Meilisearch /indexes/{{ indexName }}/stats)</strong></div>
                 <div class="card-body">
                     <pre class="mb-0"><code>{{ stats|json_pretty }}</code></pre>
                 </div>
             </div>
         </div>
     </div>
+{% endblock %}
+
+{% block body_javascript %}
+    {{ parent() }}
+    <script src="https://cdn.jsdelivr.net/npm/simple-datatables@latest"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            function initDataTable(table) {
+                if (table.dataset.initialized) return;
+                new simpleDatatables.DataTable(table, {
+                    perPage: 25,
+                    perPageSelect: [10, 25, 50, 100],
+                    searchable: true,
+                    sortable: true,
+                    labels: {
+                        placeholder: "Search values...",
+                        perPage: "{select} per page",
+                        noRows: "No values found",
+                        info: "Showing {start} to {end} of {rows} values"
+                    }
+                });
+                table.dataset.initialized = 'true';
+            }
+
+            // Init the first visible table
+            const firstTable = document.querySelector('.tab-pane.active .facet-datatable');
+            if (firstTable) initDataTable(firstTable);
+
+            // Init tables when their tab becomes visible
+            document.querySelectorAll('[data-bs-toggle="tab"]').forEach(function(tab) {
+                tab.addEventListener('shown.bs.tab', function(e) {
+                    const pane = document.querySelector(e.target.dataset.bsTarget);
+                    const table = pane?.querySelector('.facet-datatable');
+                    if (table) initDataTable(table);
+                });
+            });
+        });
+    </script>
 {% endblock %}

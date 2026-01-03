@@ -613,12 +613,13 @@
                 <div class="facet-block mb-3" data-facet-block>
                   <div class="facet-header">
                       {% set fieldDescription = false %}
+                      {% set label = name %}
                       {% if translationStyle == 'simple' %}
-                      {% set label = (name ~ '.label')|trans(domain: indexConfig.rawName) %}
-                      {% set fieldDescription = (name ~ '.description')|trans(domain: indexConfig.rawName) %}
+                      {% set label = (name ~ '.label')|trans(domain: indexConfig.baseName) %}
+                      {% set fieldDescription = (name ~ '.description')|trans(domain: indexConfig.baseName) %}
                       {% elseif translationStyle == 'compound' %}
-                      {% set label = (name ~ '.label')|trans(domain: indexConfig.rawName) %}
-                      {% set fieldDescription = (name ~ '.description')|trans(domain: indexConfig.rawName) %}
+                      {% set label = (name ~ '.label')|trans(domain: indexConfig.baseName) %}
+                      {% set fieldDescription = (name ~ '.description')|trans(domain: indexConfig.baseName) %}
                           {% else %}
                               {% set label = name %}
                               {% endif %}

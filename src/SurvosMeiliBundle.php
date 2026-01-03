@@ -2,57 +2,50 @@
 
 namespace Survos\MeiliBundle;
 
-use Psr\Log\LoggerAwareInterface;
-use ReflectionClass;
 use Survos\CoreBundle\HasAssetMapperInterface;
 use Survos\CoreBundle\Traits\HasAssetMapperTrait;
 use Survos\MeiliBundle\Bridge\EasyAdmin\MeiliEasyAdminDashboardHelper;
+use Survos\MeiliBundle\Bridge\EasyAdmin\MeiliEasyAdminMenuFactory;
 use Survos\MeiliBundle\Command\ExportCommand;
-use Survos\MeiliBundle\Command\FastSyncIndexesCommand;
 use Survos\MeiliBundle\Command\IterateIndexesCommand;
 use Survos\MeiliBundle\Command\MeilEstimatorCommand;
 use Survos\MeiliBundle\Command\MeiliFlushFileCommand;
-use Survos\MeiliBundle\Command\MeiliRegistryCommand;
+use Survos\MeiliBundle\Command\MeiliRegistryReportCommand;
 use Survos\MeiliBundle\Command\MeiliSchemaCreateCommand;
 use Survos\MeiliBundle\Command\MeiliSchemaUpdateCommand;
 use Survos\MeiliBundle\Command\MeiliSchemaValidateCommand;
 use Survos\MeiliBundle\Command\MeiliSuggestSettingsCommand;
+use Survos\MeiliBundle\Command\PopulateCommand;
 use Survos\MeiliBundle\Command\SyncIndexesCommand;
 use Survos\MeiliBundle\Compiler\MeiliIndexPass;
 use Survos\MeiliBundle\Components\InstantSearchComponent;
-use Survos\MeiliBundle\Command\PopulateCommand;
-use Survos\MeiliBundle\Command\SettingsCommand;
-use Survos\MeiliBundle\Controller\MeiliAdminController;
 use Survos\MeiliBundle\Controller\AbstractMeiliController;
+use Survos\MeiliBundle\Controller\MeiliAdminController;
 use Survos\MeiliBundle\Controller\MeiliProxyController;
 use Survos\MeiliBundle\Controller\SearchController;
 use Survos\MeiliBundle\Controller\TemplateController;
 use Survos\MeiliBundle\EventListener\DoctrineEventListener;
-use Survos\MeiliBundle\Filter\MeiliSearch\AbstractSearchFilter;
 use Survos\MeiliBundle\MessageHandler\BatchIndexEntitiesMessageHandler;
-use Survos\MeiliBundle\Metadata\MeiliIndex;
 use Survos\MeiliBundle\Registry\MeiliRegistry;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
 use Survos\MeiliBundle\Service\IndexFastSyncService;
+use Survos\MeiliBundle\Service\IndexNameResolver;
 use Survos\MeiliBundle\Service\IndexSyncService;
 use Survos\MeiliBundle\Service\MeiliFieldHeuristic;
 use Survos\MeiliBundle\Service\MeiliNdjsonUploader;
 use Survos\MeiliBundle\Service\MeiliPayloadBuilder;
 use Survos\MeiliBundle\Service\MeiliService;
+use Survos\MeiliBundle\Service\MeiliServiceConfig;
 use Survos\MeiliBundle\Service\SettingsService;
-use Survos\MeiliBundle\Util\EmbedderConfig;
 use Survos\MeiliBundle\Util\ResolvedEmbeddersProvider;
 use Survos\MeiliBundle\Util\TextFieldResolver;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
-use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Symfony\Component\DependencyInjection\Extension\PrependExtensionInterface;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
-use Symfony\Contracts\HttpClient\HttpClientInterface;
-use Survos\MeiliBundle\Bridge\EasyAdmin\MeiliEasyAdminMenuFactory;
+use Twig\Environment;
 
 class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterface
 {
@@ -80,19 +73,34 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         }
 
         foreach ([SettingsService::class, MeiliPayloadBuilder::class] as $class) {
-            $builder->autowire($class)
-                ->setPublic(true);
+            $builder->autowire($class)->setPublic(true);
         }
 
         $builder->autowire(ResolvedEmbeddersProvider::class)
             ->setArgument(0, $config['embedders'] ?? [])
             ->setPublic(true);
 
+        // Parameters
         $builder->setParameter('survos_meili.entity_dirs', $config['entity_dirs']);
         $builder->setParameter('survos_meili.prefix', $config['meiliPrefix']);
         $builder->setParameter('survos_meili.pricing', $config['pricing'] ?? []);
         $builder->setParameter('survos_meili.meili_settings', $config['meili_settings'] ?? []);
 
+        // IMPORTANT: define MeiliServiceConfig via factory (no object literals in container dump)
+        $builder->register(MeiliServiceConfig::class)
+            ->setFactory([MeiliServiceConfig::class, 'fromArray'])
+            ->setArguments([$config])
+            ->setAutowired(true)
+            ->setAutoconfigured(true)
+            ->setPublic(false);
+
+        // Index name resolver (uses MeiliRegistry + ParameterBag + MeiliServiceConfig)
+        $builder->autowire(IndexNameResolver::class)
+            ->setAutowired(true)
+            ->setAutoconfigured(true)
+            ->setPublic(true);
+
+        // Meili service
         $builder->autowire(MeiliService::class)
             ->setArgument('$config', $config)
             ->setArgument('$meiliHost', $config['host'])
@@ -101,13 +109,14 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->setArgument('$httpClient', new Reference('httplug.http_client', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->setArgument('$logger', new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->setArgument('$bag', new Reference('parameter_bag'))
-            ->setArgument('$indexedEntities', []) // placeholder; replaced in process()
+            ->setArgument('$indexedEntities', []) // placeholder; replaced by MeiliIndexPass merge
             ->setAutowired(true)
             ->setPublic(true)
             ->setAutoconfigured(true);
 
         $container->services()->alias('meili_service', MeiliService::class);
 
+        // Registry
         $builder->autowire(MeiliRegistry::class)
             ->setPublic(true)
             ->setAutoconfigured(true)
@@ -115,31 +124,36 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->setArgument('$indexSettings', '%meili.index_settings%')
             ->setArgument('$prefix', '%survos_meili.prefix%');
 
-
-        foreach ([PopulateCommand::class,
-                     ExportCommand::class,
-                     IterateIndexesCommand::class,
-                     MeiliSchemaCreateCommand::class,
-                     MeiliSchemaUpdateCommand::class,
-                     MeilEstimatorCommand::class,
-                     MeiliSchemaValidateCommand::class,
-                     MeiliFlushFileCommand::class,
-                     MeiliSuggestSettingsCommand::class,
-                 ] as $class) {
+        // Commands
+        foreach ([
+            PopulateCommand::class,
+            MeiliRegistryReportCommand::class,
+            ExportCommand::class,
+            IterateIndexesCommand::class,
+            MeiliSchemaCreateCommand::class,
+            MeiliSchemaUpdateCommand::class,
+            MeilEstimatorCommand::class,
+            MeiliSchemaValidateCommand::class,
+            MeiliFlushFileCommand::class,
+            MeiliSuggestSettingsCommand::class,
+        ] as $class) {
             $builder->autowire($class)
                 ->setPublic(true)
                 ->setAutoconfigured(true)
                 ->addTag('console.command');
         }
 
-        foreach ([IndexSyncService::class,
-                     MeiliEasyAdminDashboardHelper::class,
-                     MeiliNdjsonUploader::class,
-                     MeiliFieldHeuristic::class,
-                     SyncIndexesCommand::class,
-                     IndexFastSyncService::class,
-                     TextFieldResolver::class,
-                     BatchIndexEntitiesMessageHandler::class] as $class) {
+        // Other services (NOTE: MeiliServiceConfig removed from this list)
+        foreach ([
+            IndexSyncService::class,
+            MeiliEasyAdminDashboardHelper::class,
+            MeiliNdjsonUploader::class,
+            MeiliFieldHeuristic::class,
+            SyncIndexesCommand::class,
+            IndexFastSyncService::class,
+            TextFieldResolver::class,
+            BatchIndexEntitiesMessageHandler::class,
+        ] as $class) {
             $builder->autowire($class)
                 ->setPublic(true)
                 ->setAutoconfigured(true);
@@ -156,7 +170,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             $builder->autowire($class)
                 ->addTag('container.service_subscriber')
                 ->addTag('controller.service_arguments')
-                ->addTag('ea.admin_route_controller')     // <— required for #[AdminRoute]
+                ->addTag('ea.admin_route_controller')
                 ->setAutoconfigured(false)
                 ->setPublic(true);
         }
@@ -170,17 +184,9 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         }
 
         $builder->autowire(AbstractMeiliController::class)
-//            ->setAutowired(true)
             ->setAutoconfigured(false)
             ->setAbstract(true)
             ->setAutowired(true);
-//            ->addTag('container.service_subscriber')
-//            ->addTag('controller.service_arguments')
-//            ->setArgument('$meiliService', new Reference('meili_service'))
-//            ->setArgument('$chartBuilder', new Reference('chartjs.builder', ContainerInterface::NULL_ON_INVALID_REFERENCE))
-//            ->addTag('ea.admin_route_controller')     // <— required for #[AdminRoute]
-////            ->setAutoconfigured(true) // so that #[AdminRoute(path: '/index/overview/{indexName}', name: 'show_index')] is registerd
-//            ->setPublic(true);
 
         $builder->autowire(SearchController::class)
             ->addTag('container.service_subscriber')
@@ -218,121 +224,92 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->scalarNode('meiliPrefix')->defaultValue('%env(default::MEILI_PREFIX)%')->end()
             ->scalarNode('translationStyle')->defaultValue('simple')->end()
             ->booleanNode('passLocale')->defaultFalse()->end()
-            ->booleanNode('multiLingual')->info("turn on multi-lingual indexing")->defaultFalse()->end()
+            ->booleanNode('multiLingual')->info('turn on multi-lingual indexing')->defaultFalse()->end()
             ->integerNode('maxValuesPerFacet')->defaultValue(1000)->end()
-
-            // Optional external tools, e.g. OpenAI playground, dashboards, etc.
             ->arrayNode('tools')
-            ->arrayPrototype()
-            ->children()
-            ->scalarNode('label')->isRequired()->cannotBeEmpty()->end()
-            ->scalarNode('url')->isRequired()->cannotBeEmpty()->end()
+                ->arrayPrototype()
+                    ->children()
+                        ->scalarNode('label')->isRequired()->cannotBeEmpty()->end()
+                        ->scalarNode('url')->isRequired()->cannotBeEmpty()->end()
+                    ->end()
+                ->end()
             ->end()
-            ->end()
-            ->end()
-
-            // Embedders: a named config that MeiliService + ResolvedEmbeddersProvider will use.
             ->arrayNode('embedders')
-            ->useAttributeAsKey('name')
-            ->arrayPrototype()
-            ->children()
-            ->scalarNode('source')->isRequired()->cannotBeEmpty()->end()      // e.g. 'openAi'
-            ->scalarNode('model')->isRequired()->cannotBeEmpty()->end()       // e.g. 'text-embedding-3-small'
-            ->scalarNode('apiKey')->defaultNull()->end()                      // e.g. '%env(OPENAI_API_KEY)%'
-            ->scalarNode('for')->defaultNull()->end()                         // optional FQCN (e.g. App\Entity\Product)
-            ->scalarNode('template')->defaultNull()->end()                    // optional path to Liquid template
-            ->integerNode('documentTemplateMaxBytes')->defaultValue(4096)->end()
-            ->integerNode('maxTokensPerDoc')
-            ->defaultNull()
-            ->info('Optional hint for expected max tokens per doc for cost estimation / guard rails.')
+                ->useAttributeAsKey('name')
+                ->arrayPrototype()
+                    ->children()
+                        ->scalarNode('source')->isRequired()->cannotBeEmpty()->end()
+                        ->scalarNode('model')->isRequired()->cannotBeEmpty()->end()
+                        ->scalarNode('apiKey')->defaultNull()->end()
+                        ->scalarNode('for')->defaultNull()->end()
+                        ->scalarNode('template')->defaultNull()->end()
+                        ->integerNode('documentTemplateMaxBytes')->defaultValue(4096)->end()
+                        ->integerNode('maxTokensPerDoc')->defaultNull()->end()
+                        ->arrayNode('examples')->scalarPrototype()->end()->defaultValue([])->end()
+                    ->end()
+                ->end()
             ->end()
-            ->arrayNode('examples')
-            ->scalarPrototype()->end()
-            ->defaultValue([])
-            ->end()
-            ->end()
-            ->end()
-            ->end()
-
-            // Pricing configuration for cost estimator.
-            // Cost per 1M tokens, keyed by embedding model.
             ->arrayNode('pricing')
-            ->addDefaultsIfNotSet()
-            ->children()
-            ->arrayNode('embedders')
-            ->useAttributeAsKey('model')
-            ->scalarPrototype()->end()
-            ->defaultValue([
-                'text-embedding-3-small' => 0.02,  // $0.02 / 1M tokens
-                'text-embedding-3-large' => 0.13,  // $0.13 / 1M tokens
-                'text-embedding-ada-002' => 0.10,  // legacy approx
-            ])
+                ->addDefaultsIfNotSet()
+                ->children()
+                    ->arrayNode('embedders')
+                        ->useAttributeAsKey('model')
+                        ->scalarPrototype()->end()
+                        ->defaultValue([
+                            'text-embedding-3-small' => 0.02,
+                            'text-embedding-3-large' => 0.13,
+                            'text-embedding-ada-002' => 0.10,
+                        ])
+                    ->end()
+                ->end()
             ->end()
-            ->end()
-            ->end()
-
-            // Allow passing default Meili settings (e.g. typoTolerance)
-            // through bundle config to SettingsService/SettingsCommand.
             ->arrayNode('meili_settings')
-            ->addDefaultsIfNotSet()
-            ->children()
-            // This is intentionally loose; structure mirrors Meilisearch settings.
-            ->arrayNode('typoTolerance')
-            ->addDefaultsIfNotSet()
-            ->children()
-            ->booleanNode('enabled')->defaultTrue()->end()
-            ->integerNode('oneTypo')->defaultValue(5)->end()
-            ->integerNode('twoTypos')->defaultValue(9)->end()
-            ->arrayNode('disableOnWords')
-            ->scalarPrototype()->end()
-            ->defaultValue([])
+                ->addDefaultsIfNotSet()
+                ->children()
+                    ->arrayNode('typoTolerance')
+                        ->addDefaultsIfNotSet()
+                        ->children()
+                            ->booleanNode('enabled')->defaultTrue()->end()
+                            ->integerNode('oneTypo')->defaultValue(5)->end()
+                            ->integerNode('twoTypos')->defaultValue(9)->end()
+                            ->arrayNode('disableOnWords')->scalarPrototype()->end()->defaultValue([])->end()
+                            ->arrayNode('disableOnAttributes')->scalarPrototype()->end()->defaultValue([])->end()
+                            ->booleanNode('disableOnNumbers')->defaultFalse()->end()
+                        ->end()
+                    ->end()
+                    ->arrayNode('faceting')
+                        ->addDefaultsIfNotSet()
+                        ->children()
+                            ->integerNode('maxValuesPerFacet')->defaultValue(1000)->end()
+                            ->arrayNode('sortFacetValuesBy')
+                                ->useAttributeAsKey('attribute')
+                                ->scalarPrototype()->end()
+                                ->defaultValue(['*' => 'count'])
+                            ->end()
+                        ->end()
+                    ->end()
+                    ->arrayNode('pagination')
+                        ->addDefaultsIfNotSet()
+                        ->children()
+                            ->integerNode('maxTotalHits')->defaultValue(1000)->end()
+                        ->end()
+                    ->end()
+                    ->booleanNode('facetSearch')->defaultTrue()->end()
+                    ->scalarNode('prefixSearch')->defaultValue('indexingTime')->end()
+                ->end()
             ->end()
-            ->arrayNode('disableOnAttributes')
-            ->scalarPrototype()->end()
-            ->defaultValue([])
-            ->end()
-            ->booleanNode('disableOnNumbers')->defaultFalse()->end()
-            ->end()
-            ->end()
-            ->arrayNode('faceting')
-            ->addDefaultsIfNotSet()
-            ->children()
-            ->integerNode('maxValuesPerFacet')->defaultValue(1000)->end()
-            ->arrayNode('sortFacetValuesBy')
-            ->useAttributeAsKey('attribute')
-            ->scalarPrototype()->end()
-            ->defaultValue(['*' => 'count'])
-            ->end()
-            ->end()
-            ->end()
-            ->arrayNode('pagination')
-            ->addDefaultsIfNotSet()
-            ->children()
-            ->integerNode('maxTotalHits')->defaultValue(1000)->end()
-            ->end()
-            ->end()
-            ->booleanNode('facetSearch')->defaultTrue()->end()
-            ->scalarNode('prefixSearch')->defaultValue('indexingTime')->end()
-            ->end()
-            ->end()
-
-            // allow multiple directories to be scanned for #[MeiliIndex]
             ->arrayNode('entity_dirs')
-            ->scalarPrototype()->end()
-            ->defaultValue(['%kernel.project_dir%/src/Entity'])
+                ->scalarPrototype()->end()
+                ->defaultValue(['%kernel.project_dir%/src/Entity'])
             ->end()
-            ->end();
+        ->end();
     }
 
     public function prependExtension(ContainerConfigurator $container, ContainerBuilder $builder): void
     {
-
         if ($builder->hasExtension('ux_icons')) {
-            // Prepend our aliases so the app can still override them
-            // @todo: move these to be configured in survos_meili!
             $builder->prependExtensionConfig('ux_icons', [
                 'aliases' => [
-
                     'home' => 'material-symbols:home-outline',
                     'browse' => 'mdi:list-box-outline',
                     'instant_search' => 'mdi:tag-search-outline',
@@ -342,7 +319,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                     'semantic' => 'simple-icons:semanticscholar',
                     'database' => 'mdi:database',
                     'search' => 'tabler:search',
-                    'meili' => 'tabler:search', // etc.
+                    'meili' => 'tabler:search',
                 ],
             ]);
         }
@@ -374,68 +351,5 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
     {
         parent::build($container);
         $container->addCompilerPass(new MeiliIndexPass());
-    }
-
-//    public function process(ContainerBuilder $container): void
-//    {
-//        $attributeClass = MeiliIndex::class;
-//
-//        $entityDir = $container->getParameter('kernel.project_dir') . '/src/Entity';
-//        $indexedClasses = [];
-//        dump($entityDir, $this->getClassesInDirectory($entityDir));
-//        foreach ($this->getClassesInDirectory($entityDir) as $class) {
-//            assert(class_exists($class), "Missing $class in $entityDir");
-//            $ref = new ReflectionClass($class);
-//            if ($ref->getAttributes($attributeClass)) {
-//                $indexedClasses[] = $class;
-//            }
-//        }
-//
-//        $container->setParameter('meili.indexed_entities', $indexedClasses);
-//
-//        if ($container->hasDefinition(MeiliService::class)) {
-//            $def = $container->getDefinition(MeiliService::class);
-//            $def->setArgument('$indexedEntities', $indexedClasses);
-//        }
-//
-//        if ($container->hasDefinition(MeiliRegistry::class)) {
-//            $def = $container->getDefinition(MeiliRegistry::class);
-//            // IMPORTANT: use setArgument() with the correct argument names from the constructor
-//            $def->setArgument('$indexEntities', '%meili.index_entities%');
-//            $def->setArgument('$indexSettings', '%meili.index_settings%');
-//
-//            // Prefix: you can inject '' and let registry handle it, OR wire from your config.
-//            // In your MeiliService you already derive prefix from config['meiliPrefix'].
-//            // The simplest is to pass empty and have MeiliRegistry not apply any prefix.
-//            $def->setArgument('$prefix', '');        }
-//
-//        if (0) {
-//            $container->registerForAutoconfiguration(LoggerAwareInterface::class)
-//                ->addMethodCall('setLogger', [new Reference('logger')]);
-//        }
-//    }
-
-    private function getClassesInDirectory(string $dir): array
-    {
-        $classes = [];
-        $rii = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($dir));
-
-        foreach ($rii as $file) {
-            if (!$file->isFile() || $file->getExtension() !== 'php') {
-                continue;
-            }
-
-            if (str_ends_with($file->getBasename('.' . $file->getExtension()), 'Interface')) {
-                continue;
-            }
-            $contents = file_get_contents($file->getRealPath());
-            if (preg_match('/namespace\s+([^;]+);/i', $contents, $nsMatch)
-                && preg_match('/^class\s+([A-Za-z_][A-Za-z0-9_]*)/m', $contents, $classMatch)) {
-                $classes[] = ($class = $nsMatch[1] . '\\' . $classMatch[1]);
-                assert(class_exists($class), "missing class $class in " . $contents);
-            }
-        }
-
-        return $classes;
     }
 }
