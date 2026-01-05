@@ -529,4 +529,74 @@ ORDER BY n.nspname, c.relname;"
             $currentPosition += $documents->count();
         }
     }
+
+    /**
+     * Summarize a list of index UIDs (exact names as on the Meili server).
+     *
+     * Dashboard-safe:
+     * - Works even if an index does not exist (exists=false)
+     * - Uses $client->getIndex($uid) for updatedAt/primaryKey (canonical SDK call)
+     * - Uses $client->index($uid)->stats() for document count
+     *
+     * If you pass $uidToLocale, each row will include 'locale' for the given uid.
+     *
+     * @param list<string> $indexUids
+     * @param array<string,string> $uidToLocale  uid => locale
+     * @return array<int,array{
+     *   indexName:string,
+     *   locale:?string,
+     *   exists:bool,
+     *   documentCount:?int,
+     *   updatedAt:?\DateTimeImmutable,
+     *   primaryKey:?string,
+     *   error:?string
+     * }>
+     */
+    public function getIndexSummaries(array $indexUids, array $uidToLocale = []): array
+    {
+        $client = $this->getMeiliClient();
+
+        $rows = [];
+        foreach (array_values(array_unique($indexUids)) as $uid) {
+            $row = [
+                'indexName'     => $uid,
+                'locale'        => $uidToLocale[$uid] ?? null,
+                'exists'        => false,
+                'documentCount' => null,
+                'updatedAt'     => null,
+                'primaryKey'    => null,
+                'error'         => null,
+            ];
+
+            try {
+                $info = $client->getIndex($uid); // array: uid, primaryKey, createdAt, updatedAt
+                $row['exists'] = true;
+
+                if (is_array($info)) {
+                    $row['primaryKey'] = $info['primaryKey'] ?? null;
+
+                    if (isset($info['updatedAt']) && is_string($info['updatedAt'])) {
+                        $row['updatedAt'] = new \DateTimeImmutable($info['updatedAt']);
+                    }
+                }
+
+                $stats = $client->index($uid)->stats();
+                if (is_array($stats) && array_key_exists('numberOfDocuments', $stats)) {
+                    $row['documentCount'] = (int) $stats['numberOfDocuments'];
+                }
+            } catch (\Meilisearch\Exceptions\ApiException $e) {
+                if (($e->httpStatus ?? null) !== 404) {
+                    $row['error'] = $e->getMessage();
+                }
+            } catch (\Throwable $e) {
+                $row['error'] = $e->getMessage();
+            }
+
+            $rows[] = $row;
+        }
+
+        return $rows;
+    }
+
+
 }

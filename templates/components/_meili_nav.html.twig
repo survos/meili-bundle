@@ -2,14 +2,6 @@
 {% set embedders = indexConfig.embedders|default([]) %}
 <div class="meili-bar">
   <a href="/">/</a>
-  {% for indexName, indexSettings in allSettings|default([]) %}
-      {# @todo: handle locale #}
-      <li>
-        <a href="{{ path('meili_insta', {indexName: indexName}) }}">
-          {{ ux_icon('mdi:search') }}
-          {{ indexName }}</a>
-      </li>
-  {% endfor %}
 
       <div class="meili-bar-left">
     {% if indexName %}

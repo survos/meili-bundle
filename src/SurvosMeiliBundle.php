@@ -299,10 +299,14 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                 ->end()
             ->end()
             ->arrayNode('entity_dirs')
-                ->scalarPrototype()->end()
-                ->defaultValue(['%kernel.project_dir%/src/Entity'])
+            ->scalarPrototype()->end()
+            ->defaultValue([
+                '%kernel.project_dir%/src/Entity',
+                '%kernel.project_dir%/src/Index',
+            ])
             ->end()
-        ->end();
+
+            ->end();
     }
 
     public function prependExtension(ContainerConfigurator $container, ContainerBuilder $builder): void

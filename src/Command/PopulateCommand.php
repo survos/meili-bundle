@@ -38,29 +38,29 @@ class PopulateCommand extends MeiliBaseCommand
     private SymfonyStyle $io;
 
     public function __construct(
-        protected ?EntityManagerInterface $entityManager,
-        private readonly MessageBusInterface $messageBus,
-        private readonly SettingsService $settingsService,
-        protected MeiliService $meiliService,
-        protected ?LoggerInterface $logger,
-        private readonly TextFieldResolver $textFieldResolver,
-        protected ResolvedEmbeddersProvider $resolvedEmbeddersProvider,
-        protected ?NormalizerInterface $normalizer = null,
-        protected ?MeiliPayloadBuilder $payloadBuilder = null,
-        private readonly ?TranslatableIndex $translatableIndex = null,
-        ?LocaleContext $localeContext = null,
+//        protected ?EntityManagerInterface $entityManager,
+//        private readonly MessageBusInterface $messageBus,
+//        private readonly SettingsService $settingsService,
+//        protected MeiliService $meiliService,
+//        protected ?LoggerInterface $logger,
+//        private readonly TextFieldResolver $textFieldResolver,
+//        protected ResolvedEmbeddersProvider $resolvedEmbeddersProvider,
+//        protected ?NormalizerInterface $normalizer = null,
+//        protected ?MeiliPayloadBuilder $payloadBuilder = null,
+//        private readonly ?TranslatableIndex $translatableIndex = null,
+//        ?LocaleContext $localeContext = null,
         #[Autowire('%kernel.enabled_locales%')] private array $enabledLocales = [],
         #[Autowire('%kernel.default_locale%')] private string $defaultLocale = 'en',
         #[Autowire('%kernel.project_dir%')] ?string $projectDir = null,
     ) {
         parent::__construct(
-            localeContext: $localeContext,
-            meili: $meiliService,
-            embeddersProvider: $resolvedEmbeddersProvider,
-            entityManager: $entityManager,
-            normalizer: $this->normalizer,
-            payloadBuilder: $this->payloadBuilder,
-            projectDir: $projectDir,
+//            localeContext: $localeContext,
+//            meili: $meiliService,
+//            embeddersProvider: $resolvedEmbeddersProvider,
+//            entityManager: $entityManager,
+//            normalizer: $this->normalizer,
+//            payloadBuilder: $this->payloadBuilder,
+//            projectDir: $projectDir,
         );
     }
 

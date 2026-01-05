@@ -4,84 +4,107 @@ declare(strict_types=1);
 namespace Survos\MeiliBundle\Command;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Meilisearch\Client;
 use Psr\Log\LoggerAwareInterface;
 use Psr\Log\LoggerAwareTrait;
-use Psr\Log\LoggerInterface;
 use Survos\BabelBundle\Service\LocaleContext;
 use Survos\MeiliBundle\Meili\MeiliTaskStatus;
-use Survos\MeiliBundle\Meili\MeiliTaskType;
+use Survos\MeiliBundle\Service\IndexNameResolver;
 use Survos\MeiliBundle\Service\MeiliPayloadBuilder;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Util\ResolvedEmbeddersProvider;
-use Symfony\Component\Console\Attribute\AsCommand;
-use Symfony\Component\Console\Attribute\Option;
-use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
+use Symfony\Contracts\Service\Attribute\Required;
 
-class MeiliBaseCommand extends Command implements LoggerAwareInterface
+abstract class MeiliBaseCommand extends Command implements LoggerAwareInterface
 {
     use LoggerAwareTrait;
-    public function __construct(
-        public readonly MeiliService $meili,
-        protected ?LocaleContext $localeContext=null, // require if multiLingual: true
-        protected ?ResolvedEmbeddersProvider $embeddersProvider=null,
-        protected ?EntityManagerInterface $entityManager=null,
-        protected ?NormalizerInterface $normalizer=null,
-        protected ?MeiliPayloadBuilder $payloadBuilder=null,
-        #[Autowire('%kernel.project_dir%')]
-        protected readonly ?string $projectDir=null,
-//        protected ?LoggerInterface $logger=null,
-    ) {
-        if ($this->meili->isMultiLingual && $this->localeContext === null) {
-            throw new \LogicException('LocaleContext is required when MultiLingual mode is enabled. Install survos/babel-bundle.');
-        }
 
+    #[Required]
+    public MeiliService $meili;
+
+    #[Required]
+    public IndexNameResolver $indexNameResolver;
+
+    #[Required]
+    public ?LocaleContext $localeContext = null;
+
+    #[Required]
+    public ?ResolvedEmbeddersProvider $embeddersProvider = null;
+
+    #[Required]
+    public ?EntityManagerInterface $entityManager = null;
+
+    #[Required]
+    public ?NormalizerInterface $normalizer = null;
+
+    #[Required]
+    public ?MeiliPayloadBuilder $payloadBuilder = null;
+
+    public function __construct(
+        #[Autowire('%kernel.project_dir%')]
+        protected readonly ?string $projectDir = null,
+    ) {
         parent::__construct();
     }
 
-
-    /** @return string[] array of PREFIXED index names */
-    protected function resolveTargets(?string $index, ?string $class, ?array $locales=null): array
+    /**
+     * Call at the start of every __invoke() to enforce invariants.
+     */
+    protected function init(): void
     {
+        // IMPORTANT: your MeiliService currently exposes isMultiLingual as a property hook,
+        // but some projects may not have BabelBundle installed.
+        if ($this->meili->isMultiLingual && $this->localeContext === null) {
+            throw new \LogicException(
+                'LocaleContext is required when MultiLingual mode is enabled. Install survos/babel-bundle.'
+            );
+        }
+    }
 
+    /**
+     * @return list<string> base names (UNPREFIXED) from compiler pass settings (raw registry)
+     */
+    protected function resolveTargets(?string $index, ?string $class): array
+    {
         $names = [];
+
         if ($class) {
             if (!class_exists($class)) {
                 $class = 'App\\Entity\\' . $class;
             }
             if (!class_exists($class)) {
-                throw new \Exception('Class "' . $class . '" does not exist');
+                throw new \InvalidArgumentException(sprintf('Class "%s" does not exist', $class));
             }
         }
-        foreach ($this->meili->getRawIndexSettings() as $indexName => $setting) {
-            if ($index && $indexName !== $index) {
+
+        foreach ($this->meili->getRawIndexSettings() as $rawName => $setting) {
+            // $rawName is the unprefixed name key in rawSettings
+            if ($index && $rawName !== $index) {
                 continue;
             }
-            if ($class && $class !== $setting['class']) {
+            if ($class && $class !== ($setting['class'] ?? null)) {
                 continue;
             }
-            $names[] = $setting['prefixedName'];
+
+            // Prefer explicit baseName when present, else the raw name
+            $names[] = (string)($setting['baseName'] ?? $rawName);
         }
+
         return $names;
     }
 
     public function pendingTasks(string $uid): int
     {
-        $resp = $this->meili->getTasks($uid,  MeiliTaskStatus::ACTIVE);
-
+        $resp = $this->meili->getTasks($uid, MeiliTaskStatus::ACTIVE);
         return \count($resp['results'] ?? []);
     }
 
     public function cancelTasks(string $uid, SymfonyStyle $io): void
     {
-        // @todo
-        foreach ($this->meili->getTasks($uid,  MeiliTaskStatus::ACTIVE) as $task) {
-            $this->meili->getMeiliClient()->cancelTasks($task['taskUid']);
-        }
+        // TODO: implement if you still want this.
+        $io->warning('cancelTasks not implemented (yet).');
     }
-
 }
