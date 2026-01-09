@@ -80,7 +80,7 @@ abstract class MeiliBaseCommand extends Command implements LoggerAwareInterface
             }
         }
 
-        foreach ($this->meili->getRawIndexSettings() as $rawName => $setting) {
+        foreach ($this->meili->getAllSettings() as $rawName => $setting) {
             // $rawName is the unprefixed name key in rawSettings
             if ($index && $rawName !== $index) {
                 continue;

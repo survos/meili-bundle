@@ -6,6 +6,7 @@ use Adbar\Dot;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminRoute;
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use Meilisearch\Exceptions\ApiException;
+use Survos\MeiliBundle\Service\IndexNameResolver;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Bridge\Twig\Attribute\Template;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -33,9 +34,10 @@ class MeiliAdminController extends AbstractController
     ];
 
     public function __construct(
-        private MeiliService           $meiliService,
-        private ?ChartBuilderInterface $chartBuilder = null,
-        private string                 $coreName = 'core'
+        private readonly MeiliService $meiliService,
+        private readonly IndexNameResolver $resolver,
+        private readonly ?ChartBuilderInterface $chartBuilder = null,
+        private readonly string $coreName = 'core'
     ) {
     }
 
@@ -44,84 +46,113 @@ class MeiliAdminController extends AbstractController
     public function index(AdminContext $context): Response|array
     {
         return [
-            'adminContext' => $context,
-            'indexSettings' => $this->meiliService->indexedByClass()
+            'adminContext'  => $context,
+            'indexSettings' => $this->meiliService->indexedByClass(),
         ];
     }
 
     #[AdminRoute(path: '/index/overview/{indexName}', name: 'meili_index_dashboard')]
     public function indexDashboard(
         AdminContext $context,
-        string       $indexName,
+        string $indexName, // IMPORTANT: this is a base key, not a UID
     ): Response {
-
         $baseIndexName = $indexName;
-        $locale = $context->getRequest()->getLocale();
+        $requestLocale = strtolower((string) $context->getRequest()->getLocale());
 
-        // Resolve the actual Meilisearch UID once, based on bundle configuration
-        if ($this->meiliService->isMultiLingual) {
-            $meiliIndexUid = $this->meiliService->localizedUid($baseIndexName, $locale);
-        } else {
-            $meiliIndexUid = $baseIndexName;
-        }
+        // Resolve locale policy for this base key.
+        // In monolingual mode, we must still apply the prefix via uidFor(), but we should not suffix locale.
+        $isMlFor = $this->resolver->isMultiLingualFor($baseIndexName, $requestLocale);
+        $uidLocale = $isMlFor ? $requestLocale : null;
 
-        // configured
-        $settings = $this->meiliService->settings[$indexName];
+        $meiliIndexUid = $this->resolver->uidFor($baseIndexName, $uidLocale, $isMlFor);
+
+        // Configured settings are keyed by base name.
+        // Prefer the public accessor to avoid reaching into $meiliService->settings directly.
+        $settings = $this->meiliService->getIndexSetting($baseIndexName) ?? [];
 
         $indexApi = $this->meiliService->getIndexEndpoint($meiliIndexUid);
-        $liveSettings = $indexApi->getSettings();
-        $results = $indexApi->search(null, [
-            'limit' => 0,
-            'facets' => ['*']
-        ]);
 
-        $facetDistribution = $results->getFacetDistribution();
+        // If the index doesn't exist yet, do NOT create it in the controller.
+        // This keeps creation in the pipeline/commands and avoids “accidental empty indexes” in prod.
         try {
+            $liveSettings = $indexApi->getSettings();
+
+            // NOTE: facets will only return for filterable attributes; requesting '*' can fail
+            // depending on Meilisearch version/settings. We keep this call for overview,
+            // but each facet below requests a single field.
+            $results = $indexApi->search(null, [
+                'limit'  => 0,
+                'facets' => ['*'],
+            ]);
+
             $rawInfo = $indexApi->fetchRawInfo();
         } catch (ApiException $e) {
-            if ($e->getCode() == 404) {
-                $index = $this->meiliService->getOrCreateIndex($indexName, $settings['primaryKey']);
-                $task = $index->updateSettings($settings['schema']);
-                $info = $indexApi->getSettings();
-                foreach ($info as $key => $value) {
-                    if (is_object($value)) {
-                        unset($info[$key]);
-                    }
-                }
+            if ((int) $e->getCode() === 404) {
+                return $this->render('@SurvosMeili/index/show.html.twig', [
+                    'indexName'     => $baseIndexName,
+                    'resolvedUid'   => $meiliIndexUid,
+                    'rawInfo'       => null,
+                    'stats'         => null,
+                    'settings'      => $settings,
+                    'facetCounts'   => [],
+                    'facetCharts'   => [],
+                    'adminContext'  => $context,
+                    'error'         => sprintf('Index "%s" not found on server (resolved uid: "%s"). Create/populate it first.', $baseIndexName, $meiliIndexUid),
+                ]);
             }
+
+            throw $e;
         }
-        $rawInfo = $indexApi->fetchRawInfo();
+
         $stats = $indexApi->stats();
+
         $facetCounts = [];
         $facetCharts = [];
 
-        foreach ($settings['facets'] as $fieldName => $details) {
-            $params = ['limit' => 0, 'facets' => [$fieldName]];
-            $data = $indexApi->rawSearch("", $params);
+        // IMPORTANT: facet distribution requires the field to be filterable.
+        // If a field is not in filterableAttributes, Meilisearch will throw invalid_search_facets.
+        foreach (($settings['facets'] ?? []) as $fieldName => $details) {
+            try {
+                $params = [
+                    'limit'  => 0,
+                    'facets' => [$fieldName],
+                ];
+
+                $data = $indexApi->rawSearch('', $params);
+            } catch (ApiException $e) {
+                // Keep the dashboard resilient: record the failure per field rather than breaking the page.
+                $facetCounts[$fieldName] = [[
+                    'label' => sprintf('Facet error: %s', $e->getMessage()),
+                    'count' => 0,
+                ]];
+                continue;
+            }
 
             $facetDistributionCounts = $data['facetDistribution'][$fieldName] ?? [];
             $counts = [];
+
             foreach ($facetDistributionCounts as $label => $count) {
                 $counts[] = [
                     'label' => $label,
-                    'count' => $count
+                    'count' => $count,
                 ];
             }
+
             $facetCounts[$fieldName] = $counts;
 
-            // Build chart if chartBuilder is available
-            if ($this->chartBuilder && count($counts) > 0) {
+            if ($this->chartBuilder && \count($counts) > 0) {
                 $facetCharts[$fieldName] = $this->buildFacetChart($fieldName, $counts);
             }
         }
 
         return $this->render('@SurvosMeili/index/show.html.twig', [
-            'indexName' => $indexName,
-            'facetCounts' => $facetCounts,
-            'facetCharts' => $facetCharts,
-            'rawInfo' => $rawInfo,
-            'stats' => $stats,
-            'settings' => $settings,
+            'indexName'    => $baseIndexName,
+            'resolvedUid'  => $meiliIndexUid,
+            'facetCounts'  => $facetCounts,
+            'facetCharts'  => $facetCharts,
+            'rawInfo'      => $rawInfo,
+            'stats'        => $stats,
+            'settings'     => $settings,
             'adminContext' => $context,
         ]);
     }
@@ -132,8 +163,7 @@ class MeiliAdminController extends AbstractController
         $labels = array_map(fn($c) => mb_substr($c['label'] ?: '(empty)', 0, 25), $chartData);
         $values = array_map(fn($c) => $c['count'], $chartData);
 
-        // Use pie for small datasets, bar for larger ones
-        $chartType = count($chartData) <= 6 ? Chart::TYPE_PIE : Chart::TYPE_BAR;
+        $chartType = \count($chartData) <= 6 ? Chart::TYPE_PIE : Chart::TYPE_BAR;
 
         $chart = $this->chartBuilder->createChart($chartType);
         $chart->setData([
@@ -143,7 +173,7 @@ class MeiliAdminController extends AbstractController
                 'backgroundColor' => array_slice(
                     array_merge(self::CHART_COLORS, self::CHART_COLORS, self::CHART_COLORS),
                     0,
-                    count($chartData)
+                    \count($chartData)
                 ),
                 'data' => $values,
             ]],
@@ -156,7 +186,6 @@ class MeiliAdminController extends AbstractController
             ],
         ];
 
-        // Add horizontal bar options for better label display
         if ($chartType === Chart::TYPE_BAR) {
             $options['indexAxis'] = 'y';
         }
@@ -181,30 +210,44 @@ class MeiliAdminController extends AbstractController
 
     #[Route(path: '/facet/{indexName}/{fieldName}/{max}', name: 'survos_facet_show', methods: ['GET'])]
     public function facet(
-        string $indexName,
+        string $indexName, // base key, not uid
         string $fieldName,
         #[MapQueryParameter] ?string $tableName = null,
-        int    $max = 25
+        int $max = 25
     ): Response {
-        $index = $this->meiliService->getIndex($indexName);
+        $requestLocale = strtolower((string) $this->getRequestLocaleSafe());
+        $isMlFor = $this->resolver->isMultiLingualFor($indexName, $requestLocale);
+        $uidLocale = $isMlFor ? $requestLocale : null;
 
-        $params = ['limit' => 0, 'facets' => [$fieldName]];
+        $uid = $this->resolver->uidFor($indexName, $uidLocale, $isMlFor);
+
+        $index = $this->meiliService->getIndexEndpoint($uid);
+
+        $params = [
+            'limit'  => 0,
+            'facets' => [$fieldName],
+        ];
+
         if ($tableName) {
-            $params['filter'] = $this->coreName . "=" . $tableName;
+            // Quote string values to be safe (Meilisearch filter syntax).
+            $params['filter'] = sprintf('%s = "%s"', $this->coreName, addcslashes($tableName, "\"\\"));
         }
-        $data = $index->rawSearch("", $params);
+
+        $data = $index->rawSearch('', $params);
 
         $facetDistributionCounts = $data['facetDistribution'][$fieldName] ?? [];
         $counts = [];
+
         foreach ($facetDistributionCounts as $label => $count) {
             $counts[] = [
                 'label' => $label,
-                'count' => $count
+                'count' => $count,
             ];
         }
+
         $chartData = [];
         foreach (array_slice($counts, 0, $max) as $count) {
-            $chartData[$count['label'] ?? $count['code']] = $count['count'];
+            $chartData[$count['label'] ?: '(empty)'] = $count['count'];
         }
 
         $chart = null;
@@ -217,7 +260,7 @@ class MeiliAdminController extends AbstractController
                     'backgroundColor' => array_slice(
                         array_merge(self::CHART_COLORS, self::CHART_COLORS, self::CHART_COLORS),
                         0,
-                        count($chartData)
+                        \count($chartData)
                     ),
                     'data' => array_values($chartData),
                 ]],
@@ -229,14 +272,15 @@ class MeiliAdminController extends AbstractController
         }
 
         return $this->render('@SurvosApiGrid/facet.html.twig', get_defined_vars() + [
-                'tableData' => $counts,
-                'chartData' => $chartData,
-                'chart' => $chart,
-                'currentField' => $fieldName,
-                'indexName' => $indexName,
-                'max' => $max,
-                'facetFields' => $index->getFilterableAttributes(),
-            ]);
+            'tableData'    => $counts,
+            'chartData'    => $chartData,
+            'chart'        => $chart,
+            'currentField' => $fieldName,
+            'indexName'    => $indexName,
+            'resolvedUid'  => $uid,
+            'max'          => $max,
+            'facetFields'  => $index->getFilterableAttributes(),
+        ]);
     }
 
     #[Route('/meili/admin{anything}', name: 'survos_meili_admin', defaults: ['anything' => null], requirements: ['anything' => '.+'])]
@@ -267,7 +311,7 @@ END
         $config->rootURL = $urlGenerator->generate('survos_meili_admin');
 
         return $this->render('@SurvosMeiliAdmin/dashboard.html.twig', [
-            'config' => $config,
+            'config'        => $config,
             'encodedConfig' => json_encode($config),
             'controller_name' => 'MeiliAdminController',
         ]);
@@ -281,21 +325,35 @@ END
 
     #[Route(path: '/stats/{indexName}.{_format}', name: 'survos_index_stats', methods: ['GET'])]
     public function stats(
-        string  $indexName,
+        string $indexName, // base key, not uid
         Request $request,
-        string  $_format = 'html'
+        string $_format = 'html'
     ): Response {
-        $index = $this->meiliService->getIndex($indexName);
+        $requestLocale = strtolower((string) $request->getLocale());
+        $isMlFor = $this->resolver->isMultiLingualFor($indexName, $requestLocale);
+        $uidLocale = $isMlFor ? $requestLocale : null;
+
+        $uid = $this->resolver->uidFor($indexName, $uidLocale, $isMlFor);
+
+        $index = $this->meiliService->getIndexEndpoint($uid);
         $stats = $index->stats();
 
         $data = [
             'indexName' => $indexName,
+            'resolvedUid' => $uid,
             'settings' => $index->getSettings(),
-            'stats' => $stats
+            'stats' => $stats,
         ];
 
-        return $_format == 'json'
+        return $_format === 'json'
             ? $this->json($data)
             : $this->render('@SurvosMeili/stats.html.twig', $data);
+    }
+
+    private function getRequestLocaleSafe(): string
+    {
+        // For controller methods that do not receive Request explicitly.
+        $req = $this->container->has('request_stack') ? $this->container->get('request_stack')->getCurrentRequest() : null;
+        return $req?->getLocale() ?? 'en';
     }
 }

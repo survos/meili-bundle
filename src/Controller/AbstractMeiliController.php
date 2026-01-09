@@ -117,9 +117,10 @@ abstract class AbstractMeiliController extends AbstractDashboardController
 
     public function configureAssets(): Assets
     {
+        $assetEntry = $this->getAssetEntityName();
         return Assets::new()
             ->useCustomIconSet() // use ux_icons
-            ->addAssetMapperEntry($this->getAssetEntityName())  // Your main .js entry, must be configured in importap. Use admin to avoid tabler/bootstrap conflicts
+            ->addAssetMapperEntry($assetEntry)  // Your main .js entry, must be configured in importap. Use admin to avoid tabler/bootstrap conflicts
             ;
     }
 

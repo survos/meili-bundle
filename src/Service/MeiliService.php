@@ -31,6 +31,8 @@ final class MeiliService
      * @var array<string,array<string,mixed>> baseName => settings
      */
     private array $baseSettings = [];
+    // deprecated?
+    public array $settings { get => $this->baseSettings; }
 
     /**
      * Back-compat: per-class settings as provided by compiler pass.
@@ -148,6 +150,32 @@ final class MeiliService
     public function uidForBase(string $baseName, ?string $locale): string
     {
         return $this->nameResolver->uidFor($baseName, $locale);
+    }
+
+    /**
+     * Back-compat alias for uidForBase().
+     *
+     * @deprecated use uidForBase() instead
+     */
+    public function localizedUid(string $baseName, ?string $locale): string
+    {
+        // Prefer Symfony's trigger_deprecation() when available, otherwise fall back to PHP's E_USER_DEPRECATED.
+        if (\function_exists('trigger_deprecation')) {
+            trigger_deprecation(
+                'survos/meili-bundle',
+                '2.0',
+                'Method %s() is deprecated; use %s::uidForBase() instead.',
+                __METHOD__,
+                self::class
+            );
+        } else {
+            @\trigger_error(
+                sprintf('Method %s() is deprecated; use %s::uidForBase() instead.', __METHOD__, self::class),
+                E_USER_DEPRECATED
+            );
+        }
+
+        return $this->uidForBase($baseName, $locale);
     }
 
     /**

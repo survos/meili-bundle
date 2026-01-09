@@ -2,6 +2,7 @@
 
 namespace Survos\MeiliBundle;
 
+use Survos\BabelBundle\Service\LocaleContext;
 use Survos\CoreBundle\HasAssetMapperInterface;
 use Survos\CoreBundle\Traits\HasAssetMapperTrait;
 use Survos\MeiliBundle\Bridge\EasyAdmin\MeiliEasyAdminDashboardHelper;
@@ -124,9 +125,17 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->setArgument('$indexSettings', '%meili.index_settings%')
             ->setArgument('$prefix', '%survos_meili.prefix%');
 
+        $builder->autowire(PopulateCommand::class)
+            ->setPublic(true)
+            ->setAutoconfigured(true)
+            ->addTag('console.command')
+            ->setProperty('localeContext', new Reference(
+                LocaleContext::class,
+                ContainerInterface::IGNORE_ON_INVALID_REFERENCE
+            ));
+
         // Commands
         foreach ([
-            PopulateCommand::class,
             MeiliRegistryReportCommand::class,
             ExportCommand::class,
             IterateIndexesCommand::class,
@@ -140,7 +149,12 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             $builder->autowire($class)
                 ->setPublic(true)
                 ->setAutoconfigured(true)
-                ->addTag('console.command');
+                ->addTag('console.command')
+                ->setProperty('localeContext', new Reference(
+                    LocaleContext::class,
+                    ContainerInterface::IGNORE_ON_INVALID_REFERENCE
+                ));
+            ;
         }
 
         // Other services (NOTE: MeiliServiceConfig removed from this list)

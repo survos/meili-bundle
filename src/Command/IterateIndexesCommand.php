@@ -38,20 +38,50 @@ final class IterateIndexesCommand
         $prefix ??= $this->meiliService->getPrefix();
         $io->title('Meilisearch → Doctrine (FAST)');
 
-        $info = $this->meiliService->getMeiliClient()->stats();
-        foreach ($info['indexes'] as $uid => $rawInfo) {
+        $stats = $this->meiliService->getMeiliClient()->stats();
+
+        // meilisearch-php newer versions return a typed Stats object.
+        $indexes = $stats instanceof \Meilisearch\Contracts\Stats
+            ? $stats->getIndexes()
+            : ($stats['indexes'] ?? []);
+
+        foreach ($indexes as $uid => $indexStats) {
             // filter by prefix.
-            if (!str_starts_with($uid, $prefix)) {
+            if ($prefix !== '' && $prefix !== null && !str_starts_with($uid, $prefix)) {
                 continue;
             }
-            if ($details) {
-                $details = $this->meiliService->getIndex($uid)->getSettings();
-                dd($uid, $details, $rawInfo);
+
+            $rawInfo = [];
+            if ($indexStats instanceof \Meilisearch\Contracts\IndexStats) {
+                $rawInfo = [
+                    'uid' => $uid,
+                    'numberOfDocuments' => $indexStats->getNumberOfDocuments(),
+                    'rawDocumentDbSize' => $indexStats->getRawDocumentDbSize(),
+                    'avgDocumentSize' => $indexStats->getAvgDocumentSize(),
+                    'isIndexing' => $indexStats->isIndexing(),
+                    'numberOfEmbeddings' => $indexStats->getNumberOfEmbeddings(),
+                    'numberOfEmbeddedDocuments' => $indexStats->getNumberOfEmbeddedDocuments(),
+                    'fieldDistribution' => $indexStats->getFieldDistribution(),
+                ];
+            } elseif (is_array($indexStats)) {
+                $rawInfo = $indexStats;
+                $rawInfo['uid'] = $uid;
             }
-            $rawInfo['uid'] = $uid;
-            $message = new UpdateIndexInfoMessage(...$rawInfo);
-            $this->eventDispatcher->dispatch($message);
+
+            if ($details) {
+                $liveSettings = $this->meiliService->getIndexEndpoint($uid)->getSettings();
+                $io->section($uid);
+                $io->writeln(sprintf('docs=%s indexing=%s', $rawInfo['numberOfDocuments'] ?? '?', ($rawInfo['isIndexing'] ?? false) ? 'yes' : 'no'));
+                $io->writeln(sprintf('filterable=%s', implode(',', $liveSettings['filterableAttributes'] ?? [])));
+                $io->writeln(sprintf('sortable=%s', implode(',', $liveSettings['sortableAttributes'] ?? [])));
+            }
+
+            if ($rawInfo !== []) {
+                $message = new UpdateIndexInfoMessage(...$rawInfo);
+                $this->eventDispatcher->dispatch($message);
+            }
         }
+
         return Command::SUCCESS;
         if (0) {
             dd($uid, $rawInfo);

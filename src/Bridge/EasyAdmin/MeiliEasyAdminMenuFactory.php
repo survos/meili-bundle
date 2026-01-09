@@ -55,7 +55,7 @@ final class MeiliEasyAdminMenuFactory
         $items[] = MenuItem::linkToRoute(
             t('action.detail', domain: 'EasyAdminBundle'),
             $this->dashboardHelper->getIcon('browse'),
-            sprintf('%s_%s_index', $routePrefix, $meiliSettings['rawName']),
+            sprintf('%s_%s_index', $routePrefix, $meiliSettings['baseName']),
         );
 
 
@@ -121,12 +121,16 @@ final class MeiliEasyAdminMenuFactory
      */
     public function createToolsMenuItems(): iterable
     {
-        foreach ($this->meiliService->tools as $tool) {
-            yield MenuItem::linkToUrl(
-                $tool['label'] ?? 'tool',
-                'tabler:chart-bar',
-                $tool['url'] ?? '#'
-            );
-        }
+        // ??
+        // riccox direct link?  meili?
+
+//        foreach ($this->meiliService->tools as $tool) {
+//            yield MenuItem::linkToUrl(
+//                $tool['label'] ?? 'tool',
+//                'tabler:chart-bar',
+//                $tool['url'] ?? '#'
+//            );
+//        }
+        return [];
     }
 }

@@ -1,30 +1,27 @@
 <?php
-// Batch message classes for optimized MeiliSearch operations
-
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Message;
 
 /**
- * Message to batch index multiple entities of the same class in MeiliSearch
+ * Batch indexing message.
  */
-class BatchIndexEntitiesMessage
+final class BatchIndexEntitiesMessage
 {
     /**
-     * @param string $entityClass
-     * @param array<array> $entitiesData Array of normalized entity data
+     * @param array<mixed> $entityData list of IDs or list of normalized docs
      */
     public function __construct(
         public readonly string $entityClass,
-        public readonly array $entityData, // normalized data OR list of ids
-        public readonly ?bool $reload=null, // if true, data is a list of pks, otherwise it's the actual data to send
-        public readonly ?string $primaryKeyName=null, // for the database and meili.  But now can be different
-        public readonly ?string $transport=null,
-        public ?string $locale=null,
-        public ?string $indexName=null, // this is reset when it's missing or multiple indexes on a class
-        public readonly ?bool $dry=null,
-        public readonly ?bool $cost=null,
-    ) {
-    }
+        public readonly array $entityData,
+        public readonly ?bool $reload = null,
+        public readonly ?string $primaryKeyName = null,
+        public readonly ?string $transport = null, // legacy
+        public ?string $locale = null,
+        public ?string $indexName = null,
+        public readonly ?bool $dry = null,
+        public readonly ?bool $cost = null,
+        public readonly bool $sync = false,
+        public readonly bool $wait = false,
+    ) {}
 }
-

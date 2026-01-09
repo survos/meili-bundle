@@ -57,7 +57,7 @@
                                     {% else %}
                                         {{ ux_icon('mdi:database-search') }}
                                 {% endif %}
-                                {{ settings.rawName }}
+                                {{ settings.baseName }}
                                 <span class="btn btn-primary float-end">
                                 Count: {{ approximate_count(settings.class) }}
 
@@ -110,7 +110,7 @@
                                         {{ 'filter.title'|trans(domain: 'EasyAdminBundle') }}
                                     </h6>
                                     <div class="d-flex flex-wrap gap-2">
-                                        {% set domain = settings.rawName %}
+                                        {% set domain = settings.baseName %}
                                         {# @todo: handle different translation styles #}
                                         {% for filterField in settings.schema.filterableAttributes %}
                                             <span class="badge bg-primary-subtle text-dark field-badge" title="{{ '%s.description'|format(filterField)|trans(domain: domain) }}">

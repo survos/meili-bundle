@@ -14,7 +14,7 @@ final class MeiliRegistry
     public function __construct(
         private readonly array $indexEntities,
         private readonly array $indexSettings,
-        private readonly string $prefix = '',
+        private readonly ?string $prefix = null,
     ) {
     }
 

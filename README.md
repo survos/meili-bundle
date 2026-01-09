@@ -4,6 +4,10 @@ Requires php 8.4.
 
 @todo: write readme.
 
+## Documentation
+
+- Multi-lingual naming strategy: [docs/multilingual-index-naming.md](docs/multilingual-index-naming.md)
+
 ```bash
 composer require survos/meili-bundle
 bin/console importmap:require @andypf/json-viewer

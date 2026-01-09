@@ -34,7 +34,7 @@
 
     {# Keep JS minimal. If your Stimulus controllers use importmap, the app can still call importmap('app') in its own layout. #}
     {% block javascripts %}
-      {% block importmap %}{{ importmap('app') }}{% endblock %}
+      {% block importmap %}{{ importmap('meili') }}{% endblock %}
     {% endblock %}
   </body>
 </html>

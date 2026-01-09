@@ -7,9 +7,9 @@ use Doctrine\ORM\EntityManagerInterface;
 use Meilisearch\Endpoints\Indexes;
 use Psr\Log\LoggerInterface;
 use Survos\BabelBundle\Service\LocaleContext;
-use Survos\BootstrapBundle\Service\ContextService;
 use Survos\CoreBundle\Service\SurvosUtils;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
+use Survos\MeiliBundle\Service\IndexNameResolver;
 use Survos\MeiliBundle\Service\MeiliNdjsonUploader;
 use Survos\MeiliBundle\Service\MeiliPayloadBuilder;
 use Survos\MeiliBundle\Service\MeiliService;
@@ -27,6 +27,7 @@ final class BatchIndexEntitiesMessageHandler
         private readonly NormalizerInterface    $normalizer,
         private readonly MeiliService           $meiliService,
         private readonly MeiliNdjsonUploader    $uploader,
+        private readonly ?IndexNameResolver     $indexNameResolver = null,
         private readonly ?LocaleContext         $localeContext = null,
         private readonly ?LoggerInterface       $logger = null,
     ) {}
@@ -34,9 +35,8 @@ final class BatchIndexEntitiesMessageHandler
     public function __invoke(BatchIndexEntitiesMessage $message): void
     {
         // Compute effective locale and *persist* it back to the message,
-        // so everything downstream (including apply/yield) sees the same value.
+        // so everything downstream sees the same value.
         $effectiveLocale = $message->locale ?: $this->localeContext?->getDefault();
-
         if ($effectiveLocale !== $message->locale) {
             $this->logger?->info('Normalizing message locale', [
                 'original'  => $message->locale,
@@ -50,6 +50,7 @@ final class BatchIndexEntitiesMessageHandler
             'indexName'   => $message->indexName,
             'locale'      => $message->locale,
             'reload'      => $message->reload,
+            'sync'        => $this->messageSync($message),
             'ids'         => \is_iterable($message->entityData) ? \count((array) $message->entityData) : null,
         ]);
 
@@ -62,7 +63,7 @@ final class BatchIndexEntitiesMessageHandler
                 'locale'    => $message->locale,
             ]);
 
-            $runner = function () use ($message) {
+            $runner = function () use ($message): void {
                 $this->apply($message);
             };
 
@@ -84,24 +85,23 @@ final class BatchIndexEntitiesMessageHandler
 
             return;
         }
-//
-// 🌱 DEFAULT / MAPPED PATH: derive indexName(s) from indexedByClass()
-//
+
+        //
+        // 🌱 DEFAULT / MAPPED PATH: derive indexName(s) from indexedByClass()
+        //
         $classIndexes = $this->meiliService->indexedByClass();
         $indexes      = $classIndexes[$message->entityClass] ?? [];
         $count        = \count($indexes);
 
         if ($count === 0) {
-            // This really IS exceptional.
             $this->logger?->warning('No Meili index mapping found for entityClass', [
                 'entityClass' => $message->entityClass,
             ]);
             return;
         }
 
-// Heuristic: if locale is null, this is the normal "plain index" case.
-// Only treat it as "legacy fallback" (and log louder) when locale is set but
-// the producer still didn't provide an indexName.
+        // If locale is null, treat as mono-index (plain) case.
+        // If locale is set but producer didn't provide indexName, it is legacy producer behavior.
         $plainIndex = ($message->locale === null);
 
         $this->logger?->info(
@@ -115,16 +115,30 @@ final class BatchIndexEntitiesMessageHandler
             ]
         );
 
-        foreach ($indexes as $indexName => $index) {
-            $message->indexName = $indexName;
+        foreach ($indexes as $mappedKey => $indexCfg) {
+            // IMPORTANT:
+            // - indexedByClass() historically returned "UIDs" as keys.
+            // - With the new IndexNameResolver + registry as source of truth, we can treat
+            //   $mappedKey as a BASE key when resolving for a specific locale.
+            // We do not regex-strip locale suffixes here; we ask the resolver (when available).
+            $resolvedUid = $mappedKey;
 
-            $runner = function () use ($message, $indexName, $plainIndex) {
+            if (!$plainIndex && $message->locale && $this->indexNameResolver) {
+                // $mappedKey should be baseName (unprefixed) in the new world
+                // If it's already a prefixed uid, uidFor() will re-prefix incorrectly, so
+                // we only do this when it looks like a base key (no prefix applied).
+                $resolvedUid = $this->resolveUidFromMappingKey($mappedKey, $message->locale);
+            }
+
+            $message->indexName = $resolvedUid;
+
+            $runner = function () use ($message, $resolvedUid, $plainIndex): void {
                 $this->logger?->info(
                     $plainIndex
                         ? 'Applying mapped index for entityClass'
                         : 'Applying derived localized index for entityClass (legacy producer)',
                     [
-                        'indexName' => $indexName,
+                        'indexName' => $resolvedUid,
                         'locale'    => $message->locale,
                     ]
                 );
@@ -138,7 +152,6 @@ final class BatchIndexEntitiesMessageHandler
                 $runner();
             }
         }
-
     }
 
     private function apply(BatchIndexEntitiesMessage $message): void
@@ -153,9 +166,8 @@ final class BatchIndexEntitiesMessageHandler
             'indexName'   => $indexName,
             'locale'      => $locale,
         ]);
-        $this->entityManager->clear($entityClass); // or clear() for everything
+        $this->entityManager->clear($entityClass);
 
-        // Optional: verify what LocaleContext thinks is current
         $currentLocale = null;
         if ($this->localeContext && method_exists($this->localeContext, 'get')) {
             $currentLocale = $this->localeContext->get();
@@ -174,34 +186,19 @@ final class BatchIndexEntitiesMessageHandler
         $index = $this->getMeiliIndex($indexName, $entityClass, $locale);
 
         //
-        // SETTINGS: use base settings for localized index names like "movies_en"
+        // SETTINGS
         //
-        $settingsKey = $indexName;
-        if (!isset($this->meiliService->settings[$settingsKey])
-            && $this->meiliService->isMultiLingual
-            && $locale
-        ) {
-            $suffix = '_' . $locale;
-            if (\str_ends_with($indexName, $suffix)) {
-                $baseKey = \substr($indexName, 0, -\strlen($suffix));
-                if (isset($this->meiliService->settings[$baseKey])) {
-                    $this->logger?->info('Using base settings for localized index', [
-                        'localizedIndex' => $indexName,
-                        'baseIndex'      => $baseKey,
-                        'locale'         => $locale,
-                    ]);
-                    $settingsKey = $baseKey;
-                } else {
-                    $this->logger?->warning('Localized index settings not found and base settings missing', [
-                        'localized'      => $indexName,
-                        'baseAttempt'    => $baseKey,
-                        'availableKeys'  => \array_keys($this->meiliService->settings),
-                    ]);
-                }
-            }
-        }
+        // Settings in MeiliService are keyed by *base name* (unprefixed), e.g. "amst".
+        // Messages carry a UID (prefixed, maybe locale-suffixed), e.g. "bts_amst_nl".
+        //
+        // Previously we regex-stripped prefix/locale. That is brittle.
+        // If IndexNameResolver exists, prefer its source-of-truth to compute the base key
+        // via the registry (MeiliService should already know base keys for settings).
+        //
+        // In the absence of a reverse lookup in the resolver, we keep a conservative fallback.
+        $settingsKey = $this->settingsKeyForUid($indexName, $locale);
 
-        $indexSettings = $this->meiliService->settings[$settingsKey] ?? null;
+        $indexSettings = $this->meiliService->getIndexSetting($settingsKey);
 
         if (!$indexSettings) {
             $this->logger?->warning('Missing indexSettings for index', [
@@ -209,7 +206,7 @@ final class BatchIndexEntitiesMessageHandler
                 'settingsKey'   => $settingsKey,
                 'entityClass'   => $entityClass,
                 'locale'        => $locale,
-                'availableKeys' => \array_keys($this->meiliService->settings),
+                'availableKeys' => \array_keys($this->meiliService->getAllSettings()),
             ]);
             return;
         }
@@ -226,6 +223,7 @@ final class BatchIndexEntitiesMessageHandler
             'contextLocale' => $currentLocale,
             'primaryKey'    => $primaryKey,
             'reload'        => $message->reload,
+            'sync'          => $this->messageSync($message),
         ]);
 
         //
@@ -234,9 +232,12 @@ final class BatchIndexEntitiesMessageHandler
         $metadata        = $this->entityManager->getClassMetadata($entityClass);
         $repo            = $this->entityManager->getRepository($entityClass);
         $identifierField = $metadata->getSingleIdentifierFieldName();
-//        ($message->locale === 'es') && dd($message, $identifierField);
 
+        $sync = $this->messageSync($message);
 
+        // IMPORTANT:
+        // Always pass $primaryKey on add-documents (first ingestion establishes PK).
+        // When sync is enabled, wait for completion and fail loudly on failure.
         if ($message->reload) {
             $iter = $this->yieldNormalizedDocs(
                 $repo,
@@ -244,9 +245,14 @@ final class BatchIndexEntitiesMessageHandler
                 $message->entityData,
                 $persisted,
             );
-            $this->uploader->uploadDocuments($index, $iter, $primaryKey);
+
+            $taskUid = $this->uploader->uploadDocuments($index, $iter, $primaryKey);
+            $this->awaitIfSync($index, $taskUid, $sync, $indexName, $primaryKey);
         } else {
-            $this->uploader->uploadDocuments($index, $message->entityData, $primaryKey);
+            // If entityData is already an array of docs, NDJSON uploader is fine.
+            // If it's a list of IDs (legacy), reload should have been set.
+            $taskUid = $this->uploader->uploadDocuments($index, $message->entityData, $primaryKey);
+            $this->awaitIfSync($index, $taskUid, $sync, $indexName, $primaryKey);
         }
     }
 
@@ -257,32 +263,210 @@ final class BatchIndexEntitiesMessageHandler
                 'indexName' => $indexName,
                 'locale'    => $locale,
             ]);
+
+            // autoCreate: true is fine; PK is established on first addDocuments via $primaryKey
             return $this->meiliService->getOrCreateIndex($indexName, autoCreate: true);
         }
 
         //
-        // Fallback (rare)
+        // Fallback (rare): derive a UID from class + locale policy.
+        // Prefer IndexNameResolver when available.
         //
         $short = (new \ReflectionClass($entityClass))->getShortName();
         $loc   = $locale ?: $this->localeContext?->getDefault();
 
         $classMapping = $this->meiliService->indexedByClass()[$entityClass] ?? [];
-        $baseUid = \count($classMapping) === 1
-            ? \array_key_first($classMapping)
+
+        $baseKey = \count($classMapping) === 1
+            ? (string) \array_key_first($classMapping)
             : \strtolower($short);
 
-        $derivedUid = $baseUid;
-        if ($this->meiliService->isMultiLingual && $loc) {
-            $derivedUid = $this->meiliService->localizedUid($baseUid, $loc);
+        $derivedUid = $baseKey;
+
+        if ($this->indexNameResolver && $loc) {
+            // If $baseKey is actually a UID already, this may not be safe to re-resolve.
+            // However this fallback path is rare; we keep the old behavior when resolver isn't usable.
+            $derivedUid = $this->resolveUidFromMappingKey($baseKey, $loc);
+        } elseif ($this->meiliService->isMultiLingual && $loc) {
+            $derivedUid = $this->meiliService->localizedUid($baseKey, $loc);
         }
 
         $this->logger?->info('getMeiliIndex(): derived fallback indexName', [
-            'baseUid'    => $baseUid,
+            'baseKey'    => $baseKey,
             'derivedUid' => $derivedUid,
             'locale'     => $loc,
         ]);
 
         return $this->meiliService->getOrCreateIndex($derivedUid, autoCreate: true);
+    }
+
+    /**
+     * Conservative “mapping key -> uid” resolution.
+     *
+     * If the mapping key already looks like a UID (e.g. starts with configured prefix),
+     * return it unchanged. Otherwise treat it as a base name and resolve using IndexNameResolver.
+     */
+    private function resolveUidFromMappingKey(string $mappingKey, string $locale): string
+    {
+        $prefix = $this->meiliService->getPrefix();
+
+        if ($prefix && \str_starts_with($mappingKey, $prefix)) {
+            // Already a UID
+            return $mappingKey;
+        }
+
+        // Treat as base name
+        return $this->indexNameResolver
+            ? $this->indexNameResolver->uidFor($mappingKey, $locale)
+            : $mappingKey;
+    }
+
+    /**
+     * Settings keys are base names; message carries UIDs.
+     *
+     * Today we do not have a guaranteed reverse lookup (uid -> baseName) exposed here,
+     * so we keep a safe fallback: strip prefix once, strip locale suffix when provided.
+     *
+     * If/when MeiliRegistry exposes reverse resolution, wire it here and delete the fallback.
+     */
+    private function settingsKeyForUid(string $indexUid, ?string $locale): string
+    {
+        // Prefer a reverse lookup if MeiliService grows one (future-proof, no BC break).
+        if (method_exists($this->meiliService, 'baseNameForUid')) {
+            /** @var string $base */
+            $base = $this->meiliService->baseNameForUid($indexUid);
+            return $base;
+        }
+
+        // Fallback: previous behavior (kept for BC)
+        return $this->baseSettingsKeyForIndexName($indexUid, $locale);
+    }
+
+    private function baseSettingsKeyForIndexName(string $indexUid, ?string $locale): string
+    {
+        $key = $indexUid;
+
+        $prefix = $this->meiliService->getPrefix();
+        if ($prefix && \str_starts_with($key, $prefix)) {
+            $key = \substr($key, \strlen($prefix));
+        }
+
+        if ($locale) {
+            $suffix = '_' . \strtolower($locale);
+            if (\str_ends_with($key, $suffix)) {
+                $key = \substr($key, 0, -\strlen($suffix));
+            }
+        }
+
+        return $key;
+    }
+
+    /**
+     * Determine whether we should wait for tasks.
+     *
+     * Supports either:
+     * - $message->sync (preferred)
+     * - $message->wait (fallback)
+     */
+    private function messageSync(BatchIndexEntitiesMessage $message): bool
+    {
+        foreach (['sync', 'wait'] as $prop) {
+            if (\property_exists($message, $prop)) {
+                $v = $message->{$prop};
+                return \is_bool($v) ? $v : (bool) $v;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Wait for the task if sync is enabled and we have a task uid.
+     * Fail loudly when the task fails.
+     */
+    private function awaitIfSync(Indexes $index, mixed $taskUid, bool $sync, ?string $indexName, string $primaryKey): void
+    {
+        if (!$sync) {
+            return;
+        }
+
+        // Normalize task uid from whatever uploader returns.
+        $uid = null;
+
+        if (\is_int($taskUid)) {
+            $uid = $taskUid;
+        } elseif (\is_array($taskUid)) {
+            $uid = $taskUid['taskUid'] ?? $taskUid['uid'] ?? $taskUid['task_id'] ?? null;
+            $uid = \is_int($uid) ? $uid : null;
+        } elseif (\is_object($taskUid)) {
+            foreach (['getTaskUid', 'getUid'] as $m) {
+                if (\method_exists($taskUid, $m)) {
+                    $v = $taskUid->{$m}();
+                    if (\is_int($v)) {
+                        $uid = $v;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!$uid) {
+            $this->logger?->warning('Sync requested but no task uid was returned from uploader; cannot wait', [
+                'indexName'  => $indexName,
+                'primaryKey' => $primaryKey,
+            ]);
+            return;
+        }
+
+        $this->logger?->info('Waiting for Meilisearch task completion (sync mode)', [
+            'taskUid'     => $uid,
+            'indexName'   => $indexName,
+            'primaryKey'  => $primaryKey,
+        ]);
+
+        $task = $this->waitForTask($index, $uid);
+
+        $status = \is_array($task) ? ($task['status'] ?? null) : null;
+        if ($status !== 'succeeded') {
+            $error = \is_array($task) ? ($task['error'] ?? null) : null;
+            $msg = sprintf(
+                'Meilisearch task %d did not succeed (status=%s) for index "%s" (primaryKey=%s).',
+                $uid,
+                (string) ($status ?? 'unknown'),
+                (string) ($indexName ?? $index->getUid()),
+                $primaryKey
+            );
+
+            $this->logger?->error($msg, [
+                'task' => $task,
+            ]);
+
+            throw new \RuntimeException($msg . ($error ? ' ' . json_encode($error) : ''));
+        }
+    }
+
+    /**
+     * Wait using whichever API is available in the current SDK / MeiliService wrapper.
+     *
+     * @return array<string,mixed>
+     */
+    private function waitForTask(Indexes $index, int $taskUid): array
+    {
+        // Newer SDKs support waitForTask directly on Indexes.
+        if (\method_exists($index, 'waitForTask')) {
+            /** @var array<string,mixed> $task */
+            $task = $index->waitForTask($taskUid);
+            return $task;
+        }
+
+        // If MeiliService provides a wait helper, prefer it.
+        if (\method_exists($this->meiliService, 'waitForTask')) {
+            /** @var array<string,mixed> $task */
+            $task = $this->meiliService->waitForTask($taskUid);
+            return $task;
+        }
+
+        throw new \RuntimeException('Sync mode requested, but no waitForTask() implementation is available.');
     }
 
     /**
@@ -294,14 +478,12 @@ final class BatchIndexEntitiesMessageHandler
     {
         foreach ($ids as $id) {
             $entity = $repo->find($id);
-//            if ($this->localeContext->get() === 'en') dd($this->localeContext->get(), $entity->niveau1);
             if (!$entity) {
                 $this->logger?->warning('Entity not found for ID', ['id' => $id]);
                 continue;
             }
 
             $doc = $this->payloadBuilder->build($entity, $persisted);
-            $targetLocale = $this->localeContext?->get();
             $doc = SurvosUtils::removeNullsAndEmptyArrays($doc);
 
             if (!\is_array($doc)) {

@@ -159,15 +159,12 @@ final class IndexNameResolver
     private function normLocale(?string $locale): ?string
     {
         $locale = $locale !== null ? trim($locale) : null;
-        if ($locale === '') {
-            return null;
-        }
-        return strtolower($locale);
+        return $locale ? strtolower($locale) : null;
     }
 
     private function defaultLocale(): string
     {
-        $v = $this->bag->has('kernel.default_locale') ? (string)$this->bag->get('kernel.default_locale') : 'en';
+        $v = $this->bag->has('kernel.default_locale') ? $this->bag->get('kernel.default_locale') : 'en';
         return $this->normLocale($v) ?? 'en';
     }
 
