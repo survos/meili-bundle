@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Command;
 
+use Survos\CoreBundle\Service\SurvosUtils;
+use Survos\MeiliBundle\Service\DoctrinePrimaryKeyStreamer;
 use Survos\MeiliBundle\Service\IndexProducer;
 use Survos\MeiliBundle\Service\TargetPlanner;
 use Symfony\Component\Console\Attribute\Argument;
@@ -73,6 +75,9 @@ final class PopulateCommand extends MeiliBaseCommand
         #[Option('Wait for Meili tasks after each batch when sync is enabled (default true)', 'wait')]
         ?bool $wait = null,
 
+        #[Option('Dump entity + normalized JSON payload (debug; use with --limit)', 'dump')]
+        ?bool $dump = null,
+
         #[Option('Messenger transport name (legacy; ignored when --sync is true)', 'transport')]
         ?string $transport = null,
     ): int {
@@ -82,6 +87,7 @@ final class PopulateCommand extends MeiliBaseCommand
         $sync ??= true;
         $wait ??= true;
         $fetch ??= true;
+        $dump ??= false;
 
         // Default per-locale behavior: on when enabled_locales exists
         $perLocale ??= true;
@@ -90,13 +96,14 @@ final class PopulateCommand extends MeiliBaseCommand
         $filterArray = $filter ? (is_array($parsed = Yaml::parse($filter)) ? $parsed : null) : null;
 
         $io->note(sprintf(
-            'populate: indexName=%s class=%s perLocale=%s onlyLocales=%s sync=%s wait=%s',
+            'populate: indexName=%s class=%s perLocale=%s onlyLocales=%s sync=%s wait=%s dump=%s',
             $indexName ?? '<all>',
             $class ?? '<auto>',
             $perLocale ? 'yes' : 'no',
             $onlyLocales ?? '<all>',
             $sync ? 'yes' : 'no',
             $wait ? 'yes' : 'no',
+            $dump ? 'yes' : 'no',
         ));
 
         // Resolve base keys (UNPREFIXED registry keys)
@@ -127,7 +134,16 @@ final class PopulateCommand extends MeiliBaseCommand
             }
         }
 
+        if ($dump && ($this->entityManager === null || $this->payloadBuilder === null)) {
+            throw new \LogicException('Dump mode requires Doctrine EntityManager and MeiliPayloadBuilder services.');
+        }
+
+        if ($dump) {
+            $io->warning('Dump mode enabled: no documents will be dispatched or uploaded.');
+        }
+
         $summary = [];
+        $actionLabel = $dump ? 'Dumped' : 'Dispatched';
 
         foreach ($targets as $t) {
             $uid    = $t->uid;
@@ -163,6 +179,7 @@ final class PopulateCommand extends MeiliBaseCommand
                 limit: $limit,
                 sync: $sync,
                 wait: $wait,
+                dump: $dump,
                 transport: $transport,
                 primaryKeyName: $primaryKeyName,
             );
@@ -179,7 +196,7 @@ final class PopulateCommand extends MeiliBaseCommand
         $io->section('Populate summary');
 
         $table = new Table($io);
-        $table->setHeaders(['Index UID', 'Class', 'Kind', 'Locale', 'Dispatched']);
+        $table->setHeaders(['Index UID', 'Class', 'Kind', 'Locale', $actionLabel]);
         foreach ($summary as $row) {
             $table->addRow($row);
         }

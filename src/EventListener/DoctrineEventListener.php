@@ -16,6 +16,7 @@ use Psr\Log\LoggerInterface;
 use Survos\CoreBundle\Service\SurvosUtils;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
 use Survos\MeiliBundle\Message\BatchRemoveEntitiesMessage;
+use Survos\MeiliBundle\Service\MeiliPayloadBuilder;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\SettingsService;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -41,7 +42,7 @@ class DoctrineEventListener
         private readonly MeiliService              $meiliService,
         private readonly SettingsService           $settingsService,
         private readonly PropertyAccessorInterface $propertyAccessor,
-        private readonly NormalizerInterface       $normalizer,
+        private readonly NormalizerInterface       $normalizer, private readonly MeiliPayloadBuilder $meiliPayloadBuilder,
         private readonly ?MessageBusInterface      $messageBus=null,
         private readonly ?LoggerInterface          $logger = null,
     ) {
@@ -93,6 +94,13 @@ class DoctrineEventListener
 //            dd($entityClass, $this->meiliService->indexedEntities);
 
             $groups = $this->settingsService->getNormalizationGroups($entityClass);
+            $normalized = [];
+            foreach ($objects as $object) {
+//                $normalized[] = $this->meiliPayloadBuilder->build($object, $groups);
+//                dd($normalized[0]);
+            }
+
+
             $normalized = $this->normalizer->normalize($objects, 'array', ['groups' => $groups]);
             SurvosUtils::removeNullsAndEmptyArrays($normalized);
 

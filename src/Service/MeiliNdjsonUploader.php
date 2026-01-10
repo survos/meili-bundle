@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
 
+use Meilisearch\Contracts\Task;
 use Meilisearch\Endpoints\Indexes;
 use Psr\Log\LoggerInterface;
 use Survos\JsonlBundle\IO\JsonlReader;
@@ -25,7 +26,7 @@ final class MeiliNdjsonUploader
      *
      * @param iterable<array<string,mixed>> $docs
      */
-    public function uploadDocuments(Indexes $index, iterable $docs, string $primaryKey): ?int
+    public function uploadDocuments(Indexes $index, iterable $docs, string $primaryKey): int
     {
         $lines = [];
         $bytes = 0;
@@ -225,6 +226,7 @@ final class MeiliNdjsonUploader
         if (\is_array($data)) {
             $taskUid = $data['taskUid'] ?? $data['uid'] ?? $data['task_id'] ?? null;
         }
+
 
         return \is_int($taskUid) ? $taskUid : null;
     }

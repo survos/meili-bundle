@@ -25,14 +25,13 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Symfony\UX\Chartjs\Builder\ChartBuilderInterface;
 use Symfony\UX\Chartjs\Model\Chart;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractDashboardController;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminDashboard;
 use Symfony\Contracts\Service\Attribute\Required;
 use function Symfony\Component\Translation\t;
 
 //#[Route('/meili')]
 //#[AdminDashboard('/ez', '/default-meili')]
-abstract class AbstractMeiliController extends AbstractDashboardController
+abstract class AbstractMeiliController extends _EasyAdminDashboardBase
 {
 
     const MEILI_ROUTE = 'meili_admin';

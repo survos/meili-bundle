@@ -23,5 +23,6 @@ final class BatchIndexEntitiesMessage
         public readonly ?bool $cost = null,
         public readonly bool $sync = false,
         public readonly bool $wait = false,
+        public readonly bool $dump = false,
     ) {}
 }

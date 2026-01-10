@@ -8,6 +8,7 @@ use Doctrine\ORM\EntityRepository;
 use Meilisearch\Client;
 use Meilisearch\Contracts\DocumentsQuery;
 use Meilisearch\Contracts\IndexesQuery;
+use Meilisearch\Contracts\Task;
 use Meilisearch\Contracts\TasksQuery;
 use Meilisearch\Contracts\TasksResults;
 use Meilisearch\Endpoints\Indexes;
@@ -626,5 +627,42 @@ ORDER BY n.nspname, c.relname;"
         return $rows;
     }
 
+
+    /**
+     * Block until a Meilisearch task reaches a terminal state.
+     *
+     * @return array<string,mixed> Raw task payload (status, type, duration, error, etc.)
+     */
+    public function waitForTask(int|Task $taskUid, int $timeoutMs = 600_000, int $pollMs = 250): array
+    {
+        $start = \microtime(true);
+        $client = $this->getMeiliClient();
+        dd($task);
+        $task = $this->getMeiliClient()->tasks->get($taskUid);
+        $task = $task->wait();
+        dd($task);
+
+        while (true) {
+            // Adjust these two lines to your client:
+
+            $status = $task['status'] ?? null;
+
+            if (\in_array($status, ['succeeded', 'failed', 'canceled'], true)) {
+                return $task;
+            }
+
+            $elapsedMs = (int)\round((\microtime(true) - $start) * 1000);
+            if ($elapsedMs >= $timeoutMs) {
+                return $task + [
+                        'status' => $status ?? 'unknown',
+                        'error' => $task['error'] ?? [
+                                'message' => sprintf('Timed out waiting for task %d after %dms', $taskUid, $elapsedMs),
+                            ],
+                    ];
+            }
+
+            \usleep($pollMs * 1000);
+        }
+    }
 
 }

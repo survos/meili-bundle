@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Survos\MeiliBundle\MessageHandler;
 
 use Doctrine\ORM\EntityManagerInterface;
+use Meilisearch\Contracts\TaskStatus;
 use Meilisearch\Endpoints\Indexes;
 use Psr\Log\LoggerInterface;
 use Survos\BabelBundle\Service\LocaleContext;
@@ -199,6 +200,7 @@ final class BatchIndexEntitiesMessageHandler
         $settingsKey = $this->settingsKeyForUid($indexName, $locale);
 
         $indexSettings = $this->meiliService->getIndexSetting($settingsKey);
+        $client = $this->meiliService->getMeiliClient();
 
         if (!$indexSettings) {
             $this->logger?->warning('Missing indexSettings for index', [
@@ -245,14 +247,22 @@ final class BatchIndexEntitiesMessageHandler
                 $message->entityData,
                 $persisted,
             );
-
-            $taskUid = $this->uploader->uploadDocuments($index, $iter, $primaryKey);
-            $this->awaitIfSync($index, $taskUid, $sync, $indexName, $primaryKey);
+            $taskId = $this->uploader->uploadDocuments($index, $iter, $primaryKey);
+            if ($sync) {
+                $task = $client->getTask($taskId)->wait();
+                if ($task->getStatus() !== TaskStatus::Succeeded) {
+                    dd($task->getStatus(), $task->getError());
+                }
+            }
         } else {
             // If entityData is already an array of docs, NDJSON uploader is fine.
             // If it's a list of IDs (legacy), reload should have been set.
+//            dd($message->entityData);
             $taskUid = $this->uploader->uploadDocuments($index, $message->entityData, $primaryKey);
-            $this->awaitIfSync($index, $taskUid, $sync, $indexName, $primaryKey);
+            $task = $client->getTask($taskUid)->wait();
+            if ($task->getStatus() !== TaskStatus::Succeeded) {
+                dd($task->getStatus(), $task->getError());
+            }
         }
     }
 
@@ -384,7 +394,7 @@ final class BatchIndexEntitiesMessageHandler
      * Wait for the task if sync is enabled and we have a task uid.
      * Fail loudly when the task fails.
      */
-    private function awaitIfSync(Indexes $index, mixed $taskUid, bool $sync, ?string $indexName, string $primaryKey): void
+    private function awaitIfSync(Indexes $index, Task $task, bool $sync, ?string $indexName, string $primaryKey): void
     {
         if (!$sync) {
             return;
@@ -424,7 +434,7 @@ final class BatchIndexEntitiesMessageHandler
             'primaryKey'  => $primaryKey,
         ]);
 
-        $task = $this->waitForTask($index, $uid);
+        $task = $this->waitForTask($index, $taskUid);
 
         $status = \is_array($task) ? ($task['status'] ?? null) : null;
         if ($status !== 'succeeded') {
@@ -450,7 +460,7 @@ final class BatchIndexEntitiesMessageHandler
      *
      * @return array<string,mixed>
      */
-    private function waitForTask(Indexes $index, int $taskUid): array
+    private function waitForTask(Indexes $index, Task $task): array
     {
         // Newer SDKs support waitForTask directly on Indexes.
         if (\method_exists($index, 'waitForTask')) {

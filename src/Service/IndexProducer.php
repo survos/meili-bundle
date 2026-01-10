@@ -25,6 +25,7 @@ final class IndexProducer
         ?int $limit = null,
         bool $sync = true,
         bool $wait = true,
+        bool $dump = true,
         ?string $transport = null,
         string $primaryKeyName = 'id',
     ): int {
@@ -52,6 +53,7 @@ final class IndexProducer
                 indexName: $target->uid,
                 sync: $sync,
                 wait: $wait,
+                dump: $dump
             );
 
             $this->bus->dispatch($message, $stamps);

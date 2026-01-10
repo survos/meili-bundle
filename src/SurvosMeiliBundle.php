@@ -20,7 +20,6 @@ use Survos\MeiliBundle\Command\PopulateCommand;
 use Survos\MeiliBundle\Command\SyncIndexesCommand;
 use Survos\MeiliBundle\Compiler\MeiliIndexPass;
 use Survos\MeiliBundle\Components\InstantSearchComponent;
-use Survos\MeiliBundle\Controller\AbstractMeiliController;
 use Survos\MeiliBundle\Controller\MeiliAdminController;
 use Survos\MeiliBundle\Controller\MeiliProxyController;
 use Survos\MeiliBundle\Controller\SearchController;
@@ -31,6 +30,7 @@ use Survos\MeiliBundle\Registry\MeiliRegistry;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
 use Survos\MeiliBundle\Service\IndexFastSyncService;
 use Survos\MeiliBundle\Service\IndexNameResolver;
+use Survos\MeiliBundle\Service\IndexProducer;
 use Survos\MeiliBundle\Service\IndexSyncService;
 use Survos\MeiliBundle\Service\MeiliFieldHeuristic;
 use Survos\MeiliBundle\Service\MeiliNdjsonUploader;
@@ -38,6 +38,7 @@ use Survos\MeiliBundle\Service\MeiliPayloadBuilder;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\MeiliServiceConfig;
 use Survos\MeiliBundle\Service\SettingsService;
+use Survos\MeiliBundle\Service\TargetPlanner;
 use Survos\MeiliBundle\Util\ResolvedEmbeddersProvider;
 use Survos\MeiliBundle\Util\TextFieldResolver;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
@@ -160,6 +161,8 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         // Other services (NOTE: MeiliServiceConfig removed from this list)
         foreach ([
             IndexSyncService::class,
+            TargetPlanner::class,
+            IndexProducer::class,
             MeiliEasyAdminDashboardHelper::class,
             MeiliNdjsonUploader::class,
             MeiliFieldHeuristic::class,
@@ -197,10 +200,6 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                 ->setPublic(true);
         }
 
-        $builder->autowire(AbstractMeiliController::class)
-            ->setAutoconfigured(false)
-            ->setAbstract(true)
-            ->setAutowired(true);
 
         $builder->autowire(SearchController::class)
             ->addTag('container.service_subscriber')
@@ -338,6 +337,15 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                     'database' => 'mdi:database',
                     'search' => 'tabler:search',
                     'meili' => 'tabler:search',
+                ],
+            ]);
+        }
+
+        if (class_exists(\EasyCorp\Bundle\EasyAdminBundle\EasyAdminBundle::class)) {
+            $builder->prependExtensionConfig('framework', [
+                'router' => [
+                    'resource' => '%kernel.project_dir%/src/Controller/Admin',
+                    'type' => 'attribute',
                 ],
             ]);
         }
