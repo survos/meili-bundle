@@ -33,6 +33,7 @@ final class MeiliIndex
         public ?string $name = null,
         public ?string $class = null,
         public ?string $primaryKey = null,
+        public ?bool $enabled = null,
 
         /**
          * If true, Survos\MeiliBundle\EventListener\DoctrineEventListener will auto-dispatch

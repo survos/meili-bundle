@@ -161,7 +161,6 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         // Other services (NOTE: MeiliServiceConfig removed from this list)
         foreach ([
             IndexSyncService::class,
-            TargetPlanner::class,
             IndexProducer::class,
             MeiliEasyAdminDashboardHelper::class,
             MeiliNdjsonUploader::class,
@@ -175,6 +174,16 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                 ->setPublic(true)
                 ->setAutoconfigured(true);
         }
+
+        // Remove TargetPlanner::class from the foreach loop, then add:
+
+        $builder->autowire(TargetPlanner::class)
+            ->setPublic(true)
+            ->setAutoconfigured(true)
+            ->setArgument('$translatableIndex', new Reference(
+                'Survos\BabelBundle\Service\TranslatableIndex',
+                ContainerInterface::NULL_ON_INVALID_REFERENCE
+            ));
 
         foreach ([IndexInfoRepository::class] as $class) {
             $builder->autowire($class)

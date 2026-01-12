@@ -251,7 +251,7 @@ final class BatchIndexEntitiesMessageHandler
             if ($sync) {
                 $task = $client->getTask($taskId)->wait();
                 if ($task->getStatus() !== TaskStatus::Succeeded) {
-                    dd($task->getStatus(), $task->getError());
+                    dd($index->getUid(), $task->getStatus(), $task->getError());
                 }
             }
         } else {
@@ -261,7 +261,7 @@ final class BatchIndexEntitiesMessageHandler
             $taskUid = $this->uploader->uploadDocuments($index, $message->entityData, $primaryKey);
             $task = $client->getTask($taskUid)->wait();
             if ($task->getStatus() !== TaskStatus::Succeeded) {
-                dd($task->getStatus(), $task->getError());
+                dd($index->getUid(), $task->getStatus(), $task->getError());
             }
         }
     }

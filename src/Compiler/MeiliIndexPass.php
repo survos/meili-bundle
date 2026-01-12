@@ -56,6 +56,9 @@ final class MeiliIndexPass implements CompilerPassInterface
                 foreach ($ref->getAttributes(MeiliIndex::class) as $attr) {
                     /** @var MeiliIndex $cfg */
                     $cfg = $attr->newInstance();
+                    if (!$cfg->enabled) {
+                        continue;
+                    }
 
                     $class = $cfg->class ?? $fqcn;
                     $name  = $cfg->name ?? $cfg->defaultName($class);
