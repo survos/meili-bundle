@@ -46,6 +46,8 @@
     "@hotwired/stimulus": "^3.2.2"
   },
   "dependencies": {
-    "twig": "^1.17.1"
+    "twig": "^1.17.1",
+    "@tabler/core": "^1.0.0",
+    "instantsearch.css": "^8.5.1"
   }
 }

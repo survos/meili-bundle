@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Controller;
 
+use Survos\MeiliBundle\Service\IndexNameResolver;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -17,6 +18,7 @@ final class TemplateController extends AbstractController
         private string $jsTemplateDir,
         #[Autowire('%kernel.project_dir%')]
         private string $projectDir,
+        private readonly IndexNameResolver $indexNameResolver,
         private readonly MeiliService $meiliService,
     ) {
     }
@@ -202,7 +204,24 @@ final class TemplateController extends AbstractController
         $pkFromProfile = $profile['pk'] ?? null;
 
         $client = $this->meiliService->getMeiliClient();
-        $index  = $client->getIndex($this->meiliService->getPrefixedIndexName($indexName));
+//        $index  = $client->getIndex($this->meiliService->getPrefixedIndexName($indexName));
+
+        // Resolve UID using the new resolver (raw + prefix applied centrally).
+        $fallbackSource = $locale ?? 'en';
+        $policy         = $this->indexNameResolver->localesFor($indexName, $fallbackSource);
+        $isMlForBase    = $this->indexNameResolver->isMultiLingualFor($indexName, $policy['source']);
+
+// CLI locale wins; otherwise use the resolver-selected source locale.
+        $effectiveLocale = $locale ?? $policy['source'];
+
+        $uid    = $this->indexNameResolver->uidFor($indexName, $effectiveLocale, $isMlForBase);
+        $client = $this->meiliService->getMeiliClient();
+        $index  = $client->getIndex($uid);
+
+// Use Meili's primary key API (e.g. "code" for Marvel), fallback to profile, then "id".
+        $primaryKey = $index->getPrimaryKey() ?? $pkFromProfile ?? 'id';
+        $settings   = $index->getSettings();
+
 
         // Use Meili's primary key API (e.g. "code" for Marvel), fallback to profile, then "id".
         $primaryKey = $index->getPrimaryKey() ?? $pkFromProfile ?? 'id';

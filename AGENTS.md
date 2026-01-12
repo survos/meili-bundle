@@ -30,7 +30,7 @@ Correctness, clarity, and long-term maintainability take precedence over conveni
 ## Supported Environment
 
 - **PHP**: 8.4+
-- **Symfony**: 7.4|^8.0
+- **Symfony**: ^8.0
 - **Composer**: 2.x
 - **Testing**: PHPUnit
 

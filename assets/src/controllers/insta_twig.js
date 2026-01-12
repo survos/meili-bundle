@@ -17,6 +17,9 @@ export function installTwigAPI({ Routing = null, StimAttrs }) {
       StimAttrs.stimulus_target(n, t));
     TwigApi._function.extend('stimulus_action', (n, a, e = null, p = {}) =>
       StimAttrs.stimulus_action(n, a, e, p));
+    TwigApi._function.extend('sais_encode', (url) =>
+      btoa(url).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''));
+
     TwigApi._function.extend('ux_icon', (name, attrs = {}) => {
       if (!name) return '';
       const map = (window.__survosIconsMap || {});
