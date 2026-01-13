@@ -71,6 +71,7 @@ final class MeiliIndex
         $this->sortableSel   = Fields::from($this->sortable);
         $this->searchableSel = Fields::from($this->searchable);
         $this->persistedSel  = Fields::from($this->persisted);
+        $this->enabled ??= true;
     }
 
     // --- Accessors used by the compiler pass (keeps the pass dumb & stable)
