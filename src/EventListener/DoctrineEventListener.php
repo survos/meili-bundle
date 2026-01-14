@@ -11,7 +11,6 @@ use Doctrine\ORM\Event\PostUpdateEventArgs;
 use Doctrine\ORM\Event\PrePersistEventArgs;
 use Doctrine\ORM\Event\PreRemoveEventArgs;
 use Doctrine\ORM\Events;
-use Jwage\PhpAmqpLibMessengerBundle\Transport\AmqpStamp;
 use Psr\Log\LoggerInterface;
 use Survos\CoreBundle\Service\SurvosUtils;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
@@ -42,7 +41,8 @@ class DoctrineEventListener
         private readonly MeiliService              $meiliService,
         private readonly SettingsService           $settingsService,
         private readonly PropertyAccessorInterface $propertyAccessor,
-        private readonly NormalizerInterface       $normalizer, private readonly MeiliPayloadBuilder $meiliPayloadBuilder,
+        private readonly NormalizerInterface       $normalizer,
+        private readonly MeiliPayloadBuilder $meiliPayloadBuilder,
         private readonly ?MessageBusInterface      $messageBus=null,
         private readonly ?LoggerInterface          $logger = null,
     ) {
@@ -117,7 +117,6 @@ class DoctrineEventListener
             }
             if ($transport = $this->meiliService->getConfig()['transport']) {
                 $stamps[] = new TransportNamesStamp($transport);
-//                    new AmqpStamp('meili'),
             }
 
             if ($fancyNewWay = false) {
