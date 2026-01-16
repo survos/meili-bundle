@@ -71,7 +71,6 @@ final class MeiliPayloadBuilder
 
             $doc = self::deepMerge($doc, $extra);
         }
-        dd($entity, $doc);
 
         return $doc;
     }
