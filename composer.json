@@ -22,7 +22,8 @@
         "zenstruck/bytes": "^1.0",
         "symfony/stopwatch": "^7.4||^8.0",
         "symfony/string": "^7.4||^8.0",
-        "survos/jsonl-bundle": "^2.0"
+        "survos/jsonl-bundle": "^2.0",
+        "survos/lingua-core": "^2.0"
     },
     "require-dev": {
         "roave/security-advisories": "dev-latest",
