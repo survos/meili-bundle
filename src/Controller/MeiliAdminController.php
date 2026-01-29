@@ -41,7 +41,7 @@ class MeiliAdminController extends AbstractController
     ) {
     }
 
-    #[AdminRoute('/meili-index', name: 'meili_index')]
+//    #[AdminRoute('/meili-index', name: 'meili_index')]
     #[Template('@SurvosMeili/ez/dashboard.html.twig')]
     public function index(AdminContext $context): Response|array
     {
@@ -51,7 +51,7 @@ class MeiliAdminController extends AbstractController
         ];
     }
 
-    #[AdminRoute(path: '/index/overview/{indexName}', name: 'meili_index_dashboard')]
+//    #[AdminRoute(path: '/index/overview/{indexName}', name: 'meili_index_dashboard')]
     public function indexDashboard(
         AdminContext $context,
         string $indexName, // IMPORTANT: this is a base key, not a UID

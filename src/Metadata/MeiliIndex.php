@@ -4,6 +4,9 @@ declare(strict_types=1);
 namespace Survos\MeiliBundle\Metadata;
 
 use Attribute;
+use function strrpos;
+use function substr;
+use function strtolower;
 
 /**
  * Declarative Meilisearch index configuration + UI hints used by SurvosMeiliBundle.

@@ -7,6 +7,14 @@ use EasyCorp\Bundle\EasyAdminBundle\Config\MenuItem;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Zenstruck\Bytes;
+use function array_merge;
+use function is_array;
+use function sprintf;
+use function str_replace;
+use function strrpos;
+use function substr;
+use function ucfirst;
+use function Symfony\Component\String\u;
 use function Symfony\Component\Translation\t;
 
 final class MeiliEasyAdminMenuFactory
@@ -49,13 +57,14 @@ final class MeiliEasyAdminMenuFactory
     private function createIndexSubItems(string $indexName, array $meiliSettings, string $routePrefix): array
     {
         $items = [];
+        $routeEntity = $this->routeEntityName($meiliSettings);
 
         // Overview page inside admin (your showIndex route)
 
         $items[] = MenuItem::linkToRoute(
             t('action.detail', domain: 'EasyAdminBundle'),
             $this->dashboardHelper->getIcon('browse'),
-            sprintf('%s_%s_index', $routePrefix, $meiliSettings['baseName']),
+            sprintf('%s_%s_index', $routePrefix, $routeEntity),
         );
 
 
@@ -83,6 +92,23 @@ final class MeiliEasyAdminMenuFactory
         );
 
         return $items;
+    }
+
+    /** @param array<string,mixed> $meiliSettings */
+    private function routeEntityName(array $meiliSettings): string
+    {
+        $class = $meiliSettings['class'] ?? null;
+        if (is_string($class) && $class !== '') {
+            $short = substr($class, (int) (strrpos($class, '\\') ?: -1) + 1);
+            return u($short)->snake()->toString();
+        }
+
+        $baseName = (string) ($meiliSettings['baseName'] ?? '');
+        if ($baseName === '') {
+            return '';
+        }
+
+        return u($baseName)->snake()->toString();
     }
 
     /**

@@ -50,22 +50,39 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
                 continue;
             }
 
-            $schema = $settings['schema'] ?? [];
+             $schema = $settings['schema'] ?? [];
+             // Raw embedders from compiler pass may be shorthand (e.g. ["product"]).
+             // Normalize to the exact Meili API shape using the provider.
+             $rawEmbedders = $settings['embedders'] ?? [];
+             $embedders = [];
+             if ($rawEmbedders && $this->embeddersProvider) {
+                 // Provider is already constructed with raw embedders from config
+                 // and exposes the exact Meili API shape via forMeili().
+                 $embedders = $this->embeddersProvider->forMeili();
+             }
             $facets = $settings['facets'] ?? [];
 
-            $isMl = $this->indexNameResolver->isMultiLingual();
-            $locales = $isMl ? ($this->localeContext?->getEnabled() ?? []) : [null];
+             $isMl = $this->indexNameResolver->isMultiLingual();
+             // Always process base index (null locale); localized indexes come after
+             $locales = $isMl
+                 ? array_merge([null], ($this->localeContext?->getEnabled() ?? []))
+                 : [null];
 
-            foreach ($locales as $locale) {
-                $uid = $this->indexNameResolver->uidFor($base, $locale);
+             foreach ($locales as $locale) {
+                 $uid = $this->indexNameResolver->uidFor($base, $locale);
 
                 $io->section(sprintf('Processing %s (locale=%s)', $uid, (string) $locale));
 
                 // Always show what would be applied when very verbose,
                 // or when --dump is requested.
-                if ($dumpSettings || $io->isVeryVerbose()) {
-                    $io->writeln("Schema payload (updateSettings):");
-                    $io->writeln(json_encode($schema, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+                 if ($dumpSettings || $io->isVeryVerbose()) {
+                     $dumpPayload = $schema;
+                     // Show embedders in dump only for base index
+                     if ($locale === null && $embedders) {
+                         $dumpPayload['embedders'] = $embedders;
+                     }
+                     $io->writeln("Schema payload (updateSettings):");
+                     $io->writeln(json_encode($dumpPayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
                     if ($io->isDebug()) { // -vvv
                         $io->writeln("\nFacet UI metadata (compiler pass):");
@@ -82,17 +99,23 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
                     $this->meili->reset($uid);
                 }
 
-                if (!$force) {
-                    $io->warning(sprintf('Use --force to apply settings to %s', $uid));
-                    continue;
-                }
+                 if (!$force) {
+                     $io->warning(sprintf('Use --force to apply settings to %s', $uid));
+                     continue;
+                 }
 
-                // No "ensure" semantics: just get endpoint and enqueue updateSettings.
-                // Meilisearch will auto-create index if needed when applying settings.
-                $index = $this->meili->getIndexEndpoint($uid);
+                 // No "ensure" semantics: just get endpoint and enqueue updateSettings.
+                 // Meilisearch will auto-create index if needed when applying settings.
+                 $index = $this->meili->getIndexEndpoint($uid);
 
-                $task = $index->updateSettings($schema);
-                $taskUid = $task->getTaskUid();
+                 // Apply embedders ONLY on base (non-localized) index
+                 $payload = $schema;
+                 if ($locale === null && $embedders) {
+                     $payload['embedders'] = $embedders;
+                 }
+
+                 $task = $index->updateSettings($payload);
+                 $taskUid = $task->getTaskUid();
 
                 $io->writeln(sprintf('Dispatched updateSettings taskUid=%s', (string) $taskUid));
 
