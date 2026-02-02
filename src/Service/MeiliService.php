@@ -142,7 +142,13 @@ final class MeiliService
      */
     public function rawForBase(string $baseName, ?string $locale): string
     {
-        return $this->nameResolver->rawFor($baseName, $locale);
+        $fallback = ($locale !== null && $locale !== '')
+            ? $locale
+            : (string)($this->bag->has('kernel.default_locale') ? $this->bag->get('kernel.default_locale') : 'en');
+
+        $isMlFor = $this->nameResolver->isMultiLingualFor($baseName, $fallback);
+
+        return $this->nameResolver->rawFor($baseName, $locale, $isMlFor);
     }
 
     /**
@@ -150,7 +156,13 @@ final class MeiliService
      */
     public function uidForBase(string $baseName, ?string $locale): string
     {
-        return $this->nameResolver->uidFor($baseName, $locale);
+        $fallback = ($locale !== null && $locale !== '')
+            ? $locale
+            : (string)($this->bag->has('kernel.default_locale') ? $this->bag->get('kernel.default_locale') : 'en');
+
+        $isMlFor = $this->nameResolver->isMultiLingualFor($baseName, $fallback);
+
+        return $this->nameResolver->uidFor($baseName, $locale, $isMlFor);
     }
 
     /**

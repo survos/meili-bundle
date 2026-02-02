@@ -21,6 +21,7 @@ use Survos\MeiliBundle\Command\SyncIndexesCommand;
 use Survos\MeiliBundle\Compiler\MeiliIndexPass;
 use Survos\MeiliBundle\Components\InstantSearchComponent;
 use Survos\MeiliBundle\Controller\MeiliAdminController;
+use Survos\MeiliBundle\Controller\MeiliFileProxyController;
 use Survos\MeiliBundle\Controller\MeiliProxyController;
 use Survos\MeiliBundle\Controller\SearchController;
 use Survos\MeiliBundle\Controller\TemplateController;
@@ -87,6 +88,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         $builder->setParameter('survos_meili.prefix', $config['meiliPrefix']);
         $builder->setParameter('survos_meili.pricing', $config['pricing'] ?? []);
         $builder->setParameter('survos_meili.meili_settings', $config['meili_settings'] ?? []);
+        $builder->setParameter('survos_meili.file_proxy', $config['file_proxy'] ?? []);
 
         // IMPORTANT: define MeiliServiceConfig via factory (no object literals in container dump)
         $builder->register(MeiliServiceConfig::class)
@@ -201,7 +203,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                 ->setPublic(true);
         }
 
-        foreach ([MeiliProxyController::class] as $class) {
+        foreach ([MeiliProxyController::class, MeiliFileProxyController::class] as $class) {
             $builder->autowire($class)
                 ->addTag('container.service_subscriber')
                 ->addTag('controller.service_arguments')
@@ -326,6 +328,19 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                 '%kernel.project_dir%/src/Entity',
                 '%kernel.project_dir%/src/Index',
             ])
+            ->end()
+
+            ->arrayNode('file_proxy')
+                ->addDefaultsIfNotSet()
+                ->children()
+                    ->booleanNode('enabled')->defaultTrue()->end()
+                    ->booleanNode('allow_hidden')->defaultFalse()->end()
+                    ->scalarNode('cache_control')->defaultValue('private, max-age=60')->end()
+                    ->arrayNode('roots')
+                        ->scalarPrototype()->end()
+                        ->defaultValue([])
+                    ->end()
+                ->end()
             ->end()
 
             ->end();

@@ -40,7 +40,7 @@ let Routing = null;
 try {
   const module = await import('fos-routing');
   Routing = module.default;
-  const RoutingDataModule = await import('/js/fos_js_routes.js');
+  const RoutingDataModule = await import('/js/fos_js_routes.js?abc');
   const RoutingData = RoutingDataModule.default;
   Routing.setData(RoutingData);
 } catch { /* ignore */ }

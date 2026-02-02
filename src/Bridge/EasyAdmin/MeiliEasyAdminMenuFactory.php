@@ -14,6 +14,7 @@ use function str_replace;
 use function strrpos;
 use function substr;
 use function ucfirst;
+use function trim;
 use function Symfony\Component\String\u;
 use function Symfony\Component\Translation\t;
 
@@ -69,13 +70,19 @@ final class MeiliEasyAdminMenuFactory
 
 
         // Default instant search view (non-semantic)
+        $sourceLocale = $this->sourceLocaleForBase($indexName);
+        $routeParams = [
+            'indexName' => $meiliSettings['prefixedName'] ?? $indexName,
+        ];
+        if ($sourceLocale !== null && trim($sourceLocale) !== '') {
+            $routeParams['_locale'] = $sourceLocale;
+        }
+
         $items[] = MenuItem::linkToRoute(
             t('action.search', domain: 'EasyAdminBundle'),
             $this->dashboardHelper->getIcon('instant_search'),
             'meili_insta',
-            [
-                'indexName' => $meiliSettings['prefixedName'] ?? $indexName,
-            ]
+            $routeParams
         )->setLinkTarget('_blank');
 
         // Semantic variations (this is your old getSemanticSearchItems logic)
@@ -121,19 +128,26 @@ final class MeiliEasyAdminMenuFactory
     {
         $items = [];
 
+        $sourceLocale = $this->sourceLocaleForBase($indexName);
+
         $embedders = $meiliSettings['embedders'] ?? [];
         if (!is_array($embedders) || !$embedders) {
             return $items;
         }
 
         foreach ($embedders as $embedder) {
+            $params = [
+                'indexName' => $indexName,
+                'embedder'  => $embedder,
+            ];
+            if ($sourceLocale !== null && trim($sourceLocale) !== '') {
+                $params['_locale'] = $sourceLocale;
+            }
+
             $items[] = MenuItem::linkToUrl(
                 'Semantic: ' . ucfirst(str_replace('_', ' ', (string) $embedder)),
                 'semantic',
-                $this->urlGenerator->generate('meili_insta_embed', [
-                    'indexName' => $indexName,
-                    'embedder'  => $embedder,
-                ])
+                $this->urlGenerator->generate('meili_insta_embed', $params)
             )->setLinkTarget('_blank');
         }
 
@@ -158,5 +172,11 @@ final class MeiliEasyAdminMenuFactory
 //            );
 //        }
         return [];
+    }
+
+    private function sourceLocaleForBase(string $baseName): ?string
+    {
+        $loc = $this->meiliService->resolveLocalesForBase($baseName, 'en');
+        return $loc['source'] ?? null;
     }
 }

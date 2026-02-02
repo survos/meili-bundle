@@ -8,10 +8,26 @@ use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Component\Routing\Exception\RouteNotFoundException;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+
+use function array_map;
+use function array_merge;
+use function in_array;
+use function json_encode;
+use function sprintf;
+use function strtolower;
+use function trim;
 
 #[AsCommand('meili:settings:update', 'Update Meilisearch index settings from compiler-pass schema')]
 final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 {
+    public function __construct(
+        private readonly UrlGeneratorInterface $urlGenerator,
+    ) {
+        parent::__construct();
+    }
+
     public function __invoke(
         SymfonyStyle $io,
 
@@ -32,6 +48,12 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 
         #[Option('Filter by FQCN or short class name')]
         ?string $class = null,
+
+        #[Option('Require a source locale to set indexLanguages')]
+        bool $requireLocale = false,
+
+        #[Option('Fail if locale is not in resolver policy')]
+        bool $strictLocale = false,
     ): int {
         $this->init();
 
@@ -43,12 +65,20 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
             return Command::SUCCESS;
         }
 
+        $sourceLocales = [];
+
         foreach ($bases as $base) {
             $settings = $rawSettings[$base] ?? null;
             if (!$settings) {
                 $io->warning(sprintf('No compiler-pass settings found for "%s".', $base));
                 continue;
             }
+
+            $fallbackSource = $this->localeContext?->getDefault() ?? 'en';
+            $localePolicy = $this->indexNameResolver->localesFor($base, $fallbackSource);
+            $sourceLocale = $localePolicy['source'] ?? $fallbackSource;
+            $policyLocales = array_map(static fn(string $loc): string => strtolower($loc), $localePolicy['all']);
+            $sourceLocales[$base] = $sourceLocale;
 
              $schema = $settings['schema'] ?? [];
              // Raw embedders from compiler pass may be shorthand (e.g. ["product"]).
@@ -62,10 +92,10 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
              }
             $facets = $settings['facets'] ?? [];
 
-             $isMl = $this->indexNameResolver->isMultiLingual();
+             $isMlFor = $this->indexNameResolver->isMultiLingualFor($base, $sourceLocale);
              // Always process base index (null locale); localized indexes come after
-             $locales = $isMl
-                 ? array_merge([null], ($this->localeContext?->getEnabled() ?? []))
+             $locales = $isMlFor
+                 ? array_merge([null], $localePolicy['all'])
                  : [null];
 
              foreach ($locales as $locale) {
@@ -108,11 +138,35 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
                  // Meilisearch will auto-create index if needed when applying settings.
                  $index = $this->meili->getIndexEndpoint($uid);
 
-                 // Apply embedders ONLY on base (non-localized) index
-                 $payload = $schema;
-                 if ($locale === null && $embedders) {
-                     $payload['embedders'] = $embedders;
-                 }
+                // Apply embedders ONLY on base (non-localized) index
+                $payload = $schema;
+                if ($locale === null && $embedders) {
+                    $payload['embedders'] = $embedders;
+                }
+
+                $indexLanguage = $locale ?? $sourceLocale;
+                if ($indexLanguage === null || trim($indexLanguage) === '') {
+                    if ($requireLocale) {
+                        $io->error(sprintf('Missing source locale for %s. Configure locales.source or pass --require-locale=0.', $base));
+                        return Command::FAILURE;
+                    }
+                    $io->warning(sprintf('No source locale for %s; localizedAttributes will not be set.', $base));
+                } else {
+                    $indexLanguage = strtolower($indexLanguage);
+                    if ($policyLocales !== [] && !in_array($indexLanguage, $policyLocales, true)) {
+                        $message = sprintf('Locale "%s" not in resolver policy for %s.', $indexLanguage, $base);
+                        if ($strictLocale) {
+                            $io->error($message);
+                            return Command::FAILURE;
+                        }
+                        $io->warning($message);
+                    }
+
+                    $payload['localizedAttributes'] = [[
+                        'locales' => [$indexLanguage],
+                        'attributePatterns' => ['*'],
+                    ]];
+                }
 
                  $task = $index->updateSettings($payload);
                  $taskUid = $task->getTaskUid();
@@ -131,6 +185,32 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
             }
         }
 
+        $this->renderIndexLinks($io, $bases, $sourceLocales);
+
         return Command::SUCCESS;
+    }
+
+    /** @param list<string> $bases */
+    private function renderIndexLinks(SymfonyStyle $io, array $bases, array $sourceLocales): void
+    {
+        if ($bases === []) {
+            return;
+        }
+
+        foreach ($bases as $baseName) {
+            try {
+                $params = ['indexName' => $baseName];
+                $locale = $sourceLocales[$baseName] ?? null;
+                if ($locale !== null && trim($locale) !== '') {
+                    $params['_locale'] = $locale;
+                }
+
+                $url = $this->urlGenerator->generate('meili_insta', $params, UrlGeneratorInterface::ABSOLUTE_URL);
+                $io->writeln(sprintf('Index page: %s', $url));
+            } catch (RouteNotFoundException) {
+                $io->warning('Route "meili_insta" not found; cannot print index URL.');
+                return;
+            }
+        }
     }
 }
