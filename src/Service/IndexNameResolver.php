@@ -114,6 +114,19 @@ final class IndexNameResolver
         return $this->uidForRaw($raw);
     }
 
+    /**
+     * Derive a base index name from a dataset reference.
+     *
+     * Example: "dc/tb09jw350" => "dc_tb09jw350"
+     */
+    public function baseFromDataset(string $datasetRef): string
+    {
+        $base = trim($datasetRef);
+        $base = str_replace(['/', '\\'], '_', $base);
+        $base = preg_replace('/[^a-zA-Z0-9_\-]+/', '_', $base) ?? $base;
+        return trim($base, '_');
+    }
+
     // ---------------------------------------------------------------------
 
     private function anyIndexHasTargets(): bool

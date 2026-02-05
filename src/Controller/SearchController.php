@@ -43,8 +43,8 @@ class SearchController extends AbstractController
         $meiliIndexUid = $this->meiliService->uidForBase($baseIndexName, $locale);
 
         // Index configuration is base-keyed
-        $indexConfig = $this->meiliService->getIndexSetting($baseIndexName);
-        assert($indexConfig, "Missing config for base index {$baseIndexName}");
+        $indexConfig = $this->meiliService->getIndexSetting($baseIndexName)
+            ?? ['template' => $baseIndexName, 'primaryKey' => 'id', 'baseName' => $baseIndexName, 'facets' => []];
 
         // Locale-agnostic template selection
         $templateName = $indexConfig['template'] ?? $baseIndexName;

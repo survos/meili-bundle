@@ -93,15 +93,33 @@ class DoctrineEventListener
             // @AI: The problem is here!  pixieBundle\\Row is in this list, and shouldn't be.
 //            dd($entityClass, $this->meiliService->indexedEntities);
 
-            $groups = $this->settingsService->getNormalizationGroups($entityClass);
+
+
+            // Get the index configuration for this entity class
+            $indexesByClass = $this->meiliService->indexedByClass();
+            $entityIndexes = $indexesByClass[$entityClass] ?? [];
+
+            // Use the first index's persisted configuration if available
+            $persistedConfig = [];
+            if (!empty($entityIndexes)) {
+                $firstIndex = reset($entityIndexes);
+                $persistedConfig = $firstIndex['persisted'] ?? [];
+            } else {
+                // Fallback to API groups if no MeiliIndex configuration
+                $groups = $this->settingsService->getNormalizationGroups($entityClass);
+                $persistedConfig = [
+                    'groups' => $groups,
+                    'restrict_groups' => !empty($groups)
+                ];
+            }
+
             $normalized = [];
             foreach ($objects as $object) {
-//                $normalized[] = $this->meiliPayloadBuilder->build($object, $groups);
-//                dd($normalized[0]);
+                $normalized[] = $this->meiliPayloadBuilder->build($object, $persistedConfig);
             }
 
 
-            $normalized = $this->normalizer->normalize($objects, 'array', ['groups' => $groups]);
+
             SurvosUtils::removeNullsAndEmptyArrays($normalized);
 
             $this->logger?->info(sprintf(
@@ -144,7 +162,8 @@ class DoctrineEventListener
                 $message = new BatchIndexEntitiesMessage(
                     $entityClass,
                     $normalized,
-                    reload: false
+                    reload: false,
+                    primaryKeyName: $this->getPrimaryKey($entityClass)
                 );
                     $this->messageBus->dispatch($message, $stamps);
                 try {

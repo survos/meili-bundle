@@ -608,7 +608,8 @@
             </div>
             <div class="offcanvas-body p-3 p-md-0">
               <div class="w-100">
-                {% for name, conf in indexConfig.facets %}
+                {% set facets = indexConfig.facets ?? {} %}
+                {% for name, conf in facets %}
                 {% set widget = conf.widget ?? conf.type ?? 'RefinementList' %}
                 <div class="facet-block mb-3" data-facet-block>
                   <div class="facet-header">

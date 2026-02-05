@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Survos\MeiliBundle\Command;
 
 use Survos\MeiliBundle\Registry\MeiliRegistry;
+use Survos\MeiliBundle\Repository\IndexInfoRepository;
 use Survos\MeiliBundle\Service\IndexNameResolver;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -11,6 +12,17 @@ use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use function count;
+use function implode;
+use function is_array;
+use function method_exists;
+use function property_exists;
+use function sprintf;
+use function str_contains;
+use function strtolower;
+use function strrpos;
+use function substr;
+use function trim;
 
 #[AsCommand(
     name: 'meili:registry:report',
@@ -22,6 +34,7 @@ final class MeiliRegistryReportCommand extends Command
         private readonly MeiliRegistry $registry,
         private readonly MeiliService $meili,
         private readonly IndexNameResolver $resolver,
+        private readonly IndexInfoRepository $indexInfoRepository,
     ) {
         parent::__construct();
     }
@@ -61,16 +74,49 @@ final class MeiliRegistryReportCommand extends Command
             $loc = $this->resolver->localesFor($baseName, $locale);
             $isMlFor = $this->resolver->isMultiLingualFor($baseName, $locale);
 
+            $persisted = is_array($cfg['persisted'] ?? null) ? $cfg['persisted'] : [];
+            $persistedGroups = isset($persisted['groups']) && is_array($persisted['groups'])
+                ? implode(',', $persisted['groups'])
+                : '';
+            $persistedFieldsCount = isset($persisted['fields']) && is_array($persisted['fields'])
+                ? count($persisted['fields'])
+                : 0;
+
             $rows[] = [
                 $baseName,
                 $label,
                 $isMlFor ? 'yes' : 'no',
                 $loc['source'],
                 $loc['targets'] ? implode(',', $loc['targets']) : '',
+                (string)($cfg['primaryKey'] ?? ''),
+                $persistedGroups,
+                (string)$persistedFieldsCount,
             ];
         }
 
-        $io->table(['Base name', 'Label', 'Multilingual', 'Locale', 'Target locales'], $rows);
+        $io->section('Compiled registry (attributes)');
+        $io->table(
+            ['Base name', 'Label', 'Multilingual', 'Locale', 'Target locales', 'Primary key', 'Persisted groups', 'Persisted fields'],
+            $rows
+        );
+
+        $dbRows = [];
+        foreach ($this->indexInfoRepository->findAll() as $info) {
+            $dbRows[] = [
+                $info->indexName,
+                $info->primaryKey,
+                (string)$info->documentCount,
+                $info->updatedAt?->format('Y-m-d H:i:s') ?? '',
+                $info->status ?? '',
+            ];
+        }
+
+        $io->section('Database registry (synced)');
+        if ($dbRows === []) {
+            $io->writeln('No database registry entries found. Run: bin/console meili:registry:sync');
+        } else {
+            $io->table(['Index UID', 'Primary key', 'Documents', 'Updated', 'Status'], $dbRows);
+        }
 
         if ($io->isVerbose()) {
             $io->section('Resolved raw index names (verbose)');

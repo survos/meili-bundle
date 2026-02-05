@@ -216,6 +216,8 @@ final class BatchIndexEntitiesMessageHandler
         $persisted  = $indexSettings['persisted']  ?? [];
         $primaryKey = $indexSettings['primaryKey'] ?? 'id';
 
+
+
         $this->logger?->info('Applying documents to index', [
             'entityClass'   => $entityClass,
             'indexUid'      => $index->getUid(),
@@ -241,6 +243,15 @@ final class BatchIndexEntitiesMessageHandler
         // Always pass $primaryKey on add-documents (first ingestion establishes PK).
         // When sync is enabled, wait for completion and fail loudly on failure.
         if ($message->reload) {
+//            dd([
+//                'indexSettings'   => $indexSettings,
+//                'persisted'       => $persisted,
+//                'persistedGroups' => $persisted['groups'] ?? null,
+//                'restrictGroups'  => $persisted['restrict_groups'] ?? null,
+//                'entityClass'     => $entityClass,
+//                'indexName'       => $indexName,
+//                'settingsKey'     => $settingsKey,
+//            ]);
             $iter = $this->yieldNormalizedDocs(
                 $repo,
                 $identifierField,

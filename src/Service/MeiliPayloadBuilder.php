@@ -31,7 +31,7 @@ final class MeiliPayloadBuilder
     public function build(object $entity, array $persisted): array
     {
         $groups = $persisted['groups'] ?? null;
-        $restrictGroups = (bool)($persisted['restrict_groups'] ?? false);
+        $restrictGroups = (bool)($persisted['restrict_groups'] ?? $groups);
 
         // BC: accept either 'force_fields' or legacy 'fields'
         $forceList = $persisted['force_fields'] ?? ($persisted['fields'] ?? []);
@@ -50,6 +50,7 @@ final class MeiliPayloadBuilder
         }
 
         /** @var array<string,mixed> $doc */
+        $entity->html = null;
         $doc = $this->serializer->normalize($entity, context: $ctx1);
 
         if ($force === []) {

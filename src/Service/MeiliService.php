@@ -649,25 +649,21 @@ ORDER BY n.nspname, c.relname;"
     {
         $start = \microtime(true);
         $client = $this->getMeiliClient();
-        dd($task);
-        $task = $this->getMeiliClient()->tasks->get($taskUid);
-        $task = $task->wait();
-        dd($task);
 
         while (true) {
-            // Adjust these two lines to your client:
-
-            $status = $task['status'] ?? null;
+            $task = $client->getTask($taskUid);
+            $taskArr = $task instanceof Task ? $task->toArray() : (array) $task;
+            $status = $taskArr['status'] ?? null;
 
             if (\in_array($status, ['succeeded', 'failed', 'canceled'], true)) {
-                return $task;
+                return $taskArr;
             }
 
             $elapsedMs = (int)\round((\microtime(true) - $start) * 1000);
             if ($elapsedMs >= $timeoutMs) {
-                return $task + [
+                return $taskArr + [
                         'status' => $status ?? 'unknown',
-                        'error' => $task['error'] ?? [
+                        'error' => $taskArr['error'] ?? [
                                 'message' => sprintf('Timed out waiting for task %d after %dms', $taskUid, $elapsedMs),
                             ],
                     ];

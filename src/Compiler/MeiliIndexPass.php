@@ -7,6 +7,7 @@ use Doctrine\ORM\Mapping as ORM;
 use ReflectionClass;
 use Survos\MeiliBundle\Metadata\Facet;
 use Survos\MeiliBundle\Metadata\FacetWidget;
+use Survos\MeiliBundle\Metadata\Fields;
 use Survos\MeiliBundle\Metadata\InstaView;
 use Survos\MeiliBundle\Metadata\MeiliIndex;
 use Survos\MeiliBundle\Service\MeiliService;
@@ -167,10 +168,22 @@ final class MeiliIndexPass implements CompilerPassInterface
                         }
                     }
 
+                    // Convert Fields object to array structure expected by MeiliPayloadBuilder
+                    $persistedObj = $cfg->persisted;
+                    if ($persistedObj instanceof Fields) {
+                        $persistedArray = [
+                            'fields' => $persistedObj->fields,
+                            'groups' => $persistedObj->groups,
+                            'restrict_groups' => !empty($persistedObj->groups), // Auto-enable when groups present
+                        ];
+                    } else {
+                        $persistedArray = is_array($persistedObj) ? $persistedObj : ['fields' => [], 'groups' => null];
+                    }
+
                     $indexSettings[$class][$name] = [
                         'schema'      => $indexSchema,
                         'primaryKey'  => $cfg->primaryKey,
-                        'persisted'   => (array) $cfg->persisted,
+                        'persisted'   => $persistedArray,
                         'class'       => $class,
                         'facets'      => $facetMap,
                         'embedders'   => $cfg->embedders,

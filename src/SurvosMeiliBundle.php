@@ -11,6 +11,7 @@ use Survos\MeiliBundle\Command\ExportCommand;
 use Survos\MeiliBundle\Command\IterateIndexesCommand;
 use Survos\MeiliBundle\Command\MeilEstimatorCommand;
 use Survos\MeiliBundle\Command\MeiliFlushFileCommand;
+use Survos\MeiliBundle\Command\MeiliRegistrySyncCommand;
 use Survos\MeiliBundle\Command\MeiliRegistryReportCommand;
 use Survos\MeiliBundle\Command\MeiliSchemaCreateCommand;
 use Survos\MeiliBundle\Command\MeiliSchemaUpdateCommand;
@@ -140,6 +141,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         // Commands
         foreach ([
             MeiliRegistryReportCommand::class,
+            MeiliRegistrySyncCommand::class,
             ExportCommand::class,
             IterateIndexesCommand::class,
             MeiliSchemaCreateCommand::class,
