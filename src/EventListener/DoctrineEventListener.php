@@ -37,6 +37,11 @@ class DoctrineEventListener
 
     private static bool $dispatching = false;
 
+    private bool $enabled = true;
+
+    public function disable(): void { $this->enabled = false; }
+    public function enable(): void  { $this->enabled = true; }
+
     public function __construct(
         private readonly MeiliService              $meiliService,
         private readonly SettingsService           $settingsService,
@@ -208,8 +213,9 @@ class DoctrineEventListener
 
     private function scheduleForIndexing(object $object): void
     {
-        // @todo: we need a way to disable this from the bundle config!!
-//        return;
+        if (!$this->enabled) {
+            return;
+        }
 
 
 
