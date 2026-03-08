@@ -90,6 +90,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         $builder->setParameter('survos_meili.pricing', $config['pricing'] ?? []);
         $builder->setParameter('survos_meili.meili_settings', $config['meili_settings'] ?? []);
         $builder->setParameter('survos_meili.file_proxy', $config['file_proxy'] ?? []);
+        $builder->setParameter('survos_meili.chat', $config['chat'] ?? []);
 
         // IMPORTANT: define MeiliServiceConfig via factory (no object literals in container dump)
         $builder->register(MeiliServiceConfig::class)
@@ -341,6 +342,51 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                     ->arrayNode('roots')
                         ->scalarPrototype()->end()
                         ->defaultValue([])
+                    ->end()
+                ->end()
+            ->end()
+
+            // ---------------------------------------------------------------
+            // Chat workspace configuration
+            // ---------------------------------------------------------------
+            ->arrayNode('chat')
+                ->addDefaultsIfNotSet()
+                ->children()
+                    ->arrayNode('workspaces')
+                        ->useAttributeAsKey('name')
+                        ->arrayPrototype()
+                            ->children()
+                                ->scalarNode('source')
+                                    ->defaultValue('openAi')
+                                    ->info('LLM provider: openAi | azureOpenAi | mistral | gemini | vLlm')
+                                ->end()
+                                ->scalarNode('apiKey')
+                                    ->defaultNull()
+                                    ->info('Provider API key (use %env(OPENAI_API_KEY)%)')
+                                ->end()
+                                ->scalarNode('model')
+                                    ->defaultValue('gpt-4o-mini')
+                                    ->info('Model sent in each completion request (not stored in workspace settings)')
+                                ->end()
+                                // Optional provider extras
+                                ->scalarNode('baseUrl')->defaultNull()->end()
+                                ->scalarNode('orgId')->defaultNull()->end()
+                                ->scalarNode('projectId')->defaultNull()->end()
+                                ->scalarNode('apiVersion')->defaultNull()->end()
+                                ->scalarNode('deploymentId')->defaultNull()->end()
+                                ->arrayNode('prompts')
+                                    ->addDefaultsIfNotSet()
+                                    ->children()
+                                        ->scalarNode('system')->defaultNull()->end()
+                                    ->end()
+                                ->end()
+                                ->arrayNode('indexes')
+                                    ->info('Meilisearch index UIDs this workspace has access to')
+                                    ->scalarPrototype()->end()
+                                    ->defaultValue([])
+                                ->end()
+                            ->end()
+                        ->end()
                     ->end()
                 ->end()
             ->end()

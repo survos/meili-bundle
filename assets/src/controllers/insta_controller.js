@@ -14,6 +14,7 @@ import { instantMeiliSearch } from '@meilisearch/instant-meilisearch';
 
 // import * as bootstrap from 'bootstrap';
 
+// new, might not be right
 import '../debug/fetch_tap.js';
 import { createDebug } from '../debug/debug.js';
 import {
@@ -31,9 +32,9 @@ import { installTwigEngine, getTwigEngine, installFosRouting } from './insta_twi
 import { safeParse, stripProtocol, escapeHtml, normalizeConfig } from './insta_helpers.js';
 import { mountFacetFromNode } from './insta_facets.js';
 
-// Create the engine; FOS routing wired synchronously from the generated module.
+// Create the engine; FOS routing wired from the generated module (optional — silently skips if unavailable).
 const engine = installTwigEngine();
-installFosRouting(engine);
+await installFosRouting(engine);
 
 // Debug logger (enable with: localStorage.debug = 'insta:*,wire:*,hl:*,view:*')
 const logInsta = createDebug('insta:core');
@@ -45,7 +46,8 @@ export default class extends Controller {
   static targets = [
     'searchBox', 'hits', 'reset', 'pagination', 'refinementList', 'stats',
     'semanticSlider', 'semanticOutput', 'sortBy', 'debug', 'submit',
-    'scoreThreshold', 'scoreMultiplier', 'notice', 'facetsSidebar'
+    'scoreThreshold', 'scoreMultiplier', 'notice', 'facetsSidebar',
+    'detailPanel', 'detailPanelTitle', 'detailPanelBody', 'detailPanelLoader',
   ];
 
   static values = {
@@ -133,11 +135,82 @@ export default class extends Controller {
     }
 
     await this._startSearch();
+
+    // Delegated listener: catch clicks on any [data-detail-url] element inside
+    // this controller's element (including dynamically rendered hit templates).
+    this._onDetailClick = (event) => {
+      const trigger = event.target.closest('[data-detail-url]');
+      if (!trigger || !this.element.contains(trigger)) return;
+      event.preventDefault();
+      const url   = trigger.dataset.detailUrl;
+      const title = trigger.dataset.detailTitle ?? '';
+      this.openDetail(url, title);
+    };
+    this.element.addEventListener('click', this._onDetailClick);
   }
 
   disconnect() {
     try { this.search?.dispose(); } catch { /* ignore */ }
     this.search = null;
+    if (this._onDetailClick) {
+      this.element.removeEventListener('click', this._onDetailClick);
+      this._onDetailClick = null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Detail panel (offcanvas)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Fetch `url` and display its HTML response in the detail offcanvas panel.
+   * Triggered automatically via delegated [data-detail-url] clicks, but can
+   * also be called directly: this.openDetail('/wines/42/edit', 'Edit Wine')
+   *
+   * @param {string} url   - URL to fetch (any Symfony route, e.g. from path())
+   * @param {string} title - Optional panel header title
+   */
+  async openDetail(url, title = '') {
+    if (!this.hasDetailPanelTarget) return;
+
+    // Set title and show loader while fetching
+    if (this.hasDetailPanelTitleTarget) this.detailPanelTitleTarget.textContent = title;
+    if (this.hasDetailPanelBodyTarget)  this.detailPanelBodyTarget.innerHTML = '';
+    if (this.hasDetailPanelLoaderTarget) {
+      this.detailPanelLoaderTarget.hidden = false;
+      this.detailPanelBodyTarget?.appendChild(this.detailPanelLoaderTarget);
+    }
+
+    bootstrap.Offcanvas.getOrCreateInstance(this.detailPanelTarget).show();
+
+    try {
+      const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const html = await response.text();
+
+      if (this.hasDetailPanelBodyTarget) {
+        this.detailPanelBodyTarget.innerHTML = html;
+        // Re-run any inline scripts (Symfony UX / Stimulus targets won't need this,
+        // but forms and regular JS in the response will work).
+        this.detailPanelBodyTarget.querySelectorAll('script').forEach(oldScript => {
+          const s = document.createElement('script');
+          [...oldScript.attributes].forEach(a => s.setAttribute(a.name, a.value));
+          s.textContent = oldScript.textContent;
+          oldScript.replaceWith(s);
+        });
+      }
+    } catch (e) {
+      if (this.hasDetailPanelBodyTarget) {
+        this.detailPanelBodyTarget.innerHTML =
+          `<div class="alert alert-danger m-3">Failed to load: ${e.message}</div>`;
+      }
+    }
+  }
+
+  closeDetail() {
+    if (this.hasDetailPanelTarget) {
+      bootstrap.Offcanvas.getOrCreateInstance(this.detailPanelTarget).hide();
+    }
   }
 
   async _loadTemplate() {

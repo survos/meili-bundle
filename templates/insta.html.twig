@@ -575,6 +575,15 @@
             -->
 
             <div {{ stimulus_target(_sc, 'reset') }}></div>
+
+            {# Detail panel trigger — opens the right-side offcanvas with index stats #}
+            <button type="button"
+                    class="btn btn-sm btn-outline-secondary"
+                    data-detail-url="{{ path('survos_index_stats', { indexName: indexName }) }}"
+                    data-detail-title="{{ indexName }} stats"
+                    title="Open detail panel">
+              ≡ Detail
+            </button>
           </div>
 
           <div class="mb-2 small text-muted" {{ stimulus_target(_sc, 'stats') }}></div>
@@ -690,6 +699,13 @@
               </button>
 
               <div {{ stimulus_target(_sc, 'reset') }}></div>
+
+              <button type="button"
+                      class="btn btn-sm btn-outline-secondary ms-2"
+                      data-detail-url="{{ path('survos_index_stats', { indexName: indexName }) }}"
+                      data-detail-title="{{ indexName }} stats">
+                ≡ Detail
+              </button>
             </div>
 
             <div class="mb-2 d-flex gap-2 align-items-center justify-content-between">
@@ -730,5 +746,36 @@
       Show Filters
     </button>
     {% endif %}
+
+  {# -----------------------------------------------------------------------
+     Detail panel — slides in from the right when a hit element has data-detail-url.
+     Usage in a hit template (any element — link, button, div):
+       <a data-detail-url="{{ path('app_wine_edit', {id: hit.id}) }}"
+          data-detail-title="Edit Wine">Edit</a>
+       <button data-detail-url="{{ path('app_wine_show', {id: hit.id}) }}">View</button>
+     The controller intercepts the click, fetches the URL, and injects the
+     response HTML into the panel body.
+     ----------------------------------------------------------------------- #}
+  <div
+    {{ stimulus_target(_sc, 'detailPanel') }}
+    class="offcanvas offcanvas-end"
+    tabindex="-1"
+    id="{{ _sc }}-detail-panel"
+    aria-labelledby="{{ _sc }}-detail-panel-label"
+    style="width: min(600px, 95vw);">
+    <div class="offcanvas-header border-bottom">
+      <h5 class="offcanvas-title" id="{{ _sc }}-detail-panel-label"
+          {{ stimulus_target(_sc, 'detailPanelTitle') }}></h5>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body p-0" {{ stimulus_target(_sc, 'detailPanelBody') }}>
+      <div class="d-flex justify-content-center align-items-center h-100 text-muted py-5"
+           {{ stimulus_target(_sc, 'detailPanelLoader') }}>
+        <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+        Loading…
+      </div>
+    </div>
+  </div>
+
   </div>
 {% endblock %}

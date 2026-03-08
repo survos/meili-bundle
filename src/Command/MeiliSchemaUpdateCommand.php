@@ -8,9 +8,11 @@ use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Routing\Exception\RouteNotFoundException;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
+use function array_filter;
 use function array_map;
 use function array_merge;
 use function in_array;
@@ -24,6 +26,7 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 {
     public function __construct(
         private readonly UrlGeneratorInterface $urlGenerator,
+        #[Autowire('%survos_meili.chat%')] private readonly array $chatConfig = [],
     ) {
         parent::__construct();
     }
@@ -54,6 +57,9 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 
         #[Option('Fail if locale is not in resolver policy')]
         bool $strictLocale = false,
+
+        #[Option('Also sync chat workspaces and enable chatCompletions experimental feature')]
+        bool $chat = false,
     ): int {
         $this->init();
 
@@ -187,7 +193,90 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 
         $this->renderIndexLinks($io, $bases, $sourceLocales);
 
+        if ($chat) {
+            $this->syncChat($io, $dumpSettings, $force);
+        }
+
         return Command::SUCCESS;
+    }
+
+    private function syncChat(SymfonyStyle $io, bool $dumpSettings, bool $force): void
+    {
+        $client   = $this->meili->getMeiliClient();
+        $meiliConfig = $this->meili->getConfig();
+        $host     = rtrim($meiliConfig['host'] ?? 'http://127.0.0.1:7700', '/');
+        $adminKey = $meiliConfig['apiKey'] ?? '';
+        $workspaces = $this->chatConfig['workspaces'] ?? [];
+
+        if ($workspaces === []) {
+            $io->warning('No chat workspaces configured under survos_meili.chat.workspaces — skipping.');
+            return;
+        }
+
+        // 1. Enable chatCompletions experimental feature (SDK has no wrapper; call directly)
+        $io->section('Chat: experimental feature');
+        $featuresUrl = $host . '/experimental-features';
+        $response = json_decode(
+            file_get_contents($featuresUrl, false, stream_context_create(['http' => [
+                'header' => "Authorization: Bearer $adminKey\r\n",
+            ]])) ?: '{}',
+            true
+        );
+
+        if (!empty($response['chatCompletions'])) {
+            $io->writeln('chatCompletions already enabled.');
+        } elseif ($dumpSettings) {
+            $io->writeln('Would send: PATCH /experimental-features {"chatCompletions": true}');
+        } elseif ($force) {
+            $ctx = stream_context_create(['http' => [
+                'method'  => 'PATCH',
+                'header'  => "Authorization: Bearer $adminKey\r\nContent-Type: application/json\r\n",
+                'content' => json_encode(['chatCompletions' => true]),
+            ]]);
+            file_get_contents($featuresUrl, false, $ctx);
+            $io->writeln('<info>Enabled chatCompletions experimental feature.</info>');
+        } else {
+            $io->warning('chatCompletions not enabled — use --force to apply.');
+        }
+
+        // 2. Sync each workspace
+        foreach ($workspaces as $name => $cfg) {
+            $io->section(sprintf('Chat workspace: %s', $name));
+
+            // Build the settings payload — only fields the Meilisearch API accepts
+            $settings = array_filter([
+                'source'       => $cfg['source'] ?? 'openAi',
+                'apiKey'       => $cfg['apiKey'] ?? null,
+                'baseUrl'      => $cfg['baseUrl'] ?? null,
+                'orgId'        => $cfg['orgId'] ?? null,
+                'projectId'    => $cfg['projectId'] ?? null,
+                'apiVersion'   => $cfg['apiVersion'] ?? null,
+                'deploymentId' => $cfg['deploymentId'] ?? null,
+            ], static fn($v) => $v !== null && $v !== '');
+
+            $prompts = array_filter($cfg['prompts'] ?? [], static fn($v) => $v !== null && $v !== '');
+            if ($prompts !== []) {
+                $settings['prompts'] = $prompts;
+            }
+
+            if ($dumpSettings) {
+                $io->writeln(json_encode($settings, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+                $io->comment(sprintf('  model "%s" will be sent per-request (not stored in workspace settings)', $cfg['model'] ?? 'gpt-4o-mini'));
+                continue;
+            }
+
+            if (!$force) {
+                $io->warning(sprintf('Use --force to push workspace "%s" settings.', $name));
+                continue;
+            }
+
+            $client->chatWorkspace($name)->updateSettings($settings);
+            $io->writeln(sprintf(
+                '<info>Pushed settings for workspace "%s"</info> (model per-request: %s)',
+                $name,
+                $cfg['model'] ?? 'gpt-4o-mini'
+            ));
+        }
     }
 
     /** @param list<string> $bases */
