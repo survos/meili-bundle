@@ -27,13 +27,13 @@ import {
   configure
 } from 'instantsearch.js/es/widgets';
 
-import { installTwigEngine, getTwigEngine, autoInstallFosRouting } from './insta_twig.js';
+import { installTwigEngine, getTwigEngine, installFosRouting } from './insta_twig.js';
 import { safeParse, stripProtocol, escapeHtml, normalizeConfig } from './insta_helpers.js';
 import { mountFacetFromNode } from './insta_facets.js';
 
-// Create the engine; FOS routing wired in async via the adapter's auto-detector.
+// Create the engine; FOS routing wired synchronously from the generated module.
 const engine = installTwigEngine();
-autoInstallFosRouting(engine);
+installFosRouting(engine);
 
 // Debug logger (enable with: localStorage.debug = 'insta:*,wire:*,hl:*,view:*')
 const logInsta = createDebug('insta:core');

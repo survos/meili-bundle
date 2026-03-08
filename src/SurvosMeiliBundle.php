@@ -353,16 +353,22 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         if ($builder->hasExtension('ux_icons')) {
             $builder->prependExtensionConfig('ux_icons', [
                 'aliases' => [
-                    'home' => 'material-symbols:home-outline',
-                    'browse' => 'mdi:list-box-outline',
-                    'instant_search' => 'mdi:tag-search-outline',
-                    'action.detail' => 'mdi:show-outline',
+                    // UI chrome
+                    'home'      => 'material-symbols:home-outline',
+                    'browse'    => 'mdi:list-box-outline',
+                    'search'    => 'tabler:search',
+                    'meili'     => 'tabler:search',
+                    'database'  => 'mdi:database',
+                    // actions / hits
+                    'json'      => 'si:json-duotone',
+                    'bug'       => 'tabler:bug',
+                    // instant search
+                    'instant_search'              => 'mdi:tag-search-outline',
+                    'action.detail'               => 'mdi:show-outline',
                     'field.text_editor.view_content' => 'mdi:cogs',
+                    // semantic / linked data
                     'semantic-web' => 'mdi:semantic-web',
-                    'semantic' => 'simple-icons:semanticscholar',
-                    'database' => 'mdi:database',
-                    'search' => 'tabler:search',
-                    'meili' => 'tabler:search',
+                    'semantic'     => 'simple-icons:semanticscholar',
                 ],
             ]);
         }
