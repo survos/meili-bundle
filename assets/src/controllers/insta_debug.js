@@ -15,20 +15,19 @@ export function envProbe(note = '') {
   return probe;
 }
 
-export function twigProbe(Twig) {
+/**
+ * Probe the @tacman1123/twig-browser engine instance for debug logging.
+ * Pass the engine returned by getTwigEngine().
+ */
+export function twigProbe(engine) {
   const info = {
     tag: 'MEILI_TWIG',
     ts: new Date().toISOString(),
-    typeofTwig: typeof Twig,
-    hasTwigFactory: !!(Twig && typeof Twig.twig === 'function'),
-    keys: Twig ? Object.keys(Twig).slice(0, 12) : [],
+    engineType: engine ? 'twig-browser' : 'none',
+    hasEngine: !!engine,
+    hasRenderBlock: !!(engine && typeof engine.renderBlock === 'function'),
+    hasCompileBlock: !!(engine && typeof engine.compileBlock === 'function'),
   };
-  // Detect common pitfall: Node build (needs fs/path) instead of browser build
-  try {
-    // eslint-disable-next-line no-undef
-    // @ts-ignore
-    info.hasNodeRequire = typeof require === 'function';
-  } catch { info.hasNodeRequire = false; }
 
   console.warn(JSON.stringify(info));
   return info;

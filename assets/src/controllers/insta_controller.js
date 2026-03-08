@@ -9,14 +9,10 @@
 // -----------------------------------------------------------------------------
 
 import { Controller } from '@hotwired/stimulus';
-import * as StimAttrs from 'stimulus-attributes';
 import instantsearch from 'instantsearch.js';
 import { instantMeiliSearch } from '@meilisearch/instant-meilisearch';
 
 // import * as bootstrap from 'bootstrap';
-
-// AI: NEVER ELIMINATE THIS, it is very important
-import Twig from 'twig';
 
 import '../debug/fetch_tap.js';
 import { createDebug } from '../debug/debug.js';
@@ -31,20 +27,13 @@ import {
   configure
 } from 'instantsearch.js/es/widgets';
 
-import { installTwigAPI } from './insta_twig.js';
+import { installTwigEngine, getTwigEngine, autoInstallFosRouting } from './insta_twig.js';
 import { safeParse, stripProtocol, escapeHtml, normalizeConfig } from './insta_helpers.js';
 import { mountFacetFromNode } from './insta_facets.js';
 
-// Optional routes
-let Routing = null;
-try {
-  const module = await import('fos-routing');
-  Routing = module.default;
-  const RoutingDataModule = await import('/js/fos_js_routes.js?abc');
-  const RoutingData = RoutingDataModule.default;
-  Routing.setData(RoutingData);
-} catch { /* ignore */ }
-installTwigAPI({ Routing, StimAttrs });
+// Create the engine; FOS routing wired in async via the adapter's auto-detector.
+const engine = installTwigEngine();
+autoInstallFosRouting(engine);
 
 // Debug logger (enable with: localStorage.debug = 'insta:*,wire:*,hl:*,view:*')
 const logInsta = createDebug('insta:core');
@@ -153,11 +142,12 @@ export default class extends Controller {
 
   async _loadTemplate() {
     if (!this.templateUrlValue) return;
-    const res = await fetch(this.templateUrlValue);
-    if (!res.ok) throw new Error(`Template HTTP ${res.status}: ${res.statusText}`);
-    const ct = res.headers.get('content-type') || '';
-    const data = ct.includes('application/json') ? await res.json() : await res.text();
-    this.template = Twig.twig({ data });
+    const { loadTemplateFromUrl } = await import('@tacman1123/twig-browser');
+    this._templateBlockName = await loadTemplateFromUrl(
+      getTwigEngine(),
+      this.templateUrlValue,
+      'hit'
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -673,7 +663,9 @@ export default class extends Controller {
               hints: (this.config?.hints || {}),
               view: (this.config?.view || {})
             };
-            const body = this.template ? this.template.render(ctx)
+            const engine = getTwigEngine();
+            const body = (this._templateBlockName && engine?.hasBlock(this._templateBlockName))
+              ? engine.renderBlock(this._templateBlockName, ctx)
               : `<pre>${escapeHtml(JSON.stringify(hit, null, 2))}</pre>`;
 
             logView('twig body (first 500 chars) → %o', body?.slice?.(0, 500) ?? body);

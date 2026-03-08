@@ -25,9 +25,8 @@
       }
     },
     "importmap": {
-      "twig": "^1.17.1",
+      "@tacman1123/twig-browser": "^0.3.1",
       "debug": "^4.4.3",
-      "stimulus-attributes": "^1.0.1",
       "fos-routing": "^0.0.6",
       "instantsearch.js": "^4.85.2",
       "instantsearch.js/es/widgets": "^4.85.2",
@@ -46,7 +45,7 @@
     "@hotwired/stimulus": "^3.2.2"
   },
   "dependencies": {
-    "twig": "^1.17.1",
+    "@tacman1123/twig-browser": "^0.3.1",
     "@tabler/core": "^1.0.0",
     "instantsearch.css": "^8.5.1"
   }
