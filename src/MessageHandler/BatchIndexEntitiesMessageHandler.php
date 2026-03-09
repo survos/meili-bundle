@@ -122,14 +122,10 @@ final class BatchIndexEntitiesMessageHandler
             // - With the new IndexNameResolver + registry as source of truth, we can treat
             //   $mappedKey as a BASE key when resolving for a specific locale.
             // We do not regex-strip locale suffixes here; we ask the resolver (when available).
-            $resolvedUid = $mappedKey;
-
-            if (!$plainIndex && $message->locale && $this->indexNameResolver) {
-                // $mappedKey should be baseName (unprefixed) in the new world
-                // If it's already a prefixed uid, uidFor() will re-prefix incorrectly, so
-                // we only do this when it looks like a base key (no prefix applied).
-                $resolvedUid = $this->resolveUidFromMappingKey($mappedKey, $message->locale);
-            }
+            // Always resolve the UID via the resolver so the prefix is applied.
+            // indexedByClass() keys are base names (e.g. "product"), not UIDs ("meili_product").
+            $locale = $plainIndex ? null : ($message->locale ?? null);
+            $resolvedUid = $this->resolveUidFromMappingKey($mappedKey, $locale);
 
             $message->indexName = $resolvedUid;
 
@@ -327,16 +323,21 @@ final class BatchIndexEntitiesMessageHandler
      * If the mapping key already looks like a UID (e.g. starts with configured prefix),
      * return it unchanged. Otherwise treat it as a base name and resolve using IndexNameResolver.
      */
-    private function resolveUidFromMappingKey(string $mappingKey, string $locale): string
+    private function resolveUidFromMappingKey(string $mappingKey, ?string $locale): string
     {
         $prefix = $this->meiliService->getPrefix();
 
         if ($prefix && \str_starts_with($mappingKey, $prefix)) {
-            // Already a UID
+            // Already a UID (already prefixed)
             return $mappingKey;
         }
 
-        // Treat as base name
+        // No locale: mono-index, just apply prefix if available
+        if ($locale === null) {
+            return $prefix ? $prefix . $mappingKey : $mappingKey;
+        }
+
+        // Treat as base name and resolve with locale
         return $this->indexNameResolver
             ? $this->indexNameResolver->uidFor($mappingKey, $locale)
             : $mappingKey;

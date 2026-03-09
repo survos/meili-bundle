@@ -43,5 +43,9 @@ final class Facet
         public ?int $showMoreLimit = null,
         public ?bool $searchable = null,
         public array $lookup = [],
+
+        // Whether this field should be described to the AI in chat workspace prompts.
+        // Set to false to hide implementation-detail fields from the LLM.
+        public bool $returnInChat = true,
     ) {}
 }

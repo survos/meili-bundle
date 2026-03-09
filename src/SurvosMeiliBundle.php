@@ -9,6 +9,7 @@ use Survos\MeiliBundle\Bridge\EasyAdmin\MeiliEasyAdminDashboardHelper;
 use Survos\MeiliBundle\Bridge\EasyAdmin\MeiliEasyAdminMenuFactory;
 use Survos\MeiliBundle\Command\ExportCommand;
 use Survos\MeiliBundle\Command\IterateIndexesCommand;
+use Survos\MeiliBundle\Command\MeiliMcpTestCommand;
 use Survos\MeiliBundle\Command\MeilEstimatorCommand;
 use Survos\MeiliBundle\Command\MeiliFlushFileCommand;
 use Survos\MeiliBundle\Command\MeiliRegistrySyncCommand;
@@ -41,6 +42,11 @@ use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\MeiliServiceConfig;
 use Survos\MeiliBundle\Service\SettingsService;
 use Survos\MeiliBundle\Service\TargetPlanner;
+use Survos\MeiliBundle\Service\ResultNormalizer;
+use Survos\MeiliBundle\Tool\GetDocumentTool;
+use Survos\MeiliBundle\Tool\SearchFacetsTool;
+use Survos\MeiliBundle\Tool\SearchIndexTool;
+use Survos\MeiliBundle\Tool\SimilarDocumentsTool;
 use Survos\MeiliBundle\Util\ResolvedEmbeddersProvider;
 use Survos\MeiliBundle\Util\TextFieldResolver;
 use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
@@ -82,15 +88,37 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
 
         $builder->autowire(ResolvedEmbeddersProvider::class)
             ->setArgument(0, $config['embedders'] ?? [])
+            ->setArgument(1, '%kernel.project_dir%')
             ->setPublic(true);
 
         // Parameters
         $builder->setParameter('survos_meili.entity_dirs', $config['entity_dirs']);
         $builder->setParameter('survos_meili.prefix', $config['meiliPrefix']);
+        $builder->setParameter('survos_meili.meili_ui_url', $config['meiliUiUrl'] ?: 'http://127.0.0.1:24900/ins/0');
         $builder->setParameter('survos_meili.pricing', $config['pricing'] ?? []);
         $builder->setParameter('survos_meili.meili_settings', $config['meili_settings'] ?? []);
         $builder->setParameter('survos_meili.file_proxy', $config['file_proxy'] ?? []);
-        $builder->setParameter('survos_meili.chat', $config['chat'] ?? []);
+        // Default workspace: if no workspaces are declared, seed meili_assistant so
+        // indexes with chats:['meili_assistant'] work out of the box without any YAML.
+        $chatConfig = $config['chat'] ?? [];
+        if (empty($chatConfig['workspaces'])) {
+            $chatConfig['workspaces']['meili_assistant'] = [
+                'source'  => 'openAi',
+                'model'   => 'gpt-4o-mini',
+                'apiKey'  => null,
+                'indexes' => [],
+                'examples' => [],
+                'prompts' => [],
+                'label'   => null,
+                'detailUrlPattern' => null,
+                'baseUrl' => null,
+                'orgId'   => null,
+                'projectId' => null,
+                'apiVersion' => null,
+                'deploymentId' => null,
+            ];
+        }
+        $builder->setParameter('survos_meili.chat', $chatConfig);
 
         // IMPORTANT: define MeiliServiceConfig via factory (no object literals in container dump)
         $builder->register(MeiliServiceConfig::class)
@@ -236,6 +264,33 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->setArgument('$twig', new Reference('twig'))
             ->setArgument('$logger', new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE))
             ->setArgument('$meiliService', new Reference('meili_service'));
+
+        // ResultNormalizer is always registered (lightweight, no external deps).
+        $builder->autowire(ResultNormalizer::class)
+            ->setPublic(true)
+            ->setAutoconfigured(true);
+
+        // AI agent tools + test command: registered when either symfony/ai-agent or symfony/mcp-bundle is installed.
+        if (class_exists(\Symfony\AI\Agent\Toolbox\Attribute\AsTool::class) || class_exists(\Mcp\Capability\Attribute\McpTool::class)) {
+            foreach ([
+                SearchIndexTool::class,
+                GetDocumentTool::class,
+                SimilarDocumentsTool::class,
+                SearchFacetsTool::class,
+            ] as $toolClass) {
+                $builder->autowire($toolClass)
+                    ->setPublic(true)
+                    ->setAutoconfigured(true); // picks up #[AsTool] via symfony/ai-bundle autoconfigure
+            }
+
+            // Test command only makes sense when AI agent toolbox is available (it invokes tools directly).
+            if (class_exists(\Symfony\AI\Agent\Toolbox\Attribute\AsTool::class)) {
+                $builder->autowire(MeiliMcpTestCommand::class)
+                    ->setPublic(true)
+                    ->setAutoconfigured(true)
+                    ->addTag('console.command');
+            }
+        }
     }
 
     public function configure(DefinitionConfigurator $definition): void
@@ -244,6 +299,10 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->children()
             ->scalarNode('core_name')->defaultValue('core')->end()
             ->booleanNode('enabled')->defaultTrue()->end()
+            ->scalarNode('meiliUiUrl')
+                ->defaultValue('http://127.0.0.1:24900/ins/0')
+                ->info('Base URL of the Meilisearch UI (riccox). Used to generate per-index links. Override via MEILI_UI_URL env var.')
+            ->end()
             ->scalarNode('host')->defaultValue('%env(default::MEILI_SERVER)%')->end()
             ->scalarNode('apiKey')->defaultValue('%env(default::MEILI_ADMIN_KEY)%')->end()
             ->scalarNode('transport')->defaultValue('%env(default::MEILI_TRANSPORT)%')->end()
@@ -374,10 +433,27 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                                 ->scalarNode('projectId')->defaultNull()->end()
                                 ->scalarNode('apiVersion')->defaultNull()->end()
                                 ->scalarNode('deploymentId')->defaultNull()->end()
+                                ->scalarNode('label')
+                                    ->defaultNull()
+                                    ->info('Human-readable label used in dynamic prompts (defaults to indexName)')
+                                ->end()
+                                ->scalarNode('detailUrlPattern')
+                                    ->defaultNull()
+                                    ->info('URL pattern for item detail pages; use {id} as placeholder e.g. /product/{id}')
+                                ->end()
+                                ->arrayNode('examples')
+                                    ->info('Example natural-language queries injected into the searchDescription prompt')
+                                    ->scalarPrototype()->end()
+                                    ->defaultValue([])
+                                ->end()
                                 ->arrayNode('prompts')
                                     ->addDefaultsIfNotSet()
+                                    ->info('Static prompt overrides — these win over dynamic template rendering')
                                     ->children()
                                         ->scalarNode('system')->defaultNull()->end()
+                                        ->scalarNode('searchFilterParam')->defaultNull()->end()
+                                        ->scalarNode('searchDescription')->defaultNull()->end()
+                                        ->scalarNode('searchQParam')->defaultNull()->end()
                                     ->end()
                                 ->end()
                                 ->arrayNode('indexes')

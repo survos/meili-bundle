@@ -701,11 +701,19 @@
               <div {{ stimulus_target(_sc, 'reset') }}></div>
 
               <button type="button"
-                      class="btn btn-sm btn-outline-secondary ms-2"
-                      data-detail-url="{{ path('survos_index_stats', { indexName: indexName }) }}"
-                      data-detail-title="{{ indexName }} stats">
-                ≡ Detail
-              </button>
+                       class="btn btn-sm btn-outline-secondary ms-2"
+                       data-detail-url="{{ path('survos_index_stats', { indexName: indexName }) }}"
+                       data-detail-title="{{ indexName }} stats">
+                 ≡ Detail
+               </button>
+
+               {% if chatWorkspace is defined and chatWorkspace %}
+               <a href="{{ path('meili_chat', {indexName: baseIndexName, workspace: chatWorkspace}) }}"
+                  class="btn btn-sm btn-info text-white ms-2"
+                  title="Chat with this index">
+                 {{ ux_icon('heroicons:chat-bubble-left-right') }} Chat
+               </a>
+               {% endif %}
             </div>
 
             <div class="mb-2 d-flex gap-2 align-items-center justify-content-between">

@@ -88,9 +88,9 @@
         </div>
 
         <div class="btn-toolbar gap-2">
-            {% set riccox = 'http://localhost:24900/ins/1/index/' ~ indexName %}
-            <a class="btn btn-outline-secondary" href="{{ riccox }}">
-                <i class="fa fa-tasks me-1"></i> Tasks
+            <a class="btn btn-outline-secondary" target="_blank"
+               href="{{ (meiliUiUrl ?? 'http://127.0.0.1:24900/ins/0') ~ '/index/' ~ resolvedUid }}">
+                {{ ux_icon('mdi:open-in-new') }} Meili UI
             </a>
 
             {% if settings.embedders is defined and settings.embedders|length %}
@@ -102,6 +102,13 @@
                         </a>
                     {% endfor %}
                 </div>
+            {% endif %}
+
+            {% if chatWorkspace is defined and chatWorkspace %}
+                <a class="btn btn-info text-white"
+                   href="{{ path('meili_chat', {indexName: indexName, workspace: chatWorkspace}) }}">
+                    {{ ux_icon('heroicons:chat-bubble-left-right') }} Chat
+                </a>
             {% endif %}
         </div>
     </div>
@@ -164,6 +171,13 @@
                 Stats (API)
             </button>
         </li>
+        {% if chatWorkspace %}
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="chat-tab" data-bs-toggle="tab" data-bs-target="#chat-workspace" type="button" role="tab">
+                Chat workspace
+            </button>
+        </li>
+        {% endif %}
     </ul>
 
     <div class="tab-content" id="meiliIndexTabsContent">
@@ -277,6 +291,90 @@
                 </div>
             </div>
         </div>
+
+        {# ---------------- CHAT WORKSPACE TAB ---------------- #}
+        {% if chatWorkspace %}
+        <div class="tab-pane fade" id="chat-workspace" role="tabpanel">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <strong>Chat workspace: {{ chatWorkspace }}</strong>
+                    <a class="btn btn-sm btn-info text-white"
+                       href="{{ path('meili_chat', {indexName: indexName, workspace: chatWorkspace}) }}"
+                       target="_blank">
+                        {{ ux_icon('heroicons:chat-bubble-left-right') }} Open chat
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if chatWorkspaceInfo is null %}
+                        <div class="alert alert-warning mb-0">
+                            Could not retrieve workspace settings from Meilisearch
+                            (workspace <code>{{ chatWorkspace }}</code> may not exist on the server yet — run
+                            <code>bin/console meili:settings:update --chat --force</code>).
+                        </div>
+                    {% else %}
+                        <div class="row g-3 mb-3">
+                            <div class="col-sm-4">
+                                <div class="card h-100 border-0 bg-light">
+                                    <div class="card-body py-2 px-3">
+                                        <div class="text-muted small">Source</div>
+                                        <div class="fw-semibold">{{ chatWorkspaceInfo.source ?? '—' }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-sm-4">
+                                <div class="card h-100 border-0 bg-light">
+                                    <div class="card-body py-2 px-3">
+                                        <div class="text-muted small">API key</div>
+                                        <div class="fw-semibold font-monospace small">{{ chatWorkspaceInfo.apiKey ?? '—' }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-sm-4">
+                                <div class="card h-100 border-0 bg-light">
+                                    <div class="card-body py-2 px-3">
+                                        <div class="text-muted small">Indexes covered</div>
+                                        <div class="fw-semibold">
+                                            {% if chatWorkspaceIndexes %}
+                                                {{ chatWorkspaceIndexes|join(', ') }}
+                                            {% else %}
+                                                —
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {% if chatWorkspaceInfo.prompts is defined %}
+                            {% set prompts = chatWorkspaceInfo.prompts %}
+                            {% if prompts.system is defined and prompts.system %}
+                                <h6 class="mt-2">System prompt</h6>
+                                <pre class="bg-light p-3 rounded small mb-3" style="white-space: pre-wrap">{{ prompts.system }}</pre>
+                            {% endif %}
+                            {% if prompts.searchDescription is defined and prompts.searchDescription %}
+                                <details class="mb-2">
+                                    <summary class="text-muted small fw-semibold" style="cursor:pointer">Search description prompt</summary>
+                                    <pre class="bg-light p-3 rounded small mt-1" style="white-space: pre-wrap">{{ prompts.searchDescription }}</pre>
+                                </details>
+                            {% endif %}
+                            {% if prompts.searchQParam is defined and prompts.searchQParam %}
+                                <details class="mb-2">
+                                    <summary class="text-muted small fw-semibold" style="cursor:pointer">Search q-param prompt</summary>
+                                    <pre class="bg-light p-3 rounded small mt-1" style="white-space: pre-wrap">{{ prompts.searchQParam }}</pre>
+                                </details>
+                            {% endif %}
+                            {% if prompts.searchFilterParam is defined and prompts.searchFilterParam %}
+                                <details class="mb-2">
+                                    <summary class="text-muted small fw-semibold" style="cursor:pointer">Search filter-param prompt</summary>
+                                    <pre class="bg-light p-3 rounded small mt-1" style="white-space: pre-wrap">{{ prompts.searchFilterParam }}</pre>
+                                </details>
+                            {% endif %}
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 {% endblock %}
 

@@ -47,12 +47,15 @@
         "liquid/liquid": "^1.4",
         "easycorp/easyadmin-bundle": "^4.26|^5.0",
         "twig/intl-extra": "^3.22",
-        "twig/extra-bundle": "^3.22"
+        "twig/extra-bundle": "^3.22",
+        "symfony/mcp-bundle": "^0.6.0"
     },
     "suggest": {
         "api-platform/core": "Required for admin dashboard integration",
         "api-platform/doctrine-orm": "Leverage doctrine in api-platform",
-        "cebe/php-openapi": "For reading open api specs"
+        "cebe/php-openapi": "For reading open api specs",
+        "symfony/ai-bundle": "Required for exposing Meilisearch as Symfony AI agent tools (MCP / tool-calling workflows)",
+        "symfony/mcp-bundle": "Required to expose Meilisearch tools as an MCP server (Claude Desktop, MCP Inspector, etc.)"
     },
 
     "autoload": {

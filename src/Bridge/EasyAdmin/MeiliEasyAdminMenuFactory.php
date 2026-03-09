@@ -5,9 +5,11 @@ namespace Survos\MeiliBundle\Bridge\EasyAdmin;
 
 use EasyCorp\Bundle\EasyAdminBundle\Config\MenuItem;
 use Survos\MeiliBundle\Service\MeiliService;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Zenstruck\Bytes;
 use function array_merge;
+use function in_array;
 use function is_array;
 use function sprintf;
 use function str_replace;
@@ -24,6 +26,7 @@ final class MeiliEasyAdminMenuFactory
         private readonly MeiliService $meiliService,
         private MeiliEasyAdminDashboardHelper $dashboardHelper,
         private readonly UrlGeneratorInterface $urlGenerator,
+        #[Autowire('%survos_meili.chat%')] private readonly array $chatConfig = [],
     ) {
     }
 
@@ -95,8 +98,21 @@ final class MeiliEasyAdminMenuFactory
             t('page_title.dashboard', domain: 'EasyAdminBundle'),
             $this->dashboardHelper->getIcon('action.detail'),
             $routePrefix . '_' . 'meili_index_dashboard',
-            ['indexName' =>  $meiliSettings['prefixedName'] ?? $indexName,]
+            ['indexName' => $meiliSettings['prefixedName'] ?? $indexName]
         );
+
+        $chatWorkspace = $this->workspaceForIndex($meiliSettings['prefixedName'] ?? $indexName);
+        if ($chatWorkspace !== null) {
+            $items[] = MenuItem::linkToRoute(
+                'Chat',
+                'chat',
+                'meili_chat',
+                [
+                    'indexName' => $meiliSettings['prefixedName'] ?? $indexName,
+                    'workspace' => $chatWorkspace,
+                ]
+            )->setLinkTarget('_blank');
+        }
 
         return $items;
     }
@@ -172,6 +188,16 @@ final class MeiliEasyAdminMenuFactory
 //            );
 //        }
         return [];
+    }
+
+    private function workspaceForIndex(string $meiliIndexUid): ?string
+    {
+        foreach ($this->chatConfig['workspaces'] ?? [] as $name => $cfg) {
+            if (is_array($cfg['indexes'] ?? null) && in_array($meiliIndexUid, $cfg['indexes'], true)) {
+                return $name;
+            }
+        }
+        return null;
     }
 
     private function sourceLocaleForBase(string $baseName): ?string

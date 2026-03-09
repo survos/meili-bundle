@@ -187,6 +187,7 @@ final class MeiliIndexPass implements CompilerPassInterface
                         'class'       => $class,
                         'facets'      => $facetMap,
                         'embedders'   => $cfg->embedders,
+                        'chats'       => $cfg->chats,
                         'autoIndex'   => $cfg->autoIndex,
                         'ui'          => $cfg->ui,
                         'instaView'   => $instaViewHints,
@@ -279,6 +280,7 @@ final class MeiliIndexPass implements CompilerPassInterface
                 'showMoreLimit'     => $f->showMoreLimit,
                 'searchable'        => $f->searchable,
                 'lookup'            => $f->lookup,
+                'returnInChat'      => $f->returnInChat,
             ];
         };
 

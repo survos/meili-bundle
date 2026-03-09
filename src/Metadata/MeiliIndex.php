@@ -63,6 +63,14 @@ final class MeiliIndex
         public array $embedders = [],
 
         /**
+         * Chat workspace names this index participates in.
+         * Example: chats: ['meili_assistant']
+         * No indexing cost — chat queries are billed at runtime only.
+         * @var array<string>
+         */
+        public array $chats = [],
+
+        /**
          * UI hints consumed by the bundle's frontend (insta controller & templates).
          * Example:
          *   ['columns'=>4,'template'=>'@App/hits/card.html.twig','cardClass'=>'meili-card','layout'=>'bootstrap']

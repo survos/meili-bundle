@@ -1,0 +1,10 @@
+{%- set indexLabel = workspaceCfg.label ?? indexName -%}
+Generate a Meilisearch search query for the "{{ indexLabel }}" index.
+{% if sortableAttributes %}
+Sortable fields: {{ sortableAttributes|join(', ') }}. Use sort: ["field:asc"] or ["field:desc"].
+{% endif %}
+{% if examples %}
+Example natural-language queries for this index:
+{% for example in examples %}  - {{ example }}
+{% endfor %}
+{% endif %}

@@ -5,11 +5,13 @@ namespace Survos\MeiliBundle\Controller;
 use Adbar\Dot;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminRoute;
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
+use Meilisearch\Contracts\ChatWorkspaceSettings;
 use Meilisearch\Exceptions\ApiException;
 use Survos\MeiliBundle\Service\IndexNameResolver;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Bridge\Twig\Attribute\Template;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapQueryParameter;
@@ -37,8 +39,73 @@ class MeiliAdminController extends AbstractController
         private readonly MeiliService $meiliService,
         private readonly IndexNameResolver $resolver,
         private readonly ?ChartBuilderInterface $chartBuilder = null,
-        private readonly string $coreName = 'core'
+        private readonly string $coreName = 'core',
+        #[Autowire('%survos_meili.chat%')] private readonly array $chatConfig = [],
+        #[Autowire('%survos_meili.meili_ui_url%')] private readonly string $meiliUiUrl = 'http://127.0.0.1:24900/ins/0',
     ) {
+    }
+
+    /**
+     * Return the workspace name (if any) that covers the given Meilisearch index UID.
+     */
+    private function workspaceForIndex(string $meiliIndexUid): ?string
+    {
+        // Primary: check compiled settings — chats: attribute on #[MeiliIndex]
+        $allSettings = $this->meiliService->getAllSettings();
+        foreach ($allSettings as $baseName => $settings) {
+            if ($baseName === $meiliIndexUid || str_ends_with($meiliIndexUid, '_' . $baseName)) {
+                foreach ($settings['chats'] ?? [] as $workspaceName) {
+                    if (isset($this->chatConfig['workspaces'][$workspaceName])) {
+                        return $workspaceName;
+                    }
+                }
+            }
+        }
+
+        // Legacy YAML indexes: list
+        foreach ($this->chatConfig['workspaces'] ?? [] as $name => $cfg) {
+            if (in_array($meiliIndexUid, $cfg['indexes'] ?? [], true)) {
+                return $name;
+            }
+        }
+
+        // Default: use first configured workspace (applies to all indexes)
+        $workspaces = $this->chatConfig['workspaces'] ?? [];
+        if ($workspaces !== []) {
+            return array_key_first($workspaces);
+        }
+
+        return null;
+    }
+
+    private function defaultWorkspace(): ?string
+    {
+        $workspaces = $this->chatConfig['workspaces'] ?? [];
+        return $workspaces !== [] ? array_key_first($workspaces) : null;
+    }
+
+    /**
+     * Fetch live workspace settings from Meilisearch, returning null on any failure.
+     */
+    private function fetchWorkspaceInfo(string $workspaceName): ?array
+    {
+        try {
+            $settings = $this->meiliService->getMeiliClient()
+                ->chatWorkspace($workspaceName)
+                ->getSettings();
+
+            $data = $settings->toArray();
+            // Redact the API key — show only last 4 chars
+            if (!empty($data['apiKey'])) {
+                $key = (string) $data['apiKey'];
+                $data['apiKey'] = strlen($key) > 4
+                    ? str_repeat('*', strlen($key) - 4) . substr($key, -4)
+                    : '****';
+            }
+            return $data;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
 //    #[AdminRoute('/meili-index', name: 'meili_index')]
@@ -46,12 +113,14 @@ class MeiliAdminController extends AbstractController
     public function index(AdminContext $context): Response|array
     {
         return [
-            'adminContext'  => $context,
-            'indexSettings' => $this->meiliService->indexedByClass(),
+            'adminContext'    => $context,
+            'indexSettings'  => $this->meiliService->indexedByClass(),
+            'meiliUiUrl'     => $this->meiliUiUrl,
+            'defaultWorkspace' => $this->defaultWorkspace(),
         ];
     }
 
-//    #[AdminRoute(path: '/index/overview/{indexName}', name: 'meili_index_dashboard')]
+    #[AdminRoute(path: '/index/overview/{indexName}', name: 'meili_index_dashboard')]
     public function indexDashboard(
         AdminContext $context,
         string $indexName, // IMPORTANT: this is a base key, not a UID
@@ -88,16 +157,21 @@ class MeiliAdminController extends AbstractController
             $rawInfo = $indexApi->fetchRawInfo();
         } catch (ApiException $e) {
             if ((int) $e->getCode() === 404) {
+                $chatWorkspace = $this->workspaceForIndex($meiliIndexUid);
                 return $this->render('@SurvosMeili/index/show.html.twig', [
-                    'indexName'     => $baseIndexName,
-                    'resolvedUid'   => $meiliIndexUid,
-                    'rawInfo'       => null,
-                    'stats'         => null,
-                    'settings'      => $settings,
-                    'facetCounts'   => [],
-                    'facetCharts'   => [],
-                    'adminContext'  => $context,
-                    'error'         => sprintf('Index "%s" not found on server (resolved uid: "%s"). Create/populate it first.', $baseIndexName, $meiliIndexUid),
+                    'indexName'            => $baseIndexName,
+                    'resolvedUid'          => $meiliIndexUid,
+                    'rawInfo'              => null,
+                    'stats'                => null,
+                    'settings'             => $settings,
+                    'facetCounts'          => [],
+                    'facetCharts'          => [],
+                    'adminContext'         => $context,
+                    'chatWorkspace'        => $chatWorkspace,
+                    'chatWorkspaceInfo'    => $chatWorkspace ? $this->fetchWorkspaceInfo($chatWorkspace) : null,
+                    'chatWorkspaceIndexes' => $chatWorkspace ? ($this->chatConfig['workspaces'][$chatWorkspace]['indexes'] ?? []) : [],
+                    'error'                => sprintf('Index "%s" not found on server (resolved uid: "%s"). Create/populate it first.', $baseIndexName, $meiliIndexUid),
+                    'meiliUiUrl'           => $this->meiliUiUrl,
                 ]);
             }
 
@@ -145,15 +219,20 @@ class MeiliAdminController extends AbstractController
             }
         }
 
+        $chatWorkspace = $this->workspaceForIndex($meiliIndexUid);
         return $this->render('@SurvosMeili/index/show.html.twig', [
-            'indexName'    => $baseIndexName,
-            'resolvedUid'  => $meiliIndexUid,
-            'facetCounts'  => $facetCounts,
-            'facetCharts'  => $facetCharts,
-            'rawInfo'      => $rawInfo,
-            'stats'        => $stats,
-            'settings'     => $settings,
-            'adminContext' => $context,
+            'indexName'              => $baseIndexName,
+            'resolvedUid'            => $meiliIndexUid,
+            'facetCounts'            => $facetCounts,
+            'facetCharts'            => $facetCharts,
+            'rawInfo'                => $rawInfo,
+            'stats'                  => $stats,
+            'settings'               => $settings,
+            'adminContext'           => $context,
+            'chatWorkspace'          => $chatWorkspace,
+            'chatWorkspaceInfo'      => $chatWorkspace ? $this->fetchWorkspaceInfo($chatWorkspace) : null,
+            'chatWorkspaceIndexes'   => $chatWorkspace ? ($this->chatConfig['workspaces'][$chatWorkspace]['indexes'] ?? []) : [],
+            'meiliUiUrl'             => $this->meiliUiUrl,
         ]);
     }
 

@@ -125,7 +125,7 @@
 
                             {# Semantic Search / Embedders #}
                             {% if settings.embedders is defined and settings.embedders|length > 0 %}
-                                <div>
+                                <div class="mb-4">
                                     <h6 class="text-muted mb-2">
                                         {{ ux_icon('fluent:brain-circuit-20-filled') }}
                                         {{ 'action.search'|trans(domain: 'EasyAdminBundle') }}
@@ -142,10 +142,41 @@
                                     </div>
                                 </div>
                             {% endif %}
+
+                            {# Chat Workspaces — explicit chats: attribute, or fall back to first configured workspace #}
+                            {% set chatWorkspaces = (settings.chats is defined and settings.chats|length > 0)
+                                ? settings.chats
+                                : (defaultWorkspace is defined and defaultWorkspace ? [defaultWorkspace] : []) %}
+                            {% if chatWorkspaces|length > 0 %}
+                                <div>
+                                    <h6 class="text-muted mb-2">
+                                        {{ ux_icon('mdi:chat-outline') }}
+                                        Chats
+                                    </h6>
+                                    <div class="d-flex gap-2">
+                                        {% for workspace in chatWorkspaces %}
+                                            <a href="{{ path('meili_chat', {indexName: indexName, workspace: workspace}) }}"
+                                               target="_blank"
+                                               class="btn btn-secondary btn-sm px-2">
+                                                {{ ux_icon('mdi:robot-outline') }}
+                                                {{ workspace }}
+                                            </a>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% endif %}
                         </div>
 
-                        <div class="card-footer text-muted small">
-                            {{ 'index'|trans }}: <code>{{ indexName }}</code>
+                        <div class="card-footer text-muted small d-flex justify-content-between align-items-center">
+                            <span>{{ 'index'|trans }}: <code>{{ settings.uid ?? indexName }}</code></span>
+                            {% if meiliUiUrl is defined and meiliUiUrl %}
+                                <a href="{{ meiliUiUrl ~ '/index/' ~ (settings.uid ?? indexName) }}"
+                                   target="_blank"
+                                   class="btn btn-outline-secondary btn-sm py-0"
+                                   title="Open in Meilisearch UI">
+                                    {{ ux_icon('mdi:open-in-new') }} UI
+                                </a>
+                            {% endif %}
                         </div>
                     </div>
                 </div>

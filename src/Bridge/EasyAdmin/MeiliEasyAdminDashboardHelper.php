@@ -5,15 +5,20 @@ namespace Survos\MeiliBundle\Bridge\EasyAdmin;
 
 use EasyCorp\Bundle\EasyAdminBundle\Config\Dashboard;
 use Survos\MeiliBundle\Service\MeiliService;
+use Survos\MeiliBundle\Service\IndexNameResolver;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 final class MeiliEasyAdminDashboardHelper
 {
     public function __construct(
         private readonly MeiliService $meiliService,
+        private readonly IndexNameResolver $indexNameResolver,
         #[Autowire('%kernel.enabled_locales%')]
         private readonly array $enabledLocales = [],
-        // idea: we could configure the icons in survos_meili to override font awesome
+        #[Autowire('%survos_meili.meili_ui_url%')]
+        private readonly string $meiliUiUrl = 'http://127.0.0.1:24900/ins/0',
+        #[Autowire('%survos_meili.chat%')]
+        private readonly array $chatConfig = [],
     ) {
     }
 
@@ -49,9 +54,21 @@ final class MeiliEasyAdminDashboardHelper
 
     public function getDashboardParameters(string $dashboardPrefix): array
     {
+        // Enrich each settings entry with the resolved Meilisearch UID.
+        $allSettings = [];
+        foreach ($this->meiliService->settings as $baseName => $settings) {
+            $settings['uid'] = $this->indexNameResolver->uidFor($baseName, null);
+            $allSettings[$baseName] = $settings;
+        }
+
+        $workspaces = $this->chatConfig['workspaces'] ?? [];
+        $defaultWorkspace = $workspaces !== [] ? array_key_first($workspaces) : null;
+
         return [
-            'prefix' => $dashboardPrefix,
-            'allSettings' => $this->meiliService->settings,
+            'prefix'           => $dashboardPrefix,
+            'allSettings'      => $allSettings,
+            'meiliUiUrl'       => $this->meiliUiUrl,
+            'defaultWorkspace' => $defaultWorkspace,
         ];
     }
 }

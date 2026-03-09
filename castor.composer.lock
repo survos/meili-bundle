@@ -82,16 +82,16 @@
         },
         {
             "name": "tacman/castor-tools",
-            "version": "1.1.5",
+            "version": "1.1.6",
             "source": {
                 "type": "git",
                 "url": "https://github.com/tacman/castor-tools.git",
-                "reference": "2d831bef53dba990c8a3f8ff3c59ecd5e1e34989"
+                "reference": "85f2eb38d9508afc3f69fdae4ad30c05520771db"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/tacman/castor-tools/zipball/2d831bef53dba990c8a3f8ff3c59ecd5e1e34989",
-                "reference": "2d831bef53dba990c8a3f8ff3c59ecd5e1e34989",
+                "url": "https://api.github.com/repos/tacman/castor-tools/zipball/85f2eb38d9508afc3f69fdae4ad30c05520771db",
+                "reference": "85f2eb38d9508afc3f69fdae4ad30c05520771db",
                 "shasum": ""
             },
             "require": {
@@ -124,9 +124,9 @@
             "description": "Extend castor with some common tools",
             "support": {
                 "issues": "https://github.com/tacman/castor-tools/issues",
-                "source": "https://github.com/tacman/castor-tools/tree/1.1.5"
+                "source": "https://github.com/tacman/castor-tools/tree/1.1.6"
             },
-            "time": "2026-02-24T10:50:19+00:00"
+            "time": "2026-03-08T11:21:48+00:00"
         }
     ],
     "packages-dev": [],
