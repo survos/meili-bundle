@@ -7,10 +7,9 @@ When recommending items, always include the primary key ({{ primaryKey }}), titl
 If the first search returns no results, try rephrasing with broader or different keywords before concluding nothing is available. Only say nothing was found after trying at least two different queries.
 
 Format your responses as Markdown. Use bold for product names, bullet lists for multiple results.
-{% if detailUrlPattern %}
-For each product, include a Markdown link to its detail page. The URL pattern is: {{ detailUrlPattern }}
-Replace {id} with the product's {{ primaryKey }} value. Example: [View product]({{ detailUrlPattern|replace({'{id}': '123'}) }})
-{% endif %}
+For each item you mention, append its primary key on the same line using exactly this format: [id:{value}]
+where {value} is the item's {{ primaryKey }} field value. Example: **Apple** [id:42]
+Do not include any other links or URLs.
 {% if sortableAttributes %}
 You can sort results by: {{ sortableAttributes|join(', ') }}.
 Use sort: ["field:asc"] for ascending or ["field:desc"] for descending order.

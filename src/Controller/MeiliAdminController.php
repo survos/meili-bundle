@@ -17,6 +17,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapQueryParameter;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use Symfony\Component\Routing\RouterInterface;
 use Symfony\UX\Chartjs\Builder\ChartBuilderInterface;
 use Symfony\UX\Chartjs\Model\Chart;
 
@@ -38,11 +39,34 @@ class MeiliAdminController extends AbstractController
     public function __construct(
         private readonly MeiliService $meiliService,
         private readonly IndexNameResolver $resolver,
+        private readonly RouterInterface $router,
         private readonly ?ChartBuilderInterface $chartBuilder = null,
         private readonly string $coreName = 'core',
         #[Autowire('%survos_meili.chat%')] private readonly array $chatConfig = [],
         #[Autowire('%survos_meili.meili_ui_url%')] private readonly string $meiliUiUrl = 'http://127.0.0.1:24900/ins/0',
     ) {
+    }
+
+    /**
+     * Generate the index dashboard URL, tolerating the EasyAdmin route prefix.
+     * Mirrors the same helper in SearchController.
+     */
+    private function indexDashboardUrl(string $baseIndexName): ?string
+    {
+        $candidates = [];
+        foreach ($this->router->getRouteCollection()->all() as $name => $_) {
+            if (str_ends_with($name, 'meili_index_dashboard')) {
+                $candidates[] = $name;
+            }
+        }
+        foreach ($candidates as $name) {
+            try {
+                return $this->generateUrl($name, ['indexName' => $baseIndexName]);
+            } catch (\Throwable) {
+                // try next
+            }
+        }
+        return null;
     }
 
     /**
@@ -172,6 +196,7 @@ class MeiliAdminController extends AbstractController
                     'chatWorkspaceIndexes' => $chatWorkspace ? ($this->chatConfig['workspaces'][$chatWorkspace]['indexes'] ?? []) : [],
                     'error'                => sprintf('Index "%s" not found on server (resolved uid: "%s"). Create/populate it first.', $baseIndexName, $meiliIndexUid),
                     'meiliUiUrl'           => $this->meiliUiUrl,
+                    'indexDashboardUrl'    => $this->indexDashboardUrl($baseIndexName),
                 ]);
             }
 
@@ -233,6 +258,7 @@ class MeiliAdminController extends AbstractController
             'chatWorkspaceInfo'      => $chatWorkspace ? $this->fetchWorkspaceInfo($chatWorkspace) : null,
             'chatWorkspaceIndexes'   => $chatWorkspace ? ($this->chatConfig['workspaces'][$chatWorkspace]['indexes'] ?? []) : [],
             'meiliUiUrl'             => $this->meiliUiUrl,
+            'indexDashboardUrl'      => $this->indexDashboardUrl($baseIndexName),
         ]);
     }
 

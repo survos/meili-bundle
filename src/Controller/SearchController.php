@@ -15,6 +15,11 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Routing\RouterInterface;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
+use function hash;
+use function json_encode;
+use function sprintf;
 
 #[Route('/search')]
 class SearchController extends AbstractController
@@ -25,7 +30,32 @@ class SearchController extends AbstractController
         private readonly RouterInterface $router,
         #[Autowire('%survos_meili.chat%')] private readonly array $chatConfig = [],
         private readonly ?LoggerInterface $logger = null,
+        private readonly ?CacheInterface $cache = null,
     ) {
+    }
+
+    /**
+     * Try to generate the index dashboard URL regardless of the EasyAdmin route prefix.
+     * The route is registered as 'meili_index_dashboard' on MeiliAdminController but
+     * EasyAdmin prepends the dashboard prefix (e.g. 'meili_admin_meili_index_dashboard').
+     */
+    private function indexDashboardUrl(string $baseIndexName): ?string
+    {
+        $candidates = [];
+        // Collect all route names and find those ending in 'meili_index_dashboard'
+        foreach ($this->router->getRouteCollection()->all() as $name => $_) {
+            if (str_ends_with($name, 'meili_index_dashboard')) {
+                $candidates[] = $name;
+            }
+        }
+        foreach ($candidates as $name) {
+            try {
+                return $this->generateUrl($name, ['indexName' => $baseIndexName]);
+            } catch (\Throwable) {
+                // try next
+            }
+        }
+        return null;
     }
 
     /**
@@ -150,7 +180,8 @@ class SearchController extends AbstractController
             'searchAsYouType' => $embedder === null,
 
             // Chat workspace name for this index (null if none configured)
-            'chatWorkspace' => $this->workspaceForIndex($meiliIndexUid),
+            'chatWorkspace'      => $this->workspaceForIndex($meiliIndexUid),
+            'indexDashboardUrl'  => $this->indexDashboardUrl($baseIndexName),
         ];
     }
 
@@ -184,13 +215,22 @@ class SearchController extends AbstractController
             // Non-fatal: debug panel will show a warning instead
         }
 
+        $indexSettings = $this->meiliService->getIndexSetting($indexName) ?? [];
+        $meiliConfig   = $this->meiliService->getConfig();
+
         return [
-            'indexName'     => $meiliIndexUid,
-            'baseIndexName' => $indexName,
-            'workspace'     => $workspace,
-            'workspaceCfg'  => $workspaceCfg,
-            'livePrompts'   => $livePrompts,
-            'streamUrl'     => $this->generateUrl('meili_chat_stream', [
+            'indexName'          => $meiliIndexUid,
+            'baseIndexName'      => $indexName,
+            'workspace'          => $workspace,
+            'chatWorkspace'      => $workspace,
+            'workspaceCfg'       => $workspaceCfg,
+            'embedders'          => $indexSettings['embedders'] ?? [],
+            'livePrompts'        => $livePrompts,
+            'templateUrl'        => $this->generateUrl('meili_template', ['templateName' => $indexName]),
+            'indexDashboardUrl'  => $this->indexDashboardUrl($indexName),
+            'meiliHost'          => rtrim($meiliConfig['host'] ?? 'http://localhost:7700', '/'),
+            'meiliApiKey'        => $meiliConfig['apiKey'] ?? '',
+            'streamUrl'          => $this->generateUrl('meili_chat_stream', [
                 'indexName' => $indexName,
                 'workspace' => $workspace,
             ]),
@@ -297,8 +337,34 @@ class SearchController extends AbstractController
             ],
         ]);
 
-        $logger = $this->logger;
-        return new StreamedResponse(function () use ($host, $apiKey, $workspace, $payload, $meiliIndexUid, $logger): void {
+        // Build a cache key from the full request payload (workspace + index + messages).
+        // Strip the injected index-pin system message so the key is stable across sessions.
+        $cacheableMessages = array_filter($messages, static fn($m) => !($m['role'] === 'system' && str_contains($m['content'] ?? '', 'You MUST search only the index')));
+        $cacheKey = 'meili_chat_' . hash('xxh128', $workspace . $meiliIndexUid . json_encode(array_values($cacheableMessages)));
+        $cache    = $this->cache;
+        $logger   = $this->logger;
+
+        // If we have a cached response, replay it immediately without hitting Meilisearch.
+        if ($cache !== null) {
+            $cached = $cache->getItem($cacheKey);
+            if ($cached->isHit()) {
+                /** @var list<string> $lines */
+                $lines = $cached->get();
+                return new StreamedResponse(static function () use ($lines): void {
+                    foreach ($lines as $line) {
+                        echo $line;
+                        flush();
+                    }
+                }, 200, [
+                    'Content-Type'      => 'text/event-stream',
+                    'Cache-Control'     => 'no-cache',
+                    'X-Accel-Buffering' => 'no',
+                    'X-Meili-Cache'     => 'HIT',
+                ]);
+            }
+        }
+
+        return new StreamedResponse(function () use ($host, $apiKey, $workspace, $payload, $meiliIndexUid, $logger, $cache, $cacheKey): void {
             $url = sprintf('%s/chats/%s/chat/completions', $host, $workspace);
 
             // ignore_errors: fopen returns the stream even on HTTP 4xx/5xx
@@ -348,6 +414,9 @@ class SearchController extends AbstractController
                 return;
             }
 
+            $accumulated = [];
+            $hasError    = false;
+
             while (!feof($stream)) {
                 $line = fgets($stream);
                 if ($line === false || $line === '') {
@@ -364,12 +433,22 @@ class SearchController extends AbstractController
                             'workspace' => $workspace,
                             'index'     => $meiliIndexUid,
                         ]);
+                        $hasError = true;
                     }
                 }
+                $accumulated[] = $line;
                 echo $line;
                 flush();
             }
             fclose($stream);
+
+            // Persist to cache only on a clean (error-free) response.
+            if ($cache !== null && !$hasError && $accumulated !== []) {
+                $item = $cache->getItem($cacheKey);
+                $item->set($accumulated);
+                $item->expiresAfter(3600); // 1 hour
+                $cache->save($item);
+            }
         }, 200, [
             'Content-Type'  => 'text/event-stream',
             'Cache-Control' => 'no-cache',

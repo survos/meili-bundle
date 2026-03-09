@@ -1,58 +1,82 @@
-{# A tiny, framework-free header bar that the bundle owns. #}
-{% set embedders = indexConfig.embedders|default([]) %}
-<div class="meili-bar">
-  <a href="/">/</a>
+{#
+  Unified index nav bar — appears on insta, chat, and show pages.
+  Variables (all optional, degrade gracefully):
+    baseIndexName  - registry base name (e.g. "product", "wcma")
+    indexName      - resolved Meilisearch UID (e.g. "meili_product")
+    embedders      - array of embedder names
+    embedder       - currently active embedder name (if any)
+    chatWorkspace  - workspace name for this index
+    indexStats     - { numberOfDocuments: int }
+    currentRoute   - app.current_route alias passed by each page
+#}
+{% set _baseIndex   = baseIndexName|default(indexName)|default(null) %}
+{% set _embedders   = indexConfig.embedders|default(embedders|default([])) %}
+{% set _chat        = chatWorkspace|default(null) %}
+{% set _route       = app.request.attributes.get('_route') %}
 
-      <div class="meili-bar-left">
-    {% if indexName %}
-      <span class="meili-chip">
-        Index: <strong>{{ indexName }}</strong>
-      </span>
+<nav class="meili-bar d-flex align-items-center gap-2 flex-wrap">
+
+  {# ── brand / home ── #}
+  <a href="/" class="meili-bar-brand fw-bold text-decoration-none me-1">⚡</a>
+
+  {% if _baseIndex %}
+
+    {# ── index chip ── #}
+    <span class="meili-chip">
+      {{ _baseIndex }}
+      {% if indexStats is defined and indexStats.numberOfDocuments is defined %}
+        <span class="text-muted ms-1" style="font-weight:400">· {{ indexStats.numberOfDocuments|number_format(0,'.', ',') }}</span>
+      {% endif %}
+    </span>
+
+    <span class="text-muted" style="font-size:.8rem">|</span>
+
+    {# ── Dashboard (URL passed from controller; avoids EasyAdmin prefix ambiguity) ── #}
+    {% set _dashUrl = indexDashboardUrl|default(null) %}
+    {% if _dashUrl %}
+      <a href="{{ _dashUrl }}"
+         class="meili-nav-link {{ _route ends with 'meili_index_dashboard' ? 'is-active' : '' }}">
+        {{ ux_icon('oui:nav-overview') }} Overview
+      </a>
     {% endif %}
 
-    {% if indexStats and indexStats.numberOfDocuments is defined %}
-      <span class="meili-chip" title="Documents in index">
-        Docs: {{ indexStats.numberOfDocuments|number_format(0, '.', ',') }}
-      </span>
-    {% endif %}
-  </div>
+    {# ── Keyword search ── #}
+    <a href="{{ path('meili_insta', {indexName: _baseIndex}) }}"
+       class="meili-nav-link {{ _route in ['meili_insta','meili_insta_locale'] ? 'is-active' : '' }}">
+      {{ ux_icon('mdi:magnify') }} Search
+    </a>
 
-  <div class="meili-bar-right">
-    {% if embedders|length > 0 %}
-      <span class="meili-chip-label">Semantic:</span>
-      {% for name in embedders %}
-        <a class="meili-badge {{ name == embedder ? 'is-active' : '' }}"
-           href="{{ path('meili_insta_embed', { indexName: indexName, embedder: name }) }}">
-          {{ name == embedder ? '★ ' : '' }}{{ name }}
+    {# ── Semantic / embedders ── #}
+    {% if _embedders|length > 0 %}
+      {% for name in _embedders %}
+        <a href="{{ path('meili_insta_embed', {indexName: _baseIndex, embedder: name}) }}"
+           class="meili-nav-link {{ _route == 'meili_insta_embed' and embedder == name ? 'is-active' : '' }}">
+          {{ ux_icon('fluent:brain-circuit-20-filled') }} {{ name }}
         </a>
       {% endfor %}
-      {% if embedder %}
-        <a class="meili-link ms-2"
-           href="{{ path('meili_insta', { indexName: indexName }) }}">
-          Switch to keyword
-        </a>
-      {% endif %}
     {% endif %}
 
+    {# ── Chat ── #}
+    {% if _chat %}
+      <a href="{{ path('meili_chat', {indexName: _baseIndex, workspace: _chat}) }}"
+         class="meili-nav-link {{ _route == 'meili_chat' ? 'is-active' : '' }}">
+        {{ ux_icon('heroicons:chat-bubble-left-right') }} Chat
+      </a>
+    {% endif %}
 
+  {% endif %}
 
-  </div>
-</div>
-
-{% import '@SurvosMeili/babel/_locale_switcher.html.twig' as Babel %}
-
-      {# Determine current route and params dynamically #}
-
-      {% set _route = 'meili_insta_locale' %}
-      {% set _params = {
-          indexName: baseIndexName
-      } %}
-{#      {% set _route = app.current_route %}#}
-{#      {% set _params = app.current_route_parameters %}#}
-
+  {# ── locale switcher (right-aligned) ── #}
+  {% if app.enabled_locales|length > 1 %}
+    <div class="ms-auto">
+      {% import '@SurvosMeili/babel/_locale_switcher.html.twig' as Babel %}
       {{ Babel.locale_switcher(
           locales = app.enabled_locales,
           currentLocale = app.request.locale,
-          routeName = _route,
-          routeParams = _params
+          routeName = 'meili_insta_locale',
+          routeParams = { indexName: _baseIndex }
       ) }}
+    </div>
+  {% endif %}
+
+</nav>

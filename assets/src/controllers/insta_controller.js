@@ -28,13 +28,12 @@ import {
   configure
 } from 'instantsearch.js/es/widgets';
 
-import { installTwigEngine, getTwigEngine, installFosRouting } from './insta_twig.js';
+import { installTwigEngine, awaitTwigEngine } from './insta_twig.js';
 import { safeParse, stripProtocol, escapeHtml, normalizeConfig } from './insta_helpers.js';
 import { mountFacetFromNode } from './insta_facets.js';
 
-// Create the engine; FOS routing wired from the generated module (optional — silently skips if unavailable).
+// Create the shared engine once at module level (kicks off async path() wiring).
 const engine = installTwigEngine();
-await installFosRouting(engine);
 
 // Debug logger (enable with: localStorage.debug = 'insta:*,wire:*,hl:*,view:*')
 const logInsta = createDebug('insta:core');
@@ -126,6 +125,9 @@ export default class extends Controller {
   }
 
   async connect() {
+    // Wait for engine to be fully ready (path() wired) before loading template
+    // or starting search — prevents race where first render fires before path() resolves.
+    await awaitTwigEngine();
     await this._loadTemplate();
 
     if (this._isSemantic()) {
@@ -216,11 +218,13 @@ export default class extends Controller {
   async _loadTemplate() {
     if (!this.templateUrlValue) return;
     const { loadTemplateFromUrl } = await import('@tacman1123/twig-browser');
-    this._templateBlockName = await loadTemplateFromUrl(
-      getTwigEngine(),
+    const { blockName, source } = await loadTemplateFromUrl(
+      engine,
       this.templateUrlValue,
       'hit'
     );
+    this._templateBlockName = blockName;
+    this._templateSource = source;
   }
 
   // ---------------------------------------------------------------------------
@@ -736,7 +740,7 @@ export default class extends Controller {
               hints: (this.config?.hints || {}),
               view: (this.config?.view || {})
             };
-            const engine = getTwigEngine();
+            // engine is the module-level singleton from installTwigEngine()
             const body = (this._templateBlockName && engine?.hasBlock(this._templateBlockName))
               ? engine.renderBlock(this._templateBlockName, ctx)
               : `<pre>${escapeHtml(JSON.stringify(hit, null, 2))}</pre>`;
