@@ -115,6 +115,28 @@
       background: #fff; border: 1px solid #dee2e6;
       border-bottom-left-radius: .25rem;
     }
+    .chat-bubble.welcome {
+      max-width: 94%;
+      background: linear-gradient(135deg, rgba(255,255,255,.98), rgba(240,248,250,.95));
+      border: 1px solid rgba(82, 126, 135, .25);
+      box-shadow: 0 .4rem 1rem rgba(58, 93, 100, .08);
+    }
+    .chat-welcome-title {
+      font-size: 1rem;
+      margin-bottom: .5rem;
+    }
+    .chat-welcome-meta {
+      margin: .5rem 0 0;
+      padding-left: 1.1rem;
+    }
+    .chat-welcome-meta li,
+    .chat-welcome-examples li {
+      margin-bottom: .25rem;
+    }
+    .chat-welcome-examples {
+      margin: .6rem 0 0;
+      padding-left: 1.1rem;
+    }
     .chat-bubble.assistant.streaming::after {
       content: '▌'; animation: blink .7s step-end infinite;
     }
@@ -239,8 +261,37 @@
   <div class="chat-col shadow-sm">
 
     <div class="chat-messages" id="chat-messages">
-      <div class="chat-bubble assistant">
-        Hi! Ask me anything about the <strong>{{ baseIndexName }}</strong> data.
+      <div class="chat-bubble assistant welcome">
+        <div class="chat-welcome-title">
+          Hi, I'm <strong>{{ curatorName }}</strong>. Welcome to <strong>{{ (workspaceCfg.label ?? baseIndexName)|replace({'_':' ', '-':' '})|title }}</strong>.
+        </div>
+        <p>
+          Our collection contains <strong>{{ collectionOverview.documents ?? 0 }}</strong> items
+          {% if collectionOverview.overviewFacet is defined and collectionOverview.overviewFacet.values is defined and collectionOverview.overviewFacet.values %}
+            , mostly
+            {% for facet in collectionOverview.overviewFacet.values %}
+              <strong>{{ facet.value }}</strong> ({{ facet.percentage|round(0, 'common') }}%){{ not loop.last ? ', ' : '' }}
+            {% endfor %}
+            across its {{ collectionOverview.overviewFacet.label }}
+          {% endif %}.
+        </p>
+        {% if collectionOverview.locationFacet is defined and collectionOverview.locationFacet.values is defined and collectionOverview.locationFacet.values %}
+          <p>
+            Common physical locations include
+            {% for facet in collectionOverview.locationFacet.values %}
+              <strong>{{ facet.value }}</strong> ({{ facet.percentage|round(0, 'common') }}%){{ not loop.last ? ', ' : '' }}
+            {% endfor %}.
+          </p>
+        {% endif %}
+        {% if collectionOverview.summary is defined and collectionOverview.summary %}
+          <p>{{ collectionOverview.summary }}</p>
+        {% endif %}
+        <p class="mb-1">You can ask me things like:</p>
+        <ul class="chat-welcome-examples">
+          {% for example in welcomeExamples|slice(0, 4) %}
+            <li>{{ example }}</li>
+          {% endfor %}
+        </ul>
       </div>
     </div>
 
@@ -286,8 +337,10 @@
     }
 
     const streamUrl   = {{ streamUrl|json_encode|raw }};
+    const schemaUrl   = {{ schemaUrl|default(null)|json_encode|raw }};
     const templateUrl = {{ templateUrl|json_encode|raw }};
     const indexName   = {{ indexName|json_encode|raw }};
+    const primaryKey  = {{ primaryKey|default('id')|json_encode|raw }};
     const meiliHost   = {{ meiliHost|json_encode|raw }};
     const meiliApiKey = {{ meiliApiKey|json_encode|raw }};
 
@@ -381,7 +434,7 @@
         const ctx = {
           hit:           doc,
           globals,
-          _config:       { primaryKey: 'id', details: true },
+          _config:       { primaryKey: primaryKey, details: true },
           _score:        doc._rankingScore ?? null,
           _scoreDetails: doc._rankingScoreDetails ?? null,
           _isSemantic:   false,
@@ -482,7 +535,7 @@
       const list = document.createElement('div');
       list.className = 'chat-sources-list';
       docs.forEach((doc, i) => {
-        const pk    = doc.id ?? doc.sku ?? doc.code ?? doc._id ?? Object.values(doc)[0] ?? i;
+        const pk    = doc[primaryKey] ?? doc.meili_id ?? doc.id ?? doc.sku ?? doc.code ?? doc._id ?? Object.values(doc)[0] ?? i;
         const title = doc.title ?? doc.name ?? doc.label ?? `#${pk}`;
         const btn = document.createElement('button');
         btn.className = 'btn btn-sm btn-outline-primary btn-show-detail';
@@ -513,7 +566,7 @@
       // Auto-show first doc in detail panel (fetch by ID)
       if (docs.length > 0) {
         const first = docs[0];
-        const pk    = first.id ?? first.sku ?? first.code ?? first._id ?? Object.values(first)[0];
+        const pk    = first[primaryKey] ?? first.meili_id ?? first.id ?? first.sku ?? first.code ?? first._id ?? Object.values(first)[0];
         const title = first.title ?? first.name ?? first.label ?? `#${pk}`;
         showDetail(String(pk), String(title).slice(0, 50));
       }
@@ -548,7 +601,7 @@
         const resp = await fetch(streamUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: history }),
+          body: JSON.stringify({ messages: history, schemaUrl }),
         });
 
         if (!resp.ok) {

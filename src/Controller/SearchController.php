@@ -1,10 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Survos\MeiliBundle\Controller;
 
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminRoute;
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use Psr\Log\LoggerInterface;
+use Survos\MeiliBundle\Service\CollectionMetadataService;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Bridge\Twig\Attribute\Template;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -18,8 +21,19 @@ use Symfony\Component\Routing\RouterInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 use function hash;
+use function implode;
+use function in_array;
+use function is_array;
+use function is_string;
+use function json_decode;
 use function json_encode;
+use function round;
+use function rtrim;
 use function sprintf;
+use function str_contains;
+use function str_replace;
+use function str_ends_with;
+use function ucwords;
 
 #[Route('/search')]
 class SearchController extends AbstractController
@@ -27,6 +41,7 @@ class SearchController extends AbstractController
     public function __construct(
         #[Autowire('%kernel.project_dir%/templates/js/')] private string $jsTemplateDir,
         private readonly MeiliService $meiliService,
+        private readonly CollectionMetadataService $collectionMetadataService,
         private readonly RouterInterface $router,
         #[Autowire('%survos_meili.chat%')] private readonly array $chatConfig = [],
         private readonly ?LoggerInterface $logger = null,
@@ -217,6 +232,20 @@ class SearchController extends AbstractController
 
         $indexSettings = $this->meiliService->getIndexSetting($indexName) ?? [];
         $meiliConfig   = $this->meiliService->getConfig();
+        $primaryKey    = (string) ($indexSettings['primaryKey'] ?? 'id');
+        $schemaUrl     = $this->schemaUrlForRequest($request, $workspaceCfg);
+        $collectionOverview = null;
+
+        try {
+            $this->collectionMetadataService->warmup($meiliIndexUid, $schemaUrl);
+            $collectionOverview = json_decode($this->collectionMetadataService->describeCollection($meiliIndexUid, $schemaUrl), true);
+        } catch (\Throwable $exception) {
+            $this->logger?->warning('Unable to warm collection metadata cache.', [
+                'index' => $meiliIndexUid,
+                'schemaUrl' => $schemaUrl,
+                'exception' => $exception,
+            ]);
+        }
 
         return [
             'indexName'          => $meiliIndexUid,
@@ -224,6 +253,10 @@ class SearchController extends AbstractController
             'workspace'          => $workspace,
             'chatWorkspace'      => $workspace,
             'workspaceCfg'       => $workspaceCfg,
+            'schemaUrl'          => $schemaUrl,
+            'collectionOverview' => is_array($collectionOverview) ? $collectionOverview : null,
+            'welcomeExamples'    => $this->welcomeExamples($workspaceCfg),
+            'curatorName'        => $this->curatorName($workspaceCfg, $indexName),
             'embedders'          => $indexSettings['embedders'] ?? [],
             'livePrompts'        => $livePrompts,
             'templateUrl'        => $this->generateUrl('meili_template', ['templateName' => $indexName]),
@@ -234,6 +267,7 @@ class SearchController extends AbstractController
                 'indexName' => $indexName,
                 'workspace' => $workspace,
             ]),
+            'primaryKey'         => $primaryKey,
         ];
     }
 
@@ -256,6 +290,7 @@ class SearchController extends AbstractController
 
         $body = json_decode($request->getContent(), true) ?? [];
         $messages = $body['messages'] ?? [];
+        $schemaUrl = $this->schemaUrlForRequest($request, $workspaceCfg, $body['schemaUrl'] ?? null);
 
         $config = $this->meiliService->getConfig();
         $host   = rtrim($config['host'] ?? 'http://localhost:7700', '/');
@@ -274,6 +309,20 @@ class SearchController extends AbstractController
             ),
         ];
         $messages = array_merge([$indexPinMessage], $messages);
+
+        try {
+            $collectionOverview = $this->collectionMetadataService->describeCollection($meiliIndexUid, $schemaUrl);
+            $messages = array_merge([[
+                'role' => 'system',
+                'content' => 'Collection overview metadata for this index. Use this context for high-level questions about what kinds of objects exist, how the collection is structured, and what fields mean. Prefer this metadata before listing documents for overview questions. ' . $collectionOverview,
+            ]], $messages);
+        } catch (\Throwable $exception) {
+            $this->logger?->warning('Unable to build collection overview for chat.', [
+                'index' => $meiliIndexUid,
+                'schemaUrl' => $schemaUrl,
+                'exception' => $exception,
+            ]);
+        }
 
         $payload = json_encode([
             'model'    => $model,
@@ -454,6 +503,67 @@ class SearchController extends AbstractController
             'Cache-Control' => 'no-cache',
             'X-Accel-Buffering' => 'no',
         ]);
+    }
+
+    /**
+     * @param array<string,mixed> $workspaceCfg
+     */
+    private function schemaUrlForRequest(Request $request, array $workspaceCfg, mixed $bodySchemaUrl = null): ?string
+    {
+        $schemaUrl = $bodySchemaUrl;
+        if (!is_string($schemaUrl) || $schemaUrl === '') {
+            $schemaUrl = $request->query->getString('schemaUrl', '');
+        }
+        if ($schemaUrl === '') {
+            $schemaUrl = $workspaceCfg['schemaUrl'] ?? null;
+        }
+
+        return is_string($schemaUrl) && $schemaUrl !== '' ? $schemaUrl : null;
+    }
+
+    /**
+     * @param array<string,mixed> $workspaceCfg
+     * @return list<string>
+     */
+    private function welcomeExamples(array $workspaceCfg): array
+    {
+        $examples = $workspaceCfg['examples'] ?? [];
+        if (!is_array($examples)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($examples as $example) {
+            if (is_string($example) && $example !== '') {
+                $normalized[] = $example;
+            }
+        }
+
+        if ($normalized !== []) {
+            return $normalized;
+        }
+
+        return [
+            'Tell me about this collection.',
+            'What kinds of objects do you have, and how are they categorized?',
+            'Give me a list of 7 items that a 5th-grade boy would be interested in and a 1-sentence description why.',
+            'Show me a few surprising or unusual items from the collection.',
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $workspaceCfg
+     */
+    private function curatorName(array $workspaceCfg, string $indexName): string
+    {
+        $label = $workspaceCfg['label'] ?? $indexName;
+        if (!is_string($label) || $label === '') {
+            $label = $indexName;
+        }
+
+        $label = ucwords(str_replace(['_', '-'], ' ', $label));
+
+        return sprintf('%s Curator', $label);
     }
 
     #[AdminRoute(path: '/show/liquid/{indexName}', name: 'meili_show_liquid')]

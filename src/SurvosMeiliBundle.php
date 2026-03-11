@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Survos\MeiliBundle;
 
 use Survos\BabelBundle\Service\LocaleContext;
@@ -35,14 +37,17 @@ use Survos\MeiliBundle\Service\IndexFastSyncService;
 use Survos\MeiliBundle\Service\IndexNameResolver;
 use Survos\MeiliBundle\Service\IndexProducer;
 use Survos\MeiliBundle\Service\IndexSyncService;
+use Survos\MeiliBundle\Service\CollectionMetadataService;
 use Survos\MeiliBundle\Service\MeiliFieldHeuristic;
 use Survos\MeiliBundle\Service\MeiliNdjsonUploader;
 use Survos\MeiliBundle\Service\MeiliPayloadBuilder;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\MeiliServiceConfig;
+use Survos\MeiliBundle\Service\OpenApiFieldMetadataResolver;
 use Survos\MeiliBundle\Service\SettingsService;
 use Survos\MeiliBundle\Service\TargetPlanner;
 use Survos\MeiliBundle\Service\ResultNormalizer;
+use Survos\MeiliBundle\Tool\DescribeCollectionTool;
 use Survos\MeiliBundle\Tool\GetDocumentTool;
 use Survos\MeiliBundle\Tool\SearchFacetsTool;
 use Survos\MeiliBundle\Tool\SearchIndexTool;
@@ -110,6 +115,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                 'examples' => [],
                 'prompts' => [],
                 'label'   => null,
+                'schemaUrl' => null,
                 'detailUrlPattern' => null,
                 'baseUrl' => null,
                 'orgId'   => null,
@@ -270,6 +276,14 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->setPublic(true)
             ->setAutoconfigured(true);
 
+        $builder->autowire(OpenApiFieldMetadataResolver::class)
+            ->setPublic(true)
+            ->setAutoconfigured(true);
+
+        $builder->autowire(CollectionMetadataService::class)
+            ->setPublic(true)
+            ->setAutoconfigured(true);
+
         // AI agent tools + test command: registered when either symfony/ai-agent or symfony/mcp-bundle is installed.
         if (class_exists(\Symfony\AI\Agent\Toolbox\Attribute\AsTool::class) || class_exists(\Mcp\Capability\Attribute\McpTool::class)) {
             foreach ([
@@ -277,6 +291,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                 GetDocumentTool::class,
                 SimilarDocumentsTool::class,
                 SearchFacetsTool::class,
+                DescribeCollectionTool::class,
             ] as $toolClass) {
                 $builder->autowire($toolClass)
                     ->setPublic(true)
@@ -440,6 +455,10 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                                 ->scalarNode('detailUrlPattern')
                                     ->defaultNull()
                                     ->info('URL pattern for item detail pages; use {id} as placeholder e.g. /product/{id}')
+                                ->end()
+                                ->scalarNode('schemaUrl')
+                                    ->defaultNull()
+                                    ->info('Optional OpenAPI schema URL used to explain field meanings in collection overview responses')
                                 ->end()
                                 ->arrayNode('examples')
                                     ->info('Example natural-language queries injected into the searchDescription prompt')

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Survos\MeiliBundle\Command;
 
 use Survos\MeiliBundle\Tool\GetDocumentTool;
+use Survos\MeiliBundle\Tool\DescribeCollectionTool;
 use Survos\MeiliBundle\Tool\SearchFacetsTool;
 use Survos\MeiliBundle\Tool\SearchIndexTool;
 use Survos\MeiliBundle\Tool\SimilarDocumentsTool;
@@ -34,12 +35,13 @@ final class MeiliMcpTestCommand
         private readonly GetDocumentTool $getDocumentTool,
         private readonly SimilarDocumentsTool $similarDocumentsTool,
         private readonly SearchFacetsTool $searchFacetsTool,
+        private readonly DescribeCollectionTool $describeCollectionTool,
     ) {
     }
 
     public function __invoke(
         SymfonyStyle $io,
-        #[Argument('Tool name: search_index | get_document | similar_documents | search_facets')]
+        #[Argument('Tool name: search_index | get_document | similar_documents | search_facets | describe_collection')]
         string $tool,
         #[Argument('Index UID (e.g. "meili_product")')]
         string $index,
@@ -63,12 +65,13 @@ final class MeiliMcpTestCommand
             'similar_documents'  => ($this->similarDocumentsTool)($index, $query, $extra ?? 'default', $limit),
             // $extra = comma-separated facet attributes
             'search_facets'      => ($this->searchFacetsTool)($index, $query, $extra ?? 'id', $filter),
+            'describe_collection' => ($this->describeCollectionTool)($index, $extra, $limit),
             default              => null,
         };
 
         if ($json === null) {
             $io->error(sprintf(
-                'Unknown tool "%s". Available: search_index, get_document, similar_documents, search_facets',
+                'Unknown tool "%s". Available: search_index, get_document, similar_documents, search_facets, describe_collection',
                 $tool
             ));
             return Command::FAILURE;

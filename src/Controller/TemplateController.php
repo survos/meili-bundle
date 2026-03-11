@@ -29,11 +29,22 @@ final class TemplateController extends AbstractController
         // Normalize locale suffix: "movies_en" → "movies"
         $templateName = preg_replace('/_..$/', '', $templateName);
 
-        // While developing, always regenerate from profile + Meili;
-        // later we can re-enable the on-disk JS-Twig override.
-        $path = $this->jsTemplateDir . $templateName . '.html.twig';
-        if (file_exists($path)) {
-            return new Response(file_get_contents($path) ?: '');
+        // Template hierarchy: <code> -> <aggregator> -> default
+        // Example: dc_nv935r28t -> dc -> default
+        $candidates = [$templateName];
+        if (str_contains($templateName, '_')) {
+            $agg = explode('_', $templateName, 2)[0] ?? null;
+            if (is_string($agg) && $agg !== '') {
+                $candidates[] = $agg;
+            }
+        }
+        $candidates[] = 'default';
+
+        foreach ($candidates as $candidate) {
+            $path = $this->jsTemplateDir . $candidate . '.html.twig';
+            if (file_exists($path)) {
+                return new Response(file_get_contents($path) ?: '');
+            }
         }
 
         $profilePath = $this->projectDir . '/data/' . $templateName . '.profile.json';
@@ -66,11 +77,14 @@ final class TemplateController extends AbstractController
      */
     private function buildConfigFromSettings(string $indexName): array
     {
-        // If the index is missing entirely, still render *something*
-        // instead of throwing — a minimal search box + hits list.
+        $uid = $this->meiliService->uidForBase($indexName, null);
+        $primaryKey = 'id';
+
+        // If the index is missing entirely, still render *something* instead of throwing.
         try {
-            $index    = $this->meiliClient->index($indexName);
+            $index    = $this->meiliService->getIndexEndpoint($uid);
             $settings = $index->getSettings();
+            $primaryKey = $index->getPrimaryKey() ?? 'id';
         } catch (\Throwable $e) {
             $settings = [
                 'searchableAttributes' => ['id'],
@@ -93,6 +107,7 @@ final class TemplateController extends AbstractController
 
         $config = [
             'indexName' => $indexName,
+            'primaryKey' => $primaryKey,
 
             // Used by the JS/Twig template to render a card
             'ui' => [
@@ -564,6 +579,7 @@ $settingsJson
 {% set maxLen    = _config.maxLen|default(100) %}
 {% set maxList   = _config.maxList|default(3) %}
 {% set labels    = _config.labels|default({}) %}
+{% set detailed  = (view.detailed|default(false)) or (_config.details|default(false)) or (globals.details|default(false)) %}
 
 {# Title with highlight #}
 {% set highlightedTitle = (hit._highlightResult is defined
@@ -587,9 +603,24 @@ $settingsJson
     {% set description = highlightedDesc ?? rawDesc %}
 {% endif %}
 
-{# Image: config-driven first, then common fallbacks like posterUrl/poster_url/image/thumbnail,
+{# Image: IIIF-first (render-time size), then config-driven, then common fallbacks like posterUrl/poster_url/image/thumbnail,
    then nested images.thumbnail / images.background (Marvel-style) #}
-{% set imageUrl = imageKey ? (attribute(hit, imageKey)|default(null)) : null %}
+{% set iiifBase = attribute(hit, 'iiif_base')|default(null) %}
+{% if not iiifBase %}
+    {% set existingIiifImage = attribute(hit, 'iiif_image')|default(null) %}
+    {% if existingIiifImage and (existingIiifImage|split('/full/')|length > 1) %}
+        {% set iiifBase = existingIiifImage|split('/full/')|first %}
+    {% endif %}
+{% endif %}
+{% set imageUrl = null %}
+{% set imageUrl = attribute(hit, 'thumbnail_url')|default(null) %}
+{% if not imageUrl and iiifBase %}
+    {% set iiifSize = detailed ? '900,' : '240,' %}
+    {% set imageUrl = iiifBase ~ '/full/' ~ iiifSize ~ '/0/default.jpg' %}
+{% endif %}
+{% if not imageUrl and imageKey %}
+    {% set imageUrl = attribute(hit, imageKey)|default(null) %}
+{% endif %}
 {% if not imageUrl %}
     {% set imageUrl = attribute(hit, 'posterUrl')|default(
         attribute(hit, 'poster_url')|default(
@@ -605,6 +636,8 @@ $settingsJson
         attribute(images, 'background')|default(null)
     ) %}
 {% endif %}
+
+{% set citationUrl = attribute(hit, 'citation_url')|default(attribute(hit, 'url')|default(null)) %}
 
 <div class="card h-100 shadow-sm border-0">
     <div class="card-body p-3">
@@ -640,6 +673,15 @@ $settingsJson
                         {% endif %}
                     {% endif %}
                 </div>
+
+                {% if citationUrl %}
+                    <div class="small mb-1">
+                        <a href="{{ citationUrl }}" target="_blank" rel="noopener" class="text-decoration-none" title="Open source record">
+                            {{ ux_icon('tabler:external-link')|raw }}
+                            <span>Citation</span>
+                        </a>
+                    </div>
+                {% endif %}
 
                 {# Description, CSS-clamped to ~3 lines (no char slicing) #}
                 {% if description %}
@@ -686,7 +728,7 @@ $settingsJson
                     {% if v is not null and v != 0 and v != '' %}
                         {% set label = labels[sf]|default(sf) %}
                         <span class="badge bg-light text-body-secondary">
-                            {{ label }}:
+                            {{ label }}: {{ v }}
                         </span>
                     {% endif %}
                 {% endfor %}
@@ -753,9 +795,24 @@ $settingsJson
         {% set show = false %}
     {% endif %}
 
+    {# Skip empty/null scalars #}
+    {% if show and (value is null or value == '') %}
+        {% set show = false %}
+    {% endif %}
+
     {% if show %}
-        <dt class="col-4 text-truncate">{{ key }}</dt>
-        <dd class="col-8 text-truncate">{{ value }}</dd>
+        {% set isUrl = value is string and (value starts with 'http://' or value starts with 'https://') %}
+        <dt class="col-4" style="overflow-wrap:anywhere;word-break:break-word;">{{ key }}</dt>
+        <dd class="col-8" style="white-space:normal;overflow-wrap:anywhere;word-break:break-word;">
+            {% if isUrl %}
+                {% set parts = value|split('://') %}
+                {% set trimmed = parts|length > 1 ? parts[1] : parts[0] %}
+                {% set display = trimmed|length > 56 ? (trimmed|slice(0, 36) ~ '...' ~ trimmed|slice(-16)) : trimmed %}
+                <a href="{{ value }}" target="_blank" rel="noopener" title="{{ value }}">{{ display }}</a>
+            {% else %}
+                {{ value }}
+            {% endif %}
+        </dd>
     {% endif %}
 {% endfor %}
         </dl>
@@ -782,16 +839,24 @@ $settingsJson
                 {% endif %}
             {% endif %}
         </div>
+        <div class="d-flex align-items-center gap-2">
+            {% if citationUrl %}
+                <a href="{{ citationUrl }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1" title="Open source record">
+                    {{ ux_icon('tabler:external-link')|raw }}
+                    <span>Citation</span>
+                </a>
+            {% endif %}
 
-        {# JSON modal trigger (do not change) #}
-        <button
-            {{ stimulus_action(globals._sc_modal, 'modal') }}
-            data-hit-id="{{ pk }}"
-            class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1"
-        >
-            {{ ux_icon('json')|raw }}
-            <span>Details</span>
-        </button>
+            {# JSON modal trigger (do not change) #}
+            <button
+                {{ stimulus_action(globals._sc_modal, 'modal') }}
+                data-hit-id="{{ pk }}"
+                class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1"
+            >
+                {{ ux_icon('json')|raw }}
+                <span>Details</span>
+            </button>
+        </div>
     </div>
 </div>
 TWIG;

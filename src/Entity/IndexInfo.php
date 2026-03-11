@@ -29,7 +29,7 @@ class IndexInfo
     public int $documentCount = 0;
 
     #[ORM\Column(type: Types::JSON, options: ['jsonb' => true])]
-    public array $settings;
+    public array $settings = [];
 
     #[ORM\Column(nullable: true)]
     public ?string $taskId = null;
