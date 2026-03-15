@@ -454,11 +454,15 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 
         $prompts = [];
 
+        // Add allIndexUids to context so searchIndexUidParam can pin the list.
+        $context['allIndexUids'] = $allIndexUids;
+
         $templates = [
-            'system'            => '@SurvosMeili/chat/system_prompt.txt.twig',
-            'searchQParam'      => '@SurvosMeili/chat/search_q_param.txt.twig',
-            'searchFilterParam' => '@SurvosMeili/chat/search_filter_param.txt.twig',
-            'searchDescription' => '@SurvosMeili/chat/search_description.txt.twig',
+            'system'               => '@SurvosMeili/chat/system_prompt.txt.twig',
+            'searchQParam'         => '@SurvosMeili/chat/search_q_param.txt.twig',
+            'searchFilterParam'    => '@SurvosMeili/chat/search_filter_param.txt.twig',
+            'searchDescription'    => '@SurvosMeili/chat/search_description.txt.twig',
+            'searchIndexUidParam'  => '@SurvosMeili/chat/search_index_uid_param.txt.twig',
         ];
 
         foreach ($templates as $key => $template) {

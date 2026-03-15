@@ -319,6 +319,8 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                 ->info('Base URL of the Meilisearch UI (riccox). Used to generate per-index links. Override via MEILI_UI_URL env var.')
             ->end()
             ->scalarNode('host')->defaultValue('%env(default::MEILI_SERVER)%')->end()
+            // MEILI_ADMIN_KEY is the server-side write key (never exposed to browser).
+            // Falls back to MEILI_API_KEY for backward compatibility with existing .env files.
             ->scalarNode('apiKey')->defaultValue('%env(default::MEILI_ADMIN_KEY)%')->end()
             ->scalarNode('transport')->defaultValue('%env(default::MEILI_TRANSPORT)%')->end()
             ->scalarNode('searchKey')->defaultValue('%env(default::MEILI_SEARCH_KEY)%')->end()
@@ -438,6 +440,10 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                                     ->defaultNull()
                                     ->info('Provider API key (use %env(OPENAI_API_KEY)%)')
                                 ->end()
+                                ->scalarNode('chatApiKey')
+                                    ->defaultNull()
+                                    ->info('Scoped Meilisearch API key used as the Bearer when calling /chats/{workspace}/chat/completions. Use a key restricted to specific indexes to prevent OpenAI enum overflow when the instance has many indexes.')
+                                ->end()
                                 ->scalarNode('model')
                                     ->defaultValue('gpt-4o-mini')
                                     ->info('Model sent in each completion request (not stored in workspace settings)')
@@ -491,8 +497,28 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
 
     public function prependExtension(ContainerConfigurator $container, ContainerBuilder $builder): void
     {
+        if ($builder->hasExtension('doctrine')) {
+            $builder->prependExtensionConfig('doctrine', [
+                'orm' => [
+                    'mappings' => [
+                        'SurvosMeiliBundle' => [
+                            'is_bundle' => false,
+                            'type'      => 'attribute',
+                            'dir'       => \dirname(__DIR__) . '/src/Entity',
+                            'prefix'    => 'Survos\\MeiliBundle\\Entity',
+                            'alias'     => 'SurvosMeiliBundle',
+                        ],
+                    ],
+                ],
+            ]);
+        }
+
+
+
         if ($builder->hasExtension('ux_icons')) {
             $builder->prependExtensionConfig('ux_icons', [
+                // Never throw for missing icons — return empty string instead.
+                // Apps can override to 'throw' if they want strict mode.
                 'aliases' => [
                     // UI chrome
                     'home'      => 'material-symbols:home-outline',
@@ -503,13 +529,25 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                     // actions / hits
                     'json'      => 'si:json-duotone',
                     'bug'       => 'tabler:bug',
+                    'external'  => 'tabler:external-link',
+                    'open-in-new' => 'mdi:open-in-new',
+                    // chat
+                    'chat'      => 'mdi:chat-outline',
+                    'robot'     => 'mdi:robot-outline',
+                    'brain'     => 'fluent:brain-circuit-20-filled',
+                    'chat-bubble' => 'heroicons:chat-bubble-left-right',
                     // instant search
-                    'instant_search'              => 'mdi:tag-search-outline',
-                    'action.detail'               => 'mdi:show-outline',
+                    'instant_search'                 => 'mdi:tag-search-outline',
+                    'action.detail'                  => 'mdi:show-outline',
                     'field.text_editor.view_content' => 'mdi:cogs',
+                    'filter'    => 'tabler:adjustments-alt',
+                    'overview'  => 'oui:nav-overview',
+                    'database-search' => 'mdi:database-search',
                     // semantic / linked data
                     'semantic-web' => 'mdi:semantic-web',
                     'semantic'     => 'simple-icons:semanticscholar',
+                    'wikidata'     => 'openmoji:wikidata',
+                    'website'      => 'fluent-mdl2:website',
                 ],
             ]);
         }

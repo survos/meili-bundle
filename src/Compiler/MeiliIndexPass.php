@@ -39,6 +39,13 @@ final class MeiliIndexPass implements CompilerPassInterface
             ];
         }
 
+        // Always scan the bundle's own Entity dir so IndexInfo #[MeiliIndex]
+        // is registered in every app that has the bundle installed — no yaml required.
+        $bundleEntityDir = \dirname(__DIR__) . '/Entity';
+        if (!in_array($bundleEntityDir, $scanDirs, true)) {
+            $scanDirs[] = $bundleEntityDir;
+        }
+
         $bag = $container->getParameterBag();
         $scanDirs = array_map(static fn($p) => (string) $bag->resolveValue($p), $scanDirs);
 

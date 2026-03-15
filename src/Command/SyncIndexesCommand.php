@@ -23,15 +23,16 @@ final class SyncIndexesCommand
 
     public function __invoke(
         SymfonyStyle $io,
-        #[Option('Remove local records not present on the server?', 'prune')] bool $prune = false,
-        #[Option('Regex to extract dataset from uid (first capture)', 'dataset-pattern')] ?string $datasetPattern = null,
-        #[Option('Regex to extract locale from uid (first capture)', 'locale-pattern')] ?string $localePattern = null,
-        #[Option('Generate app-level concrete entity if missing, then exit', 'scaffold')] bool $scaffold = false,
+        #[Option('Discover all indexes from the live Meilisearch server (filtered by prefix), not just locally configured ones')] bool $fromServer = false,
+        #[Option('Remove local records not present on the server')] bool $prune = false,
+        #[Option('Regex to extract dataset from uid (first capture)')] ?string $datasetPattern = null,
+        #[Option('Regex to extract locale from uid (first capture)')] ?string $localePattern = null,
+        #[Option('Generate app-level concrete entity if missing, then exit')] bool $scaffold = false,
     ): int {
         $io->title('Meilisearch → Doctrine index catalog sync');
 
         // 1) Preflight: If using mapped superclass, ensure an app concrete exists
-        $appEntityFqcn = 'App\\Entity\\IndexInfo';
+        $appEntityFqcn  = 'App\\Entity\\IndexInfo';
         $bundleAbstract = 'Survos\\MeiliBundle\\Entity\\AbstractIndexInfo';
 
         if (class_exists($bundleAbstract) && !class_exists($appEntityFqcn)) {
@@ -47,13 +48,25 @@ final class SyncIndexesCommand
             return 0;
         }
 
-        // 2) Preflight: Ensure table exists, otherwise tell user to migrate
+        // 2) Preflight: Ensure table exists
         if (!$this->tableExists($io, $this->getTableName($appEntityFqcn))) {
             $io->warning(sprintf('Table "%s" does not exist yet.', $this->getTableName($appEntityFqcn) ?? '(unknown)'));
-            $io->writeln('Run: bin/console doctrine:migrations:diff && bin/console doctrine:migrations:migrate');
+            $io->writeln('Run: bin/console doctrine:schema:update --force  (or doctrine:migrations:migrate)');
             return 3;
         }
 
+        if ($fromServer) {
+            // Walk every index on the live server filtered by MEILI_PREFIX.
+            // Discovers indexes created by other apps (md, zm, …) sharing the prefix.
+            $stats = $this->sync->syncFromServer($prune);
+            $io->success(sprintf(
+                'Synced %d indexes from server (created=%d, updated=%d, unchanged=%d, pruned=%d)',
+                $stats['total'], $stats['created'], $stats['updated'], $stats['unchanged'], $stats['pruned']
+            ));
+            return 0;
+        }
+
+        // Default: sync only locally configured indexes (from #[MeiliIndex] attributes)
         $localeResolver = $localePattern
             ? static fn(string $uid): ?string =>
                 (preg_match("~{$localePattern}~", $uid, $m) && isset($m[1])) ? $m[1] : null

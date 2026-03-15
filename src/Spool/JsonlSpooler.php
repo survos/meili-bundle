@@ -29,7 +29,7 @@ final class JsonlSpooler
     public function appendIds(string $entityClass, array $ids, ?string $locale = null): string
     {
         $path = $this->pathFor($entityClass, $locale, false);
-        $w = JsonlWriter::open($path, createDirs: true);
+        $w = JsonlWriter::open($path);
         foreach ($ids as $id) {
             // Use tokenCode=$id for de-dup across process runs
             $w->write(['id' => $id], (string)$id);
@@ -43,7 +43,7 @@ final class JsonlSpooler
     public function appendDocs(string $entityClass, iterable $docs, ?string $locale = null, string $pk = 'id'): string
     {
         $path = $this->pathFor($entityClass, $locale, true);
-        $w = JsonlWriter::open($path, createDirs: true);
+        $w = JsonlWriter::open($path);
         $c = 0;
         foreach ($docs as $doc) {
             $token = isset($doc[$pk]) ? (string)$doc[$pk] : null; // optional de-dup

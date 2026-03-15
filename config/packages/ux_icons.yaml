@@ -1,0 +1,20 @@
+ux_icons:
+  on_not_found: ignore
+  aliases:
+    # Core icons used in meili-bundle templates — guaranteed available
+    external:       tabler:external-link
+    json:           si:json-duotone
+    search:         tabler:numbers
+    chat:           mdi:chat-outline
+    robot:          mdi:robot-outline
+    filter:         tabler:adjustments-alt
+    overview:       oui:nav-overview
+    bug:            tabler:bug
+    semantic:       mdi:semantic-web
+    brain:          fluent:brain-circuit-20-filled
+    website:        fluent-mdl2:website
+    chat-bubble:    heroicons:chat-bubble-left-right
+    adjustments:    heroicons:adjustments-horizontal
+    open-in-new:    mdi:open-in-new
+    database-search: mdi:database-search
+    wikidata:       openmoji:wikidata

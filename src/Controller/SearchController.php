@@ -149,6 +149,29 @@ class SearchController extends AbstractController
             throw $exception;
         }
 
+        // If compiled config has no facets, fall back to live filterableAttributes.
+        // This covers indexes created outside the app (e.g. dc collections) and
+        // the IndexInfo meta-index whose facets come from #[MeiliIndex] but may
+        // not be reflected in the compiled indexConfig.
+        if (empty($indexConfig['facets'])) {
+            $liveFilterable = $settings['filterableAttributes'] ?? [];
+            if ($liveFilterable !== []) {
+                // Convert flat list to the keyed format insta expects.
+                // All keys referenced in the facet block template must be present.
+                $facetDefaults = [
+                    'collapsed'     => false,
+                    'widget'        => 'RefinementList',
+                    'searchable'    => null,
+                    'searchMode'    => 'contains',
+                    'limit'         => null,
+                    'showMoreLimit' => null,
+                    'lookup'        => null,
+                    'sortMode'      => null,
+                ];
+                $indexConfig['facets'] = array_fill_keys($liveFilterable, $facetDefaults);
+            }
+        }
+
         $sorting = [];
         $sorting[] = ['label' => 'Relevance', 'value' => $meiliIndexUid];
         foreach (($settings['sortableAttributes'] ?? []) as $attr) {
@@ -257,12 +280,13 @@ class SearchController extends AbstractController
             'collectionOverview' => is_array($collectionOverview) ? $collectionOverview : null,
             'welcomeExamples'    => $this->welcomeExamples($workspaceCfg),
             'curatorName'        => $this->curatorName($workspaceCfg, $indexName),
+            'initialQuery'       => $request->query->getString('q'),
             'embedders'          => $indexSettings['embedders'] ?? [],
             'livePrompts'        => $livePrompts,
             'templateUrl'        => $this->generateUrl('meili_template', ['templateName' => $indexName]),
             'indexDashboardUrl'  => $this->indexDashboardUrl($indexName),
-            'meiliHost'          => rtrim($meiliConfig['host'] ?? 'http://localhost:7700', '/'),
-            'meiliApiKey'        => $meiliConfig['apiKey'] ?? '',
+             'meiliHost'          => rtrim($meiliConfig['host'] ?? 'http://localhost:7700', '/'),
+             'meiliApiKey'        => $this->meiliService->getPublicApiKey() ?? $meiliConfig['apiKey'] ?? '',
             'streamUrl'          => $this->generateUrl('meili_chat_stream', [
                 'indexName' => $indexName,
                 'workspace' => $workspace,
@@ -294,7 +318,10 @@ class SearchController extends AbstractController
 
         $config = $this->meiliService->getConfig();
         $host   = rtrim($config['host'] ?? 'http://localhost:7700', '/');
-        $apiKey = $config['apiKey'] ?? '';
+        // Use workspace-specific chat key if set (scoped key prevents enum explosion
+        // when the Meilisearch instance has thousands of indexes).
+        // Falls back to the global MEILI_API_KEY.
+        $apiKey = $workspaceCfg['chatApiKey'] ?? $config['apiKey'] ?? '';
         $model  = $workspaceCfg['model'] ?? 'gpt-4o-mini';
 
         // Prepend a system message that pins the index UID for this session.

@@ -26,7 +26,9 @@
       flex-direction: column;
       gap: 1rem;
       padding: .75rem;
-      height: calc(100vh - 56px); /* below meili-header */
+      /* 56px meili-header + 48px safety margin for Symfony toolbar in dev
+         and browser chrome on mobile. */
+      height: calc(100vh - 56px - 48px);
       overflow: hidden;
     }
     @media (min-width: 768px) {
@@ -92,10 +94,11 @@
     .chat-messages {
       flex: 1;
       overflow-y: auto;
-      padding: .75rem;
+      padding: .75rem .75rem 1rem;
       display: flex;
       flex-direction: column;
       gap: .5rem;
+      scroll-padding-bottom: 1rem;
     }
 
     .chat-bubble {
@@ -177,20 +180,33 @@
       font-size: .72rem; padding: .2rem .5rem;
     }
 
-    /* input row */
+    /* input row — sits above the Symfony debug toolbar in dev.
+       padding-bottom uses a CSS env() fallback for mobile notches,
+       with a minimum of 2.5rem to clear the toolbar. */
     .chat-input-row {
       display: flex; gap: .5rem;
       padding: .6rem .75rem;
-      background: rgba(255,255,255,.6);
+      padding-bottom: max(.6rem, env(safe-area-inset-bottom, 0px));
+      background: rgba(255,255,255,.85);
+      backdrop-filter: blur(6px);
       border-top: 1px solid #dee2e6;
+      border-radius: 0 0 .5rem .5rem;
       flex-shrink: 0;
+      box-shadow: 0 -2px 8px rgba(0,0,0,.06);
     }
     .chat-input-row textarea {
-      flex: 1; resize: none; border-radius: .5rem;
-      border: 1px solid #ced4da; padding: .4rem .7rem;
-      font-size: .93rem; line-height: 1.4;
+      flex: 1; resize: none; border-radius: .75rem;
+      border: 1px solid #ced4da; padding: .5rem .9rem;
+      font-size: .95rem; line-height: 1.5;
+      background: #fff;
+      transition: border-color .15s;
     }
-    .chat-input-row button { align-self: flex-end; }
+    .chat-input-row textarea:focus {
+      outline: none;
+      border-color: #0d6efd;
+      box-shadow: 0 0 0 .15rem rgba(13,110,253,.15);
+    }
+    .chat-input-row button { align-self: flex-end; margin-bottom: .1rem; }
 
     /* ── detail panel column ── */
     .detail-col {
@@ -344,6 +360,15 @@
     const meiliHost   = {{ meiliHost|json_encode|raw }};
     const meiliApiKey = {{ meiliApiKey|json_encode|raw }};
 
+    // Populate the icons map for ux_icon() in JS-Twig hit templates.
+    // Only include icons that are guaranteed to exist in the bundle's own icon set.
+    // App-specific icons should be added in the app's own chat template override.
+    window.__survosIconsMap = window.__survosIconsMap || {};
+    Object.assign(window.__survosIconsMap, {{ {
+        'tabler:external-link': ux_icon('tabler:external-link'),
+        'json':                 ux_icon('si:json-duotone'),
+    }|json_encode|raw }});
+
     const messages      = document.getElementById('chat-messages');
     const input         = document.getElementById('chat-input');
     const sendBtn       = document.getElementById('chat-send');
@@ -355,26 +380,30 @@
     const history = [];
 
     // ── JS-Twig engine ──
-    // Each page (insta, chat) creates its own engine instance from the same
-    // @tacman1123/twig-browser package, loading the same templateUrl.
-    // TODO: a proper Symfony bridge adapter (path, ux_icon, etc.) belongs in a
-    //       separate package — for now sais_encode is the only meili-specific extra.
-    let twigEngine = null;
-    let twigBlockName = null;   // compiled block name returned by loadTemplateFromUrl
-    let twigTemplateSource = null; // raw source, kept for error display
+    // Single shared instance per page. createEngine() already wires ux_icon()
+    // (via window.__survosIconsMap), stimulus_* and core functions/filters.
+    // path() is wired async from the FOS routing module if js-twig-bundle is installed.
+    let twigBlockName = null;
+    let twigTemplateSource = null;
+    let _engine = null;
+    let _engineReady = null;
 
     async function ensureTwigEngine() {
-      if (twigEngine) return twigEngine;
+      if (_engine) return _engine;
       try {
         const { createEngine } = await import('@tacman1123/twig-browser');
-        twigEngine = createEngine();
-        twigEngine.registerFunction('sais_encode', (url) =>
+        _engine = createEngine();
+        _engine.registerFunction('sais_encode', (url) =>
           btoa(url).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
         );
+        // Wire path() from FOS routing if available (best-effort, async).
+        _engineReady = import('@survos/js-twig/generated/fos_routes.js')
+          .then(({ path }) => _engine.registerFunction('path', path))
+          .catch(() => {});
       } catch (e) {
-        console.warn('JS-Twig engine unavailable:', e);
+        console.warn('[chat] JS-Twig engine unavailable:', e);
       }
-      return twigEngine;
+      return _engine;
     }
 
     async function ensureTemplate() {
@@ -430,6 +459,10 @@
           _sc_modal:    '@survos/meili-bundle/json',
           debug:        false,
           details:      true,
+          // Base URL patterns for linking to search/chat for a given index.
+          // Templates replace INDEXNAME with the actual index uid.
+          chatBaseUrl:   {{ path('meili_chat', {indexName: 'INDEXNAME', workspace: 'meili_assistant'})|json_encode|raw }},
+          searchBaseUrl: {{ path('meili_insta', {indexName: 'INDEXNAME'})|json_encode|raw }},
         };
         const ctx = {
           hit:           doc,
@@ -672,7 +705,9 @@
 
                 // Content delta: update plain text while streaming,
                 // schedule a markdown render every ~120ms so it feels live
-                const delta = parsed?.choices?.[0]?.delta?.content ?? '';
+                const rawDelta = parsed?.choices?.[0]?.delta?.content ?? '';
+                const delta = typeof rawDelta === 'string' ? rawDelta
+                            : (rawDelta !== null && rawDelta !== undefined ? JSON.stringify(rawDelta) : '');
                 if (delta) {
                   reply += delta;
                   if (bubble.classList.contains('streaming')) {
@@ -685,7 +720,9 @@
 
                 if (parsed?.error) {
                   bubble.classList.add('error');
-                  bubble.textContent = parsed.error;
+                  const errObj = parsed.error;
+                  bubble.textContent = typeof errObj === 'string' ? errObj
+                    : (errObj?.message ?? JSON.stringify(errObj));
                 }
               } catch (_) {}
             }
@@ -721,8 +758,14 @@
       if (docId) showDetail(docId, docId);
     });
 
-    // Pre-load engine + template in background
-    ensureTwigEngine().then(() => ensureTemplate());
+     // Pre-load engine + template in background
+     ensureTwigEngine().then(() => ensureTemplate());
+
+     // Auto-submit ?q= querystring as the first message
+     {% if initialQuery is defined and initialQuery %}
+     input.value = {{ initialQuery|json_encode|raw }};
+     setTimeout(() => send(), 100);
+     {% endif %}
   })();
   </script>
 {% endblock %}

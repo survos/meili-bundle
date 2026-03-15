@@ -122,6 +122,19 @@ final class MeiliService
         return $this->config['meiliPrefix'] ?? null;
     }
 
+    /**
+     * Strip the configured prefix from a full UID to get the base name.
+     * e.g. "md_indexinfo" -> "indexinfo" when prefix is "md_"
+     */
+    public function baseNameFromUid(string $uid): string
+    {
+        $prefix = $this->getPrefix() ?? '';
+        if ($prefix !== '' && str_starts_with($uid, $prefix)) {
+            return substr($uid, strlen($prefix));
+        }
+        return $uid;
+    }
+
     // ---------------------------------------------------------------------
     // Locale + naming (Pixie-first, bundle-generic)
     // ---------------------------------------------------------------------

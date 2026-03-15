@@ -29,11 +29,18 @@ final class TemplateController extends AbstractController
         // Normalize locale suffix: "movies_en" → "movies"
         $templateName = preg_replace('/_..$/', '', $templateName);
 
-        // Template hierarchy: <code> -> <aggregator> -> default
-        // Example: dc_nv935r28t -> dc -> default
-        $candidates = [$templateName];
-        if (str_contains($templateName, '_')) {
-            $agg = explode('_', $templateName, 2)[0] ?? null;
+        // Strip configured prefix so templates don't need to know about it.
+        // e.g. "m_victoria" with prefix "m_" → "victoria"
+        $prefix = $this->meiliService->getPrefix() ?? '';
+        $unprefixed = ($prefix !== '' && str_starts_with($templateName, $prefix))
+            ? substr($templateName, strlen($prefix))
+            : $templateName;
+
+        // Template hierarchy: <unprefixed> -> <aggregator> -> <prefixed> -> default
+        // Example: md_dc_nv935r28t → dc_nv935r28t → dc → md_dc_nv935r28t → default
+        $candidates = array_unique(array_filter([$unprefixed, $templateName]));
+        if (str_contains($unprefixed, '_')) {
+            $agg = explode('_', $unprefixed, 2)[0] ?? null;
             if (is_string($agg) && $agg !== '') {
                 $candidates[] = $agg;
             }

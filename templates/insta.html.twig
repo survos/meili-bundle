@@ -447,7 +447,9 @@
     serverApiKey: apiKey,
     indexName: indexName,
     _sc_modal: '@survos/meili-bundle/json',
-    debug: debug
+    debug: debug,
+    chatBaseUrl:   path('meili_chat',  {indexName: 'INDEXNAME', workspace: 'meili_assistant'}),
+    searchBaseUrl: path('meili_insta', {indexName: 'INDEXNAME'}),
   } %}
 
   {% set icons = {

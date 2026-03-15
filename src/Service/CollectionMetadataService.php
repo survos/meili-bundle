@@ -249,11 +249,17 @@ final class CollectionMetadataService
 
         arsort($distribution);
         $total = $documents > 0 ? $documents : (int) array_sum($distribution);
+
+        // Resolve lookup map from compiled #[Facet(lookup: [...])] if available.
+        $lookup = $this->resolveFacetLookup($indexUid, $facetField);
+
         $topValues = [];
         foreach (array_slice($distribution, 0, 3, true) as $value => $count) {
             $count = (int) $count;
+            $label = $lookup[(string) $value] ?? null;
             $topValues[] = [
-                'value' => (string) $value,
+                'value' => $label ?? (string) $value,
+                'rawValue' => (string) $value,
                 'count' => $count,
                 'percentage' => $total > 0 ? round(($count / $total) * 100, 1) : 0.0,
             ];
@@ -293,6 +299,21 @@ final class CollectionMetadataService
         return $filterable[0] ?? null;
     }
 
+    /**
+     * Resolve the #[Facet(lookup: [...])] map for a field from the compiled registry.
+     * Returns an empty array when no lookup is configured.
+     *
+     * @return array<string,string>
+     */
+    private function resolveFacetLookup(string $indexUid, string $fieldName): array
+    {
+        // Strip prefix to get the base name (e.g. md_indexinfo -> indexinfo)
+        $baseName = $this->meiliService->baseNameFromUid($indexUid);
+        $settings = $this->meiliService->getRawIndexSettings();
+        $lookup = $settings[$baseName]['facets'][$fieldName]['lookup'] ?? [];
+        return is_array($lookup) ? $lookup : [];
+    }
+
     private function overviewFacetLabel(string $fieldName): string
     {
         return match ($fieldName) {
@@ -301,9 +322,11 @@ final class CollectionMetadataService
             'category', 'categories' => 'categories',
             'classification' => 'classifications',
             'department' => 'departments',
-            'genre' => 'genres',
-            'physicalLocation', 'physical_location', 'currentLocation', 'current_location', 'storageLocation', 'storage_location', 'location' => 'locations',
-            default => $fieldName,
+            'genre', 'genre_basic', 'genre_specific' => 'genres',
+            'aggregator', 'provider', 'source' => 'source collections',
+            'institution', 'holding_institution' => 'holding institutions',
+            'physicalLocation', 'physical_location', 'currentLocation', 'current_location', 'storageLocation', 'storage_location', 'location', 'city', 'state', 'county' => 'locations',
+            default => ucwords(str_replace('_', ' ', $fieldName)),
         };
     }
 
