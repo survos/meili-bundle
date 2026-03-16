@@ -243,6 +243,19 @@
     {% if livePrompts is null %}<span class="badge bg-warning text-dark ms-2">Could not fetch live prompts</span>{% endif %}
   </summary>
   <div class="chat-debug-body">
+    <div class="chat-debug-prompt">
+      <div class="chat-debug-prompt-label">Chat key</div>
+      <pre class="chat-debug-pre">status={{ chatKeyDebug.status ?? 'unknown' }}
+source={{ chatKeyDebug.source ?? 'unknown' }}
+keyUid={{ chatKeyDebug.keyUid ?? '(none)' }}
+hasApiKey={{ chatKeyDebug.hasApiKey ?? false ? 'yes' : 'no' }}</pre>
+      {% if not (chatKeyDebug.hasApiKey ?? false) %}
+        <div class="alert alert-warning mb-0 mt-2">
+          No scoped chat API key is available for <code>{{ indexName }}</code> / <code>{{ workspace }}</code>.
+          Run <code>bin/console meili:settings:update --force</code> to create and register it.
+        </div>
+      {% endif %}
+    </div>
     {% if livePrompts is null %}
       <div class="alert alert-warning mb-0">
         Could not retrieve prompts from workspace <code>{{ workspace }}</code>.

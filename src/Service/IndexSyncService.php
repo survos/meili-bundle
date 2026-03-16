@@ -209,7 +209,7 @@ final class IndexSyncService implements LoggerAwareInterface
 
             // Map live data + config settings → entity.
             $indexInfo->primaryKey    = $primaryKey;
-            $indexInfo->settings      = $settings;
+            $indexInfo->replaceSettingsPreservingRegistry($settings);
             $indexInfo->documentCount = $numDocuments;
             $indexInfo->createdAt     = $createdAt;
             $indexInfo->updatedAt     = $updatedAt;

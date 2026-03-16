@@ -38,9 +38,12 @@ use Survos\MeiliBundle\Service\IndexNameResolver;
 use Survos\MeiliBundle\Service\IndexProducer;
 use Survos\MeiliBundle\Service\IndexSyncService;
 use Survos\MeiliBundle\Service\CollectionMetadataService;
+use Survos\MeiliBundle\Service\ChatWorkspaceAccessKeyService;
+use Survos\MeiliBundle\Service\ChatWorkspaceResolver;
 use Survos\MeiliBundle\Service\MeiliFieldHeuristic;
 use Survos\MeiliBundle\Service\MeiliNdjsonUploader;
 use Survos\MeiliBundle\Service\MeiliPayloadBuilder;
+use Survos\MeiliBundle\Service\MeiliServerKeyService;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\MeiliServiceConfig;
 use Survos\MeiliBundle\Service\OpenApiFieldMetadataResolver;
@@ -284,6 +287,19 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->setPublic(true)
             ->setAutoconfigured(true);
 
+        $builder->autowire(ChatWorkspaceAccessKeyService::class)
+            ->setPublic(true)
+            ->setAutoconfigured(true);
+
+        $builder->autowire(ChatWorkspaceResolver::class)
+            ->setPublic(true)
+            ->setAutoconfigured(true)
+            ->setArgument('$chatConfig', '%survos_meili.chat%');
+
+        $builder->autowire(MeiliServerKeyService::class)
+            ->setPublic(true)
+            ->setAutoconfigured(true);
+
         // AI agent tools + test command: registered when either symfony/ai-agent or symfony/mcp-bundle is installed.
         if (class_exists(\Symfony\AI\Agent\Toolbox\Attribute\AsTool::class) || class_exists(\Mcp\Capability\Attribute\McpTool::class)) {
             foreach ([
@@ -439,10 +455,6 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                                 ->scalarNode('apiKey')
                                     ->defaultNull()
                                     ->info('Provider API key (use %env(OPENAI_API_KEY)%)')
-                                ->end()
-                                ->scalarNode('chatApiKey')
-                                    ->defaultNull()
-                                    ->info('Scoped Meilisearch API key used as the Bearer when calling /chats/{workspace}/chat/completions. Use a key restricted to specific indexes to prevent OpenAI enum overflow when the instance has many indexes.')
                                 ->end()
                                 ->scalarNode('model')
                                     ->defaultValue('gpt-4o-mini')

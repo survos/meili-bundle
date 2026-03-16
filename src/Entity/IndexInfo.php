@@ -4,6 +4,9 @@ declare(strict_types=1);
 namespace Survos\MeiliBundle\Entity;
 
 use Doctrine\DBAL\Types\Types;
+use function in_array;
+use function is_array;
+use function is_string;
 use Survos\MeiliBundle\Metadata\Facet;
 use Survos\MeiliBundle\Metadata\MeiliIndex;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
@@ -35,6 +38,10 @@ use Doctrine\ORM\Mapping as ORM;
 )]
 class IndexInfo
 {
+    private const REGISTRY_KEY = '_registry';
+    private const CHAT_WORKSPACES_KEY = 'chatWorkspaces';
+    private const SERVER_KEYS_KEY = 'serverKeys';
+
     #[ORM\Id]
     #[ORM\Column]
     public readonly string $indexName;
@@ -158,5 +165,121 @@ class IndexInfo
     public function isProcessing(): bool
     {
         return in_array($this->status, ['queued', 'processing']);
+    }
+
+    /** @return array<string,mixed> */
+    public function getChatWorkspaceAccess(string $workspace): array
+    {
+        $registry = $this->settings[self::REGISTRY_KEY] ?? null;
+        if (!is_array($registry)) {
+            return [];
+        }
+
+        $workspaces = $registry[self::CHAT_WORKSPACES_KEY] ?? null;
+        if (!is_array($workspaces)) {
+            return [];
+        }
+
+        $entry = $workspaces[$workspace] ?? null;
+
+        return is_array($entry) ? $entry : [];
+    }
+
+    public function getChatWorkspaceApiKey(string $workspace): ?string
+    {
+        $apiKey = $this->getChatWorkspaceAccess($workspace)['apiKey'] ?? null;
+
+        return is_string($apiKey) && $apiKey !== '' ? $apiKey : null;
+    }
+
+    public function getChatWorkspaceKeyUid(string $workspace): ?string
+    {
+        $keyUid = $this->getChatWorkspaceAccess($workspace)['keyUid'] ?? null;
+
+        return is_string($keyUid) && $keyUid !== '' ? $keyUid : null;
+    }
+
+    public function setChatWorkspaceAccess(string $workspace, string $apiKey, string $keyUid): void
+    {
+        $registry = $this->settings[self::REGISTRY_KEY] ?? [];
+        if (!is_array($registry)) {
+            $registry = [];
+        }
+
+        $workspaces = $registry[self::CHAT_WORKSPACES_KEY] ?? [];
+        if (!is_array($workspaces)) {
+            $workspaces = [];
+        }
+
+        $workspaces[$workspace] = [
+            'apiKey' => $apiKey,
+            'keyUid' => $keyUid,
+        ];
+
+        $registry[self::CHAT_WORKSPACES_KEY] = $workspaces;
+        $this->settings[self::REGISTRY_KEY] = $registry;
+    }
+
+    public function replaceSettingsPreservingRegistry(array $settings): void
+    {
+        $registry = $this->settings[self::REGISTRY_KEY] ?? null;
+        $this->settings = $settings;
+
+        if (is_array($registry) && $registry !== []) {
+            $this->settings[self::REGISTRY_KEY] = $registry;
+        }
+    }
+
+    /** @return array<string,mixed> */
+    public function getServerKeyAccess(string $alias): array
+    {
+        $registry = $this->settings[self::REGISTRY_KEY] ?? null;
+        if (!is_array($registry)) {
+            return [];
+        }
+
+        $serverKeys = $registry[self::SERVER_KEYS_KEY] ?? null;
+        if (!is_array($serverKeys)) {
+            return [];
+        }
+
+        $entry = $serverKeys[$alias] ?? null;
+
+        return is_array($entry) ? $entry : [];
+    }
+
+    public function getServerApiKey(string $alias): ?string
+    {
+        $apiKey = $this->getServerKeyAccess($alias)['apiKey'] ?? null;
+
+        return is_string($apiKey) && $apiKey !== '' ? $apiKey : null;
+    }
+
+    public function getServerKeyUid(string $alias): ?string
+    {
+        $keyUid = $this->getServerKeyAccess($alias)['keyUid'] ?? null;
+
+        return is_string($keyUid) && $keyUid !== '' ? $keyUid : null;
+    }
+
+    public function setServerKeyAccess(string $alias, string $apiKey, string $keyUid): void
+    {
+        $registry = $this->settings[self::REGISTRY_KEY] ?? [];
+        if (!is_array($registry)) {
+            $registry = [];
+        }
+
+        $serverKeys = $registry[self::SERVER_KEYS_KEY] ?? [];
+        if (!is_array($serverKeys)) {
+            $serverKeys = [];
+        }
+
+        $serverKeys[$alias] = [
+            'apiKey' => $apiKey,
+            'keyUid' => $keyUid,
+        ];
+
+        $registry[self::SERVER_KEYS_KEY] = $serverKeys;
+        $this->settings[self::REGISTRY_KEY] = $registry;
     }
 }

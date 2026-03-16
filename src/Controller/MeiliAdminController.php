@@ -7,6 +7,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminRoute;
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use Meilisearch\Contracts\ChatWorkspaceSettings;
 use Meilisearch\Exceptions\ApiException;
+use Survos\MeiliBundle\Service\ChatWorkspaceResolver;
 use Survos\MeiliBundle\Service\IndexNameResolver;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Bridge\Twig\Attribute\Template;
@@ -39,6 +40,7 @@ class MeiliAdminController extends AbstractController
     public function __construct(
         private readonly MeiliService $meiliService,
         private readonly IndexNameResolver $resolver,
+        private readonly ChatWorkspaceResolver $chatWorkspaceResolver,
         private readonly RouterInterface $router,
         private readonly ?ChartBuilderInterface $chartBuilder = null,
         private readonly string $coreName = 'core',
@@ -69,37 +71,9 @@ class MeiliAdminController extends AbstractController
         return null;
     }
 
-    /**
-     * Return the workspace name (if any) that covers the given Meilisearch index UID.
-     */
     private function workspaceForIndex(string $meiliIndexUid): ?string
     {
-        // Primary: check compiled settings — chats: attribute on #[MeiliIndex]
-        $allSettings = $this->meiliService->getAllSettings();
-        foreach ($allSettings as $baseName => $settings) {
-            if ($baseName === $meiliIndexUid || str_ends_with($meiliIndexUid, '_' . $baseName)) {
-                foreach ($settings['chats'] ?? [] as $workspaceName) {
-                    if (isset($this->chatConfig['workspaces'][$workspaceName])) {
-                        return $workspaceName;
-                    }
-                }
-            }
-        }
-
-        // Legacy YAML indexes: list
-        foreach ($this->chatConfig['workspaces'] ?? [] as $name => $cfg) {
-            if (in_array($meiliIndexUid, $cfg['indexes'] ?? [], true)) {
-                return $name;
-            }
-        }
-
-        // Default: use first configured workspace (applies to all indexes)
-        $workspaces = $this->chatConfig['workspaces'] ?? [];
-        if ($workspaces !== []) {
-            return array_key_first($workspaces);
-        }
-
-        return null;
+        return $this->chatWorkspaceResolver->workspaceForIndex($meiliIndexUid);
     }
 
     private function defaultWorkspace(): ?string

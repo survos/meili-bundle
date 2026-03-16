@@ -52,7 +52,7 @@ final class MeiliRegistrySyncCommand
 
             $entity->primaryKey = $primaryKey;
             $entity->documentCount = $docCount;
-            $entity->settings = is_array($settings) ? $settings : [];
+            $entity->replaceSettingsPreservingRegistry(is_array($settings) ? $settings : []);
             $entity->updatedAt = isset($info['updatedAt']) ? new \DateTime($info['updatedAt']) : null;
             $entity->createdAt = isset($info['createdAt']) ? new \DateTime($info['createdAt']) : null;
             $entity->lastIndexed = new \DateTime();

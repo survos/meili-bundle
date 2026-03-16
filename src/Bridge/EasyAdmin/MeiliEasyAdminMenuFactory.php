@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Survos\MeiliBundle\Bridge\EasyAdmin;
 
 use EasyCorp\Bundle\EasyAdminBundle\Config\MenuItem;
+use Survos\MeiliBundle\Service\ChatWorkspaceResolver;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
@@ -24,9 +25,9 @@ final class MeiliEasyAdminMenuFactory
 {
     public function __construct(
         private readonly MeiliService $meiliService,
+        private readonly ChatWorkspaceResolver $chatWorkspaceResolver,
         private MeiliEasyAdminDashboardHelper $dashboardHelper,
         private readonly UrlGeneratorInterface $urlGenerator,
-        #[Autowire('%survos_meili.chat%')] private readonly array $chatConfig = [],
     ) {
     }
 
@@ -192,12 +193,7 @@ final class MeiliEasyAdminMenuFactory
 
     private function workspaceForIndex(string $meiliIndexUid): ?string
     {
-        foreach ($this->chatConfig['workspaces'] ?? [] as $name => $cfg) {
-            if (is_array($cfg['indexes'] ?? null) && in_array($meiliIndexUid, $cfg['indexes'], true)) {
-                return $name;
-            }
-        }
-        return null;
+        return $this->chatWorkspaceResolver->workspaceForIndex($meiliIndexUid);
     }
 
     private function sourceLocaleForBase(string $baseName): ?string

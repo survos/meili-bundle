@@ -3,6 +3,10 @@ declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Command;
 
+use RuntimeException;
+use Survos\MeiliBundle\Service\ChatWorkspaceAccessKeyService;
+use Survos\MeiliBundle\Service\ChatWorkspaceResolver;
+use Survos\MeiliBundle\Service\MeiliServerKeyService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Attribute\Argument;
@@ -19,6 +23,7 @@ use function array_filter;
 use function array_keys;
 use function array_values;
 use function array_unique;
+use function count;
 use function implode;
 use function array_map;
 use function array_merge;
@@ -36,6 +41,9 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
     public function __construct(
         private readonly UrlGeneratorInterface $urlGenerator,
         #[Autowire('%survos_meili.chat%')] private readonly array $chatConfig = [],
+        private readonly ChatWorkspaceAccessKeyService $chatWorkspaceAccessKeyService,
+        private readonly ChatWorkspaceResolver $chatWorkspaceResolver,
+        private readonly MeiliServerKeyService $meiliServerKeyService,
         private readonly ?TwigEnvironment $twig = null,
     ) {
         parent::__construct();
@@ -68,8 +76,8 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
         #[Option('Fail if locale is not in resolver policy')]
         bool $strictLocale = false,
 
-        #[Option('Skip syncing chat workspaces (chat is synced by default)')]
-        bool $noChat = false,
+        #[Option('Sync chat workspaces and managed Meili keys (requires master key)')]
+        ?bool $chat = null,
 
         #[Option('Skip pushing embedders (useful when reindexing; semantic search is disabled until re-enabled)')]
         bool $noEmbedders = false,
@@ -80,11 +88,18 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
         $bases = $this->resolveTargets($indexName, $class);
 
         if ($bases === []) {
-            $io->warning('No matching indexes.');
-            return Command::SUCCESS;
+            $io->warning($chat === true
+                ? 'No matching indexes for schema updates; continuing with chat workspace sync.'
+                : 'No matching indexes.'
+            );
+
+            if ($chat !== true) {
+                return Command::SUCCESS;
+            }
         }
 
         $sourceLocales = [];
+        $processedIndexUids = [];
 
         foreach ($bases as $base) {
             $settings = $rawSettings[$base] ?? null;
@@ -124,7 +139,8 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
                  : [null];
 
              foreach ($locales as $locale) {
-                 $uid = $this->indexNameResolver->uidFor($base, $locale);
+                  $uid = $this->indexNameResolver->uidFor($base, $locale);
+                  $processedIndexUids[] = $uid;
 
                 $io->section(sprintf('Processing %s (locale=%s)', $uid, (string) $locale));
 
@@ -235,11 +251,45 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 
         $this->renderIndexLinks($io, $bases, $sourceLocales);
 
-        if (!$noChat) {
+        if ($chat === true) {
+            $this->syncManagedKeys($io, $dumpSettings, $force, array_values(array_unique($processedIndexUids)));
             $this->syncChat($io, $dumpSettings, $force);
         }
 
         return Command::SUCCESS;
+    }
+
+    /** @param list<string> $indexUids */
+    private function syncManagedKeys(SymfonyStyle $io, bool $dumpSettings, bool $force, array $indexUids): void
+    {
+        if ($indexUids === []) {
+            $io->warning('No indexes available for managed key sync.');
+
+            return;
+        }
+
+        $io->section('Managed Meili keys');
+        if ($dumpSettings) {
+            $io->writeln(sprintf('Would ensure managed keys for indexes: %s', implode(', ', $indexUids)));
+
+            return;
+        }
+
+        if (!$force) {
+            $io->warning('Use --force together with --chat to create managed Meili keys.');
+
+            return;
+        }
+
+        $keys = $this->meiliServerKeyService->ensureServerKeys($indexUids);
+        foreach ($keys as $alias => $key) {
+            $io->writeln(sprintf(
+                '  [%s] %s (uid=%s)',
+                $alias,
+                $key['created'] ? 'created' : 'verified',
+                $key['keyUid']
+            ));
+        }
     }
 
     private function waitAndReport(SymfonyStyle $io, object $task, string $label, string $uid): void
@@ -301,61 +351,75 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
             $io->warning('chatCompletions not enabled — use --force to apply.');
         }
 
-        // 2. Sync each workspace
+        // 2. Sync each workspace template into one actual workspace per index
         foreach ($workspaces as $name => $cfg) {
-            $io->section(sprintf('Chat workspace: %s', $name));
+            $workspaceIndexUids = $this->chatWorkspaceResolver->resolveWorkspaceIndexes($name, $cfg);
 
-            // Build the settings payload — only fields the Meilisearch API accepts
-            $settings = array_filter([
-                'source'       => $cfg['source'] ?? 'openAi',
-                'apiKey'       => $cfg['apiKey'] ?? null,
-                'baseUrl'      => $cfg['baseUrl'] ?? null,
-                'orgId'        => $cfg['orgId'] ?? null,
-                'projectId'    => $cfg['projectId'] ?? null,
-                'apiVersion'   => $cfg['apiVersion'] ?? null,
-                'deploymentId' => $cfg['deploymentId'] ?? null,
-            ], static fn($v) => $v !== null && $v !== '');
-
-            // Build prompts: static YAML overrides win; otherwise render from schema.
-            $staticPrompts = array_filter($cfg['prompts'] ?? [], static fn($v) => $v !== null && $v !== '');
-            $dynamicPrompts = $this->buildDynamicPrompts($name, $cfg);
-
-            // Merge: static takes priority over dynamic
-            $prompts = array_merge($dynamicPrompts, $staticPrompts);
-
-            if ($prompts !== []) {
-                $settings['prompts'] = $prompts;
+            if ($workspaceIndexUids === []) {
+                throw new RuntimeException(sprintf('Workspace "%s" is not attached to any indexes.', $name));
             }
+            $io->writeln(sprintf('Workspace template "%s" indexes: %s', $name, implode(', ', $workspaceIndexUids)));
 
-            if ($dumpSettings) {
-                $io->writeln(json_encode($settings, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-                $io->comment(sprintf('  model "%s" will be sent per-request (not stored in workspace settings)', $cfg['model'] ?? 'gpt-4o-mini'));
-                continue;
+            foreach ($workspaceIndexUids as $indexUid) {
+                $actualWorkspace = $this->chatWorkspaceResolver->actualWorkspaceName($name, $indexUid);
+                $io->section(sprintf('Chat workspace: %s', $actualWorkspace));
+
+                $settings = $this->workspaceSettings($name, $actualWorkspace, $cfg, [$indexUid]);
+
+                if ($dumpSettings) {
+                    $io->writeln(json_encode($settings, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+                    $io->comment(sprintf('  model "%s" will be sent per-request (not stored in workspace settings)', $cfg['model'] ?? 'gpt-4o-mini'));
+                    $debug = $this->chatWorkspaceAccessKeyService->debugInfo($indexUid, $actualWorkspace);
+                    $io->comment(sprintf(
+                        '  chat key for %s: status=%s source=%s keyUid=%s',
+                        $indexUid,
+                        $debug['status'],
+                        $debug['source'],
+                        $debug['keyUid'] ?? '(none)'
+                    ));
+                    continue;
+                }
+
+                if (!$force) {
+                    $io->warning(sprintf('Use --force to push workspace "%s" settings.', $actualWorkspace));
+                    continue;
+                }
+
+                $key = $this->chatWorkspaceAccessKeyService->ensureApiKey($indexUid, $actualWorkspace);
+                $io->writeln(sprintf(
+                    '  [%s] %s chat key %s (uid=%s)',
+                    $indexUid,
+                    $key['created'] ? 'created' : 'verified',
+                    $key['created'] ? 'stored in registry' : 'already available',
+                    $key['keyUid']
+                ));
+
+                $applied = $client->chatWorkspace($actualWorkspace)->updateSettings($settings);
+                $io->writeln(sprintf(
+                    '<info>Pushed settings for workspace "%s"</info> (model per-request: %s)',
+                    $actualWorkspace,
+                    $cfg['model'] ?? 'gpt-4o-mini'
+                ));
+                $appliedPrompts = $applied->toArray()['prompts'] ?? [];
+                $io->comment(sprintf(
+                    '  applied source=%s prompts=%s',
+                    $applied->getSource(),
+                    implode(', ', array_keys($appliedPrompts))
+                ));
             }
-
-            if (!$force) {
-                $io->warning(sprintf('Use --force to push workspace "%s" settings.', $name));
-                continue;
-            }
-
-            $client->chatWorkspace($name)->updateSettings($settings);
-            $io->writeln(sprintf(
-                '<info>Pushed settings for workspace "%s"</info> (model per-request: %s)',
-                $name,
-                $cfg['model'] ?? 'gpt-4o-mini'
-            ));
         }
     }
 
     /**
      * Build dynamic prompt strings from the compiled index schema.
-     * Collects filterable/sortable attributes across all indexes covered by this workspace,
+     * Collects filterable/sortable attributes across the supplied indexes,
      * and renders each prompt template with that context.
      *
      * @param array<string,mixed> $cfg workspace config
+     * @param list<string> $allIndexUids
      * @return array<string,string>
      */
-    private function buildDynamicPrompts(string $workspaceName, array $cfg): array
+    private function buildDynamicPrompts(string $workspaceName, array $cfg, array $allIndexUids): array
     {
         if ($this->twig === null) {
             return [];
@@ -371,20 +435,6 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
         $primaryKey           = 'id';
         $docCount             = 0;
         $firstIndexName       = '';
-
-        // Collect indexes for this workspace from two sources (merged, deduped):
-        //   1. #[MeiliIndex(chats: ['workspace_name'])] on entity classes (preferred)
-        //   2. Legacy indexes: list in the workspace YAML config
-        //
-        // getRawIndexSettings() returns baseSettings: [baseName => settings] (already flat).
-        $indexUidsFromAttribute = [];
-        foreach ($rawSettings as $baseName => $s) {
-            if (in_array($workspaceName, $s['chats'] ?? [], true)) {
-                $indexUidsFromAttribute[] = $this->indexNameResolver->uidFor($baseName, null);
-            }
-        }
-        $legacyUids   = $cfg['indexes'] ?? [];
-        $allIndexUids = array_values(array_unique(array_merge($indexUidsFromAttribute, $legacyUids)));
 
         foreach ($allIndexUids as $indexUid) {
             // rawSettings is keyed by base name (e.g. product); find the base for this UID.
@@ -477,6 +527,41 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
         }
 
         return $prompts;
+    }
+
+    /**
+     * @param array<string,mixed> $cfg
+     * @param list<string> $indexUids
+     * @return array<string,mixed>
+     */
+    private function workspaceSettings(string $workspaceTemplate, string $workspaceName, array $cfg, array $indexUids): array
+    {
+        $settings = array_filter([
+            'source'       => $cfg['source'] ?? 'openAi',
+            'apiKey'       => $cfg['apiKey'] ?? null,
+            'baseUrl'      => $cfg['baseUrl'] ?? null,
+            'orgId'        => $cfg['orgId'] ?? null,
+            'projectId'    => $cfg['projectId'] ?? null,
+            'apiVersion'   => $cfg['apiVersion'] ?? null,
+            'deploymentId' => $cfg['deploymentId'] ?? null,
+        ], static fn($v) => $v !== null && $v !== '');
+
+        if (!isset($settings['apiKey'])) {
+            throw new RuntimeException(sprintf(
+                'Workspace "%s" has no provider apiKey configured. Set survos_meili.chat.workspaces.%s.apiKey.',
+                $workspaceTemplate,
+                $workspaceTemplate
+            ));
+        }
+
+        $staticPrompts = array_filter($cfg['prompts'] ?? [], static fn($v) => $v !== null && $v !== '');
+        $dynamicPrompts = $this->buildDynamicPrompts($workspaceName, $cfg, $indexUids);
+        $prompts = array_merge($dynamicPrompts, $staticPrompts);
+        if ($prompts !== []) {
+            $settings['prompts'] = $prompts;
+        }
+
+        return $settings;
     }
 
     /** @param list<string> $bases */

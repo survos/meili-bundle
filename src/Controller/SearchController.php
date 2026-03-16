@@ -7,7 +7,11 @@ namespace Survos\MeiliBundle\Controller;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminRoute;
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use Psr\Log\LoggerInterface;
+use RuntimeException;
+use Survos\MeiliBundle\Service\ChatWorkspaceAccessKeyService;
+use Survos\MeiliBundle\Service\ChatWorkspaceResolver;
 use Survos\MeiliBundle\Service\CollectionMetadataService;
+use Survos\MeiliBundle\Service\MeiliServerKeyService;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Bridge\Twig\Attribute\Template;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -20,6 +24,7 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Routing\RouterInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
+use function array_merge;
 use function hash;
 use function implode;
 use function in_array;
@@ -33,6 +38,7 @@ use function sprintf;
 use function str_contains;
 use function str_replace;
 use function str_ends_with;
+use function str_starts_with;
 use function ucwords;
 
 #[Route('/search')]
@@ -41,7 +47,10 @@ class SearchController extends AbstractController
     public function __construct(
         #[Autowire('%kernel.project_dir%/templates/js/')] private string $jsTemplateDir,
         private readonly MeiliService $meiliService,
+        private readonly ChatWorkspaceAccessKeyService $chatWorkspaceAccessKeyService,
+        private readonly ChatWorkspaceResolver $chatWorkspaceResolver,
         private readonly CollectionMetadataService $collectionMetadataService,
+        private readonly MeiliServerKeyService $meiliServerKeyService,
         private readonly RouterInterface $router,
         #[Autowire('%survos_meili.chat%')] private readonly array $chatConfig = [],
         private readonly ?LoggerInterface $logger = null,
@@ -70,48 +79,6 @@ class SearchController extends AbstractController
                 // try next
             }
         }
-        return null;
-    }
-
-    /**
-     * Return the workspace name (if any) that covers the given Meilisearch index UID.
-     * Checks compiled index settings (chats: [...] on #[MeiliIndex]) first,
-     * then falls back to legacy YAML indexes: [...] in workspace config.
-     */
-    private function workspaceForIndex(string $meiliIndexUid): ?string
-    {
-        // Primary: check compiled settings — baseName => settings['chats']
-        $allSettings = $this->meiliService->getAllSettings();
-        foreach ($allSettings as $baseName => $settings) {
-            if (in_array($meiliIndexUid, $settings['chats'] ?? [], true)) {
-                // Return the first workspace name that matches
-                // (settings['chats'] contains workspace names, not index UIDs)
-                return ($settings['chats'][0]) ?? null;
-            }
-            // Also check if the base name resolves to this UID
-            if ($baseName === $meiliIndexUid || str_ends_with($meiliIndexUid, '_' . $baseName)) {
-                foreach ($settings['chats'] ?? [] as $workspaceName) {
-                    if (isset($this->chatConfig['workspaces'][$workspaceName])) {
-                        return $workspaceName;
-                    }
-                }
-            }
-        }
-
-        // Fallback: legacy YAML indexes: list
-        foreach ($this->chatConfig['workspaces'] ?? [] as $name => $cfg) {
-            if (in_array($meiliIndexUid, $cfg['indexes'] ?? [], true)) {
-                return $name;
-            }
-        }
-
-        // Default: if any workspace is configured, use the first one.
-        // Every index gets chat unless explicitly excluded.
-        $workspaces = $this->chatConfig['workspaces'] ?? [];
-        if ($workspaces !== []) {
-            return array_key_first($workspaces);
-        }
-
         return null;
     }
 
@@ -190,7 +157,7 @@ class SearchController extends AbstractController
             'server' => $useProxy
                 ? $this->router->generate('meili_proxy', [], UrlGeneratorInterface::ABSOLUTE_URL)
                 : $this->meiliService->getHost(),
-            'apiKey'  => $this->meiliService->getPublicApiKey(),
+            'apiKey'  => $this->meiliServerKeyService->resolveApiKey($meiliIndexUid, 'readonly_search'),
 
             // Index identifiers
             'indexName'     => $meiliIndexUid,  // actual Meili UID (what JS uses)
@@ -218,7 +185,7 @@ class SearchController extends AbstractController
             'searchAsYouType' => $embedder === null,
 
             // Chat workspace name for this index (null if none configured)
-            'chatWorkspace'      => $this->workspaceForIndex($meiliIndexUid),
+            'chatWorkspace'      => $this->chatWorkspaceResolver->workspaceForIndex($meiliIndexUid),
             'indexDashboardUrl'  => $this->indexDashboardUrl($baseIndexName),
         ];
     }
@@ -235,7 +202,12 @@ class SearchController extends AbstractController
     ): Response|array {
         $locale = $request->getLocale();
         $meiliIndexUid = $this->meiliService->uidForBase($indexName, $locale);
-        $workspaceCfg = $this->chatConfig['workspaces'][$workspace] ?? null;
+        $resolvedWorkspace = $this->chatWorkspaceResolver->resolveRequestedWorkspace($meiliIndexUid, $workspace);
+        if ($resolvedWorkspace === null) {
+            throw $this->createNotFoundException(sprintf('Chat workspace "%s" is not configured for index "%s".', $workspace, $meiliIndexUid));
+        }
+        $workspaceTemplate = $this->workspaceTemplateForResolvedWorkspace($resolvedWorkspace, $meiliIndexUid);
+        $workspaceCfg = $workspaceTemplate !== null ? ($this->chatConfig['workspaces'][$workspaceTemplate] ?? null) : null;
 
         if ($workspaceCfg === null) {
             throw $this->createNotFoundException(sprintf('Chat workspace "%s" is not configured.', $workspace));
@@ -246,7 +218,7 @@ class SearchController extends AbstractController
         $livePrompts = null;
         try {
             $settings = $this->meiliService->getMeiliClient()
-                ->chatWorkspace($workspace)
+                ->chatWorkspace($resolvedWorkspace)
                 ->getSettings();
             $livePrompts = $settings->toArray()['prompts'] ?? null;
         } catch (\Throwable) {
@@ -258,6 +230,8 @@ class SearchController extends AbstractController
         $primaryKey    = (string) ($indexSettings['primaryKey'] ?? 'id');
         $schemaUrl     = $this->schemaUrlForRequest($request, $workspaceCfg);
         $collectionOverview = null;
+        $chatApiKey = $this->chatWorkspaceAccessKeyService->resolveApiKey($meiliIndexUid, $resolvedWorkspace);
+        $chatKeyDebug = $this->chatWorkspaceAccessKeyService->debugInfo($meiliIndexUid, $resolvedWorkspace);
 
         try {
             $this->collectionMetadataService->warmup($meiliIndexUid, $schemaUrl);
@@ -273,8 +247,9 @@ class SearchController extends AbstractController
         return [
             'indexName'          => $meiliIndexUid,
             'baseIndexName'      => $indexName,
-            'workspace'          => $workspace,
-            'chatWorkspace'      => $workspace,
+            'workspace'          => $resolvedWorkspace,
+            'chatWorkspace'      => $resolvedWorkspace,
+            'workspaceTemplate'  => $workspaceTemplate,
             'workspaceCfg'       => $workspaceCfg,
             'schemaUrl'          => $schemaUrl,
             'collectionOverview' => is_array($collectionOverview) ? $collectionOverview : null,
@@ -285,11 +260,12 @@ class SearchController extends AbstractController
             'livePrompts'        => $livePrompts,
             'templateUrl'        => $this->generateUrl('meili_template', ['templateName' => $indexName]),
             'indexDashboardUrl'  => $this->indexDashboardUrl($indexName),
-             'meiliHost'          => rtrim($meiliConfig['host'] ?? 'http://localhost:7700', '/'),
-             'meiliApiKey'        => $this->meiliService->getPublicApiKey() ?? $meiliConfig['apiKey'] ?? '',
+            'meiliHost'          => rtrim($meiliConfig['host'] ?? 'http://localhost:7700', '/'),
+            'meiliApiKey'        => $chatApiKey,
+            'chatKeyDebug'       => $chatKeyDebug,
             'streamUrl'          => $this->generateUrl('meili_chat_stream', [
                 'indexName' => $indexName,
-                'workspace' => $workspace,
+                'workspace' => $resolvedWorkspace,
             ]),
             'primaryKey'         => $primaryKey,
         ];
@@ -304,13 +280,20 @@ class SearchController extends AbstractController
         string $indexName,
         string $workspace,
     ): StreamedResponse {
-        $workspaceCfg = $this->chatConfig['workspaces'][$workspace] ?? null;
+        $resolvedWorkspace = $this->chatWorkspaceResolver->resolveRequestedWorkspace($this->meiliService->uidForBase($indexName, $request->getLocale()), $workspace);
+        $workspaceTemplate = $resolvedWorkspace !== null
+            ? $this->workspaceTemplateForResolvedWorkspace($resolvedWorkspace, $this->meiliService->uidForBase($indexName, $request->getLocale()))
+            : null;
+        $workspaceCfg = $workspaceTemplate !== null ? ($this->chatConfig['workspaces'][$workspaceTemplate] ?? null) : null;
         if ($workspaceCfg === null) {
             throw $this->createNotFoundException(sprintf('Chat workspace "%s" is not configured.', $workspace));
         }
 
         $locale = $request->getLocale();
         $meiliIndexUid = $this->meiliService->uidForBase($indexName, $locale);
+        if ($resolvedWorkspace === null) {
+            throw $this->createNotFoundException(sprintf('Chat workspace "%s" is not configured for index "%s".', $workspace, $meiliIndexUid));
+        }
 
         $body = json_decode($request->getContent(), true) ?? [];
         $messages = $body['messages'] ?? [];
@@ -318,10 +301,14 @@ class SearchController extends AbstractController
 
         $config = $this->meiliService->getConfig();
         $host   = rtrim($config['host'] ?? 'http://localhost:7700', '/');
-        // Use workspace-specific chat key if set (scoped key prevents enum explosion
-        // when the Meilisearch instance has thousands of indexes).
-        // Falls back to the global MEILI_API_KEY.
-        $apiKey = $workspaceCfg['chatApiKey'] ?? $config['apiKey'] ?? '';
+        $apiKey = $this->chatWorkspaceAccessKeyService->resolveApiKey($meiliIndexUid, $resolvedWorkspace);
+        if ($apiKey === null) {
+            throw new RuntimeException(sprintf(
+                'No registry-backed chat API key exists for index "%s" and workspace "%s". Run "bin/console meili:settings:update --force" first.',
+                $meiliIndexUid,
+                $resolvedWorkspace
+            ));
+        }
         $model  = $workspaceCfg['model'] ?? 'gpt-4o-mini';
 
         // Prepend a system message that pins the index UID for this session.
@@ -416,7 +403,7 @@ class SearchController extends AbstractController
         // Build a cache key from the full request payload (workspace + index + messages).
         // Strip the injected index-pin system message so the key is stable across sessions.
         $cacheableMessages = array_filter($messages, static fn($m) => !($m['role'] === 'system' && str_contains($m['content'] ?? '', 'You MUST search only the index')));
-        $cacheKey = 'meili_chat_' . hash('xxh128', $workspace . $meiliIndexUid . json_encode(array_values($cacheableMessages)));
+        $cacheKey = 'meili_chat_' . hash('xxh128', $resolvedWorkspace . $meiliIndexUid . json_encode(array_values($cacheableMessages)));
         $cache    = $this->cache;
         $logger   = $this->logger;
 
@@ -440,8 +427,8 @@ class SearchController extends AbstractController
             }
         }
 
-        return new StreamedResponse(function () use ($host, $apiKey, $workspace, $payload, $meiliIndexUid, $logger, $cache, $cacheKey): void {
-            $url = sprintf('%s/chats/%s/chat/completions', $host, $workspace);
+        return new StreamedResponse(function () use ($host, $apiKey, $resolvedWorkspace, $payload, $meiliIndexUid, $logger, $cache, $cacheKey): void {
+            $url = sprintf('%s/chats/%s/chat/completions', $host, $resolvedWorkspace);
 
             // ignore_errors: fopen returns the stream even on HTTP 4xx/5xx
             // so we can read Meilisearch's JSON error body instead of failing silently.
@@ -484,7 +471,7 @@ class SearchController extends AbstractController
                     $m[2],
                     $decoded['message'] ?? $body
                 );
-                $logger?->error($detail, ['workspace' => $workspace, 'url' => $url]);
+                $logger?->error($detail, ['workspace' => $resolvedWorkspace, 'url' => $url]);
                 echo "data: " . json_encode(['error' => $detail]) . "\n\n";
                 flush();
                 return;
@@ -506,7 +493,7 @@ class SearchController extends AbstractController
                         $logger->warning('Meilisearch chat error: [{code}] {message}', [
                             'code'      => $err['code'] ?? '?',
                             'message'   => substr($err['message'] ?? '', 0, 300),
-                            'workspace' => $workspace,
+                            'workspace' => $resolvedWorkspace,
                             'index'     => $meiliIndexUid,
                         ]);
                         $hasError = true;
@@ -591,6 +578,17 @@ class SearchController extends AbstractController
         $label = ucwords(str_replace(['_', '-'], ' ', $label));
 
         return sprintf('%s Curator', $label);
+    }
+
+    private function workspaceTemplateForResolvedWorkspace(string $workspace, string $indexUid): ?string
+    {
+        foreach ($this->chatWorkspaceResolver->workspaceTemplatesForIndex($indexUid) as $templateWorkspace) {
+            if ($workspace === $templateWorkspace || $workspace === $this->chatWorkspaceResolver->actualWorkspaceName($templateWorkspace, $indexUid)) {
+                return $templateWorkspace;
+            }
+        }
+
+        return null;
     }
 
     #[AdminRoute(path: '/show/liquid/{indexName}', name: 'meili_show_liquid')]
