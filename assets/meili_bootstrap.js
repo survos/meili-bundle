@@ -10,3 +10,4 @@ import './src/controllers/insta_debug.js';
 import './src/controllers/insta_facets.js';
 import './src/controllers/insta_helpers.js';
 import './src/controllers/insta_twig.js';
+import './src/controllers/chat_controller.js';

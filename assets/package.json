@@ -22,6 +22,15 @@
         "enabled": true,
         "autoimport": {
         }
+      },
+      "chat": {
+        "main": "src/controllers/chat_controller.js",
+        "webpackMode": "eager",
+        "fetch": "lazy",
+        "enabled": true,
+        "autoimport": {
+          "@survos/meili/styles/chat.css": true
+        }
       }
     },
     "importmap": {
