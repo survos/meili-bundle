@@ -11,7 +11,7 @@ use Symfony\AI\Agent\Toolbox\Source\HasSourcesInterface;
 use Symfony\AI\Agent\Toolbox\Source\HasSourcesTrait;
 use Symfony\AI\Agent\Toolbox\Source\Source;
 
-use function array_key_first;
+use function array_key_exists;
 use function count;
 use function max;
 use function min;

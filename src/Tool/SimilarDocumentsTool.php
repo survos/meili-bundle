@@ -6,6 +6,7 @@ namespace Survos\MeiliBundle\Tool;
 use Mcp\Capability\Attribute\McpTool;
 use Meilisearch\Contracts\SimilarDocumentsQuery;
 use Meilisearch\Exceptions\ApiException;
+use Psr\Log\LoggerInterface;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\ResultNormalizer;
 use Symfony\AI\Agent\Toolbox\Attribute\AsTool;
@@ -16,6 +17,10 @@ use Symfony\AI\Agent\Toolbox\Source\Source;
 use function max;
 use function min;
 use function sprintf;
+use function array_key_exists;
+use function count;
+use function is_array;
+use function is_string;
 
 /**
  * Symfony AI tool: find documents similar to a given document using Meilisearch's
@@ -36,6 +41,7 @@ final class SimilarDocumentsTool implements HasSourcesInterface
     public function __construct(
         private readonly MeiliService $meiliService,
         private readonly ResultNormalizer $normalizer,
+        private readonly ?LoggerInterface $logger = null,
     ) {
     }
 
@@ -68,12 +74,28 @@ final class SimilarDocumentsTool implements HasSourcesInterface
         }
 
         $hits = $this->normalizer->normalizeHits($results->getHits());
+        $primaryKey = $this->primaryKeyForIndex($index);
+        $missingPrimaryKeyCount = 0;
+        foreach ($hits as $hit) {
+            if (!is_array($hit) || !array_key_exists($primaryKey, $hit)) {
+                ++$missingPrimaryKeyCount;
+            }
+        }
+
+        $this->logger?->info('Meili MCP similar_documents', [
+            'index' => $index,
+            'primaryKey' => $primaryKey,
+            'documentId' => $documentId,
+            'embedder' => $embedder,
+            'hitCount' => count($hits),
+            'missingPrimaryKeyCount' => $missingPrimaryKeyCount,
+        ]);
 
         foreach ($hits as $hit) {
             $label = $this->normalizer->labelFor($hit);
             $this->addSource(new Source(
                 $label,
-                sprintf('meili://%s/%s', $index, $hit['id'] ?? '?'),
+                sprintf('meili://%s/%s', $index, $hit[$primaryKey] ?? '?'),
                 $this->normalizer->toJson($hit),
             ));
         }
@@ -81,7 +103,19 @@ final class SimilarDocumentsTool implements HasSourcesInterface
         return $this->normalizer->toJson([
             'index'      => $index,
             'documentId' => $documentId,
+            'primaryKey' => $primaryKey,
+            'missingPrimaryKeyCount' => $missingPrimaryKeyCount,
             'hits'       => $hits,
         ]);
+    }
+
+    private function primaryKeyForIndex(string $index): string
+    {
+        $baseName = $this->meiliService->baseNameFromUid($index);
+        $settings = $this->meiliService->getIndexSetting($baseName);
+
+        return is_array($settings) && isset($settings['primaryKey']) && is_string($settings['primaryKey']) && $settings['primaryKey'] !== ''
+            ? $settings['primaryKey']
+            : 'id';
     }
 }

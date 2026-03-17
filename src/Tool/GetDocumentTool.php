@@ -5,6 +5,7 @@ namespace Survos\MeiliBundle\Tool;
 
 use Mcp\Capability\Attribute\McpTool;
 use Meilisearch\Exceptions\ApiException;
+use Psr\Log\LoggerInterface;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\ResultNormalizer;
 use Symfony\AI\Agent\Toolbox\Attribute\AsTool;
@@ -12,6 +13,9 @@ use Symfony\AI\Agent\Toolbox\Source\HasSourcesInterface;
 use Symfony\AI\Agent\Toolbox\Source\HasSourcesTrait;
 use Symfony\AI\Agent\Toolbox\Source\Source;
 
+use function array_key_exists;
+use function is_array;
+use function is_string;
 use function sprintf;
 
 /**
@@ -32,6 +36,7 @@ final class GetDocumentTool implements HasSourcesInterface
     public function __construct(
         private readonly MeiliService $meiliService,
         private readonly ResultNormalizer $normalizer,
+        private readonly ?LoggerInterface $logger = null,
     ) {
     }
 
@@ -59,6 +64,16 @@ final class GetDocumentTool implements HasSourcesInterface
         }
 
         $hit = $this->normalizer->normalizeHit((array) $raw);
+        $primaryKey = $this->primaryKeyForIndex($index);
+        $hasPrimaryKey = array_key_exists($primaryKey, $hit);
+
+        $this->logger?->info('Meili MCP get_document', [
+            'index' => $index,
+            'primaryKey' => $primaryKey,
+            'documentId' => $documentId,
+            'hasPrimaryKey' => $hasPrimaryKey,
+        ]);
+
         $label = $this->normalizer->labelFor($hit);
 
         $this->addSource(new Source(
@@ -67,6 +82,21 @@ final class GetDocumentTool implements HasSourcesInterface
             $this->normalizer->toJson($hit),
         ));
 
+        $hit['_meta'] = [
+            'primaryKey' => $primaryKey,
+            'hasPrimaryKey' => $hasPrimaryKey,
+        ];
+
         return $this->normalizer->toJson($hit);
+    }
+
+    private function primaryKeyForIndex(string $index): string
+    {
+        $baseName = $this->meiliService->baseNameFromUid($index);
+        $settings = $this->meiliService->getIndexSetting($baseName);
+
+        return is_array($settings) && isset($settings['primaryKey']) && is_string($settings['primaryKey']) && $settings['primaryKey'] !== ''
+            ? $settings['primaryKey']
+            : 'id';
     }
 }

@@ -28,8 +28,11 @@ use function implode;
 use function array_map;
 use function array_merge;
 use function in_array;
+use function is_array;
+use function is_string;
 use function json_encode;
 use function sprintf;
+use function str_contains;
 
 use Meilisearch\Exceptions\ApiException;
 use function strtolower;
@@ -459,6 +462,7 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
         $primaryKey           = 'id';
         $docCount             = 0;
         $firstIndexName       = '';
+        $indexPromptOverrides = [];
 
         foreach ($allIndexUids as $indexUid) {
             // rawSettings is keyed by base name (e.g. product); find the base for this UID.
@@ -511,6 +515,7 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
             if ($firstIndexName === '') {
                 $firstIndexName = $indexUid;
                 $primaryKey     = $s['primaryKey'] ?? 'id';
+                $indexPromptOverrides = is_array($s['prompts'] ?? null) ? $s['prompts'] : [];
             }
         }
 
@@ -548,6 +553,28 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
             } catch (\Throwable $e) {
                 // Non-fatal: skip this prompt if template fails
             }
+        }
+
+        $customSystemPrompt = $indexPromptOverrides['system'] ?? null;
+        if (is_string($customSystemPrompt) && trim($customSystemPrompt) !== '') {
+            $renderedCustomPrompt = trim($customSystemPrompt);
+
+            try {
+                $renderedCustomPrompt = trim($this->twig->createTemplate($customSystemPrompt)->render($context));
+            } catch (\Throwable) {
+                // Keep literal fallback when custom prompt template cannot be rendered.
+            }
+
+            if ($renderedCustomPrompt !== '') {
+                $prompts['system'] = $renderedCustomPrompt;
+            }
+        }
+
+        if (isset($prompts['system']) && !str_contains($prompts['system'], '[id:{value}]')) {
+            $prompts['system'] = trim($prompts['system']) . "\n\n" . sprintf(
+                'For each item you mention, append its primary key on the same line using exactly this format: [id:{value}] where {value} is the item\'s %s field value.',
+                $primaryKey
+            );
         }
 
         return $prompts;

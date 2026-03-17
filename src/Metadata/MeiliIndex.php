@@ -71,6 +71,13 @@ final class MeiliIndex
         public array $chats = [],
 
         /**
+         * Optional chat prompt overrides keyed by prompt slot.
+         * Example: prompts: ['system' => 'Always include [id:{value}] using field {{ primaryKey }}.']
+         * @var array<string,string>
+         */
+        public array $prompts = [],
+
+        /**
          * UI hints consumed by the bundle's frontend (insta controller & templates).
          * Example:
          *   ['columns'=>4,'template'=>'@App/hits/card.html.twig','cardClass'=>'meili-card','layout'=>'bootstrap']

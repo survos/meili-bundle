@@ -25,6 +25,7 @@ use Symfony\Component\Routing\RouterInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 use function array_merge;
+use function count;
 use function hash;
 use function implode;
 use function in_array;
@@ -481,6 +482,7 @@ class SearchController extends AbstractController
 
             $accumulated = [];
             $hasError    = false;
+            $toolCalls   = [];
 
             while (!feof($stream)) {
                 $line = fgets($stream);
@@ -490,15 +492,74 @@ class SearchController extends AbstractController
                 // Log Meilisearch error events so they appear in Symfony profiler logs
                 if ($logger !== null && str_starts_with($line, 'data: {')) {
                     $json = json_decode(substr($line, 6), true);
-                    if (is_array($json) && ($json['type'] ?? '') === 'error') {
-                        $err = $json['error'] ?? [];
-                        $logger->warning('Meilisearch chat error: [{code}] {message}', [
-                            'code'      => $err['code'] ?? '?',
-                            'message'   => substr($err['message'] ?? '', 0, 300),
-                            'workspace' => $resolvedWorkspace,
-                            'index'     => $meiliIndexUid,
-                        ]);
-                        $hasError = true;
+                    if (is_array($json)) {
+                        if (($json['type'] ?? '') === 'error') {
+                            $err = $json['error'] ?? [];
+                            $logger->warning('Meilisearch chat error: [{code}] {message}', [
+                                'code'      => $err['code'] ?? '?',
+                                'message'   => substr($err['message'] ?? '', 0, 300),
+                                'workspace' => $resolvedWorkspace,
+                                'index'     => $meiliIndexUid,
+                            ]);
+                            $hasError = true;
+                        }
+
+                        foreach ($json['choices'][0]['delta']['tool_calls'] ?? [] as $tc) {
+                            $tcIndex = (int) ($tc['index'] ?? 0);
+                            if (!isset($toolCalls[$tcIndex])) {
+                                $toolCalls[$tcIndex] = ['name' => null, 'arguments' => ''];
+                            }
+
+                            if (isset($tc['function']['name']) && is_string($tc['function']['name'])) {
+                                $toolCalls[$tcIndex]['name'] = $tc['function']['name'];
+                            }
+
+                            if (isset($tc['function']['arguments']) && is_string($tc['function']['arguments'])) {
+                                $toolCalls[$tcIndex]['arguments'] .= $tc['function']['arguments'];
+                            }
+                        }
+
+                        if (($json['choices'][0]['finish_reason'] ?? null) === 'tool_calls') {
+                            foreach ($toolCalls as $toolCall) {
+                                $name = $toolCall['name'] ?? null;
+                                if (!is_string($name) || $name === '') {
+                                    continue;
+                                }
+
+                                $arguments = json_decode($toolCall['arguments'], true);
+                                if (!is_array($arguments)) {
+                                    $logger->warning('Meili chat tool call arguments are not valid JSON.', [
+                                        'workspace' => $resolvedWorkspace,
+                                        'index' => $meiliIndexUid,
+                                        'tool' => $name,
+                                    ]);
+                                    continue;
+                                }
+
+                                if ($name === '_meiliSearchProgress') {
+                                    $params = json_decode((string) ($arguments['function_parameters'] ?? ''), true);
+                                    $logger->info('Meili chat tool _meiliSearchProgress', [
+                                        'workspace' => $resolvedWorkspace,
+                                        'index' => $meiliIndexUid,
+                                        'queryIndex' => is_array($params) ? ($params['index_uid'] ?? null) : null,
+                                        'query' => is_array($params) ? ($params['q'] ?? null) : null,
+                                    ]);
+                                }
+
+                                if ($name === '_meiliSearchSources') {
+                                    $documents = $arguments['documents'] ?? $arguments;
+                                    $sourceCount = is_array($documents) ? count($documents) : 0;
+                                    $logger->info('Meili chat tool _meiliSearchSources', [
+                                        'workspace' => $resolvedWorkspace,
+                                        'index' => $meiliIndexUid,
+                                        'sourceCount' => $sourceCount,
+                                        'primaryKey' => $primaryKey,
+                                    ]);
+                                }
+                            }
+
+                            $toolCalls = [];
+                        }
                     }
                 }
                 $accumulated[] = $line;

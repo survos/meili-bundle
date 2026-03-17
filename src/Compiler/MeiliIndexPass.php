@@ -195,6 +195,7 @@ final class MeiliIndexPass implements CompilerPassInterface
                         'facets'      => $facetMap,
                         'embedders'   => $cfg->embedders,
                         'chats'       => $cfg->chats,
+                        'prompts'     => $cfg->prompts,
                         'autoIndex'   => $cfg->autoIndex,
                         'ui'          => $cfg->ui,
                         'instaView'   => $instaViewHints,
