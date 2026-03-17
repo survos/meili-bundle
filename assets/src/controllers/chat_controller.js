@@ -2,35 +2,92 @@ import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
 
-  static targets = ["messages", "input", "detailBody", "detailHeader", "typing", "sendBtn"]
+  static targets = [
+    "messages", "input", "detailBody", "detailTitle", "detailBadge",
+    "typing", "sendBtn", "detailPanel", "detailOpenBtn",
+  ]
 
   static values = {
-    streamUrl:   String,
-    templateUrl: String,
-    schemaUrl:   String,
-    indexName:   String,
-    primaryKey:  { type: String, default: "id" },
-    meiliHost:   String,
-    meiliApiKey: String,
+    streamUrl:    String,
+    templateUrl:  String,
+    schemaUrl:    String,
+    indexName:    String,
+    primaryKey:   { type: String, default: "id" },
+    meiliHost:    String,
+    meiliApiKey:  String,
+    initialQuery: { type: String, default: "" },
   }
 
   connect() {
+
+    document.body.classList.add('meili-chat-page');
+
     this.history      = []
     this.marked       = null
     this._engine      = null
-    this._engineReady = null
     this._twigBlock   = null
     this._twigSource  = null
     this._renderTimer = null
+    this._offcanvas   = null
+
+    // Click delegation for "Show details" buttons inside messages
+    this.messagesTarget.addEventListener("click", (e) => {
+      const btn = e.target.closest(".chat-show-detail, [data-doc-id]")
+      if (!btn) return
+      const docId = btn.dataset.docId ?? btn.dataset.hitId
+      if (docId) this.showDetail(docId, btn.dataset.docTitle ?? docId)
+    })
 
     this._loadMarked()
     this._ensureTwigEngine().then(() => this._ensureTemplate())
 
-    console.log("chat controller connected")
+    // Initialise Bootstrap offcanvas instance (mobile only — harmless on desktop
+    // because the element won't have the offcanvas positioning applied there)
+    this._initOffcanvas()
+
+    // Auto-submit initialQuery (e.g. from ?q= querystring passed via controller)
+    if (this.initialQueryValue) {
+      this.inputTarget.value = this.initialQueryValue
+      setTimeout(() => this.send(), 100)
+    }
   }
 
   disconnect() {
     clearTimeout(this._renderTimer)
+    // Dispose offcanvas instance to avoid memory leaks
+    if (this._offcanvas) {
+      try { this._offcanvas.dispose() } catch (_) {}
+      this._offcanvas = null
+    }
+  }
+
+  // ── Offcanvas ─────────────────────────────────────────────────────────────
+
+  _initOffcanvas() {
+    if (!this.hasDetailPanelTarget) return
+    if (typeof window.bootstrap === "undefined" || !window.bootstrap.Offcanvas) return
+    try {
+      this._offcanvas = bootstrap.Offcanvas.getOrCreateInstance(
+        this.detailPanelTarget,
+        { backdrop: true, scroll: true }
+      )
+    } catch (e) {
+      console.warn("[chat] bootstrap Offcanvas init failed:", e)
+    }
+  }
+
+  _isMobile() {
+    return window.innerWidth <= 900
+  }
+
+  _openOffcanvas() {
+    if (!this._isMobile()) return
+    if (!this._offcanvas) this._initOffcanvas()
+    try {
+      this._offcanvas?.show()
+    } catch (e) {
+      console.warn("[chat] offcanvas show failed:", e)
+    }
   }
 
   // ── Auto-resize textarea ──────────────────────────────────────────────────
@@ -55,8 +112,9 @@ export default class extends Controller {
 
   clearHistory() {
     this.history = []
-    Array.from(this.messagesTarget.querySelectorAll(".chat-bubble, .chat-sources, .chat-search-note"))
-      .forEach(el => el.remove())
+    Array.from(this.messagesTarget.querySelectorAll(
+      ".chat-bubble, .chat-sources, .chat-search-note"
+    )).forEach(el => el.remove())
   }
 
   // ── Marked ───────────────────────────────────────────────────────────────
@@ -79,7 +137,8 @@ export default class extends Controller {
       this._engine.registerFunction("sais_encode", (url) =>
         btoa(url).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
       )
-      this._engineReady = import("@survos/js-twig/generated/fos_routes.js")
+      // Wire path() from FOS routing if available (best-effort)
+      import("@survos/js-twig/generated/fos_routes.js")
         .then(({ path }) => this._engine.registerFunction("path", path))
         .catch(() => {})
     } catch (e) {
@@ -106,10 +165,34 @@ export default class extends Controller {
 
   // ── Detail panel ──────────────────────────────────────────────────────────
   async showDetail(docId, label) {
-    if (!this.hasDetailHeaderTarget || !this.hasDetailBodyTarget) return
 
-    this.detailHeaderTarget.textContent = label || String(docId)
-    this.detailBodyTarget.innerHTML = '<div class="text-muted small p-3">Loading…</div>'
+    if (!this.hasDetailBodyTarget) return
+
+    // Open offcanvas immediately on mobile — before anything else
+    if (this._isMobile()) {
+      const el = document.getElementById("detailOffcanvas")
+      if (el) {
+        if (window.bootstrap?.Offcanvas) {
+          bootstrap.Offcanvas.getOrCreateInstance(el).show()
+        } else {
+          el.classList.add("show")
+        }
+      }
+    }
+
+    // Update title and hide the badge
+    if (this.hasDetailTitleTarget) {
+      this.detailTitleTarget.textContent = label || String(docId)
+    }
+    if (this.hasDetailBadgeTarget) {
+      this.detailBadgeTarget.style.display = "none"
+    }
+
+    this.detailBodyTarget.innerHTML =
+      `<div class="detail-loading">
+        <span class="spinner-border spinner-border-sm text-muted"></span>
+        Loading…
+      </div>`
 
     let doc
     try {
@@ -215,7 +298,7 @@ export default class extends Controller {
   _injectDetailButtons(markdown) {
     return markdown.replace(/\[id:([^\]]+)\]/g, (_, docId) => {
       const id = docId.trim()
-      return `<button class="btn btn-sm btn-outline-primary ms-1 py-0 px-2 chat-show-detail" data-doc-id="${id}" style="font-size:.75rem;vertical-align:middle">Show details</button>`
+      return `<button class="btn btn-sm btn-outline-primary ms-1 py-0 px-2 chat-show-detail" data-doc-id="${id}" data-doc-title="${id}" style="font-size:.75rem;vertical-align:middle">Show details</button>`
     })
   }
 
@@ -278,7 +361,7 @@ export default class extends Controller {
     const jsonDetails = document.createElement("details")
     jsonDetails.style.marginTop = ".35rem"
     const jsonSummary = document.createElement("summary")
-    jsonSummary.style.cssText = "font-size:.68rem;color:#6c757d;cursor:pointer"
+    jsonSummary.style.cssText = "font-size:.68rem;color:#6c757d;cursor:pointer;padding:.3rem .75rem"
     jsonSummary.textContent = "Raw JSON"
     const pre = document.createElement("pre")
     pre.className = "chat-sources-json"
@@ -290,12 +373,10 @@ export default class extends Controller {
     this.messagesTarget.appendChild(details)
 
     // Auto-show first doc in detail panel
-    if (docs.length > 0) {
-      const first = docs[0]
-      const pk    = first[this.primaryKeyValue] ?? first.meili_id ?? first.id ?? first.sku ?? first.code ?? first._id ?? Object.values(first)[0]
-      const title = first.title ?? first.name ?? first.label ?? `#${pk}`
-      this.showDetail(String(pk), String(title).slice(0, 50))
-    }
+    const first = docs[0]
+    const pk    = first[this.primaryKeyValue] ?? first.meili_id ?? first.id ?? first.sku ?? first.code ?? first._id ?? Object.values(first)[0]
+    const title = first.title ?? first.name ?? first.label ?? `#${pk}`
+    this.showDetail(String(pk), String(title).slice(0, 50))
 
     this._scrollBottom()
   }
@@ -375,7 +456,7 @@ export default class extends Controller {
                       if (params.index_uid) {
                         const note = document.createElement("div")
                         note.className = "chat-search-note"
-                        note.textContent = `${params.index_uid}${params.q ? ' · q: "' + params.q + '"' : ""}`
+                        note.textContent = `${params.index_uid}${params.q ? ' · "' + params.q + '"' : ""}`
                         this.messagesTarget.appendChild(note)
                         this._scrollBottom()
                       }
@@ -408,7 +489,8 @@ export default class extends Controller {
               if (parsed?.error) {
                 bubble.classList.add("error")
                 const errObj = parsed.error
-                bubble.textContent = typeof errObj === "string" ? errObj : (errObj?.message ?? JSON.stringify(errObj))
+                bubble.textContent = typeof errObj === "string" ? errObj
+                  : (errObj?.message ?? JSON.stringify(errObj))
               }
             } catch (_) {}
           }
@@ -431,13 +513,11 @@ export default class extends Controller {
     }
   }
 
-  // Delegate clicks on injected "Show details" buttons inside markdown bubbles
-  messagesTargetConnected(el) {
-    el.addEventListener("click", (e) => {
-      const btn = e.target.closest(".chat-show-detail, [data-show-detail]")
-      if (!btn) return
-      const docId = btn.dataset.docId ?? btn.dataset.hitId
-      if (docId) this.showDetail(docId, docId)
-    })
-  }
+    closeDetail() {
+        if (!this._isMobile()) return
+        const el = document.getElementById("detailOffcanvas")
+        if (el && window.bootstrap?.Offcanvas) {
+            bootstrap.Offcanvas.getOrCreateInstance(el).hide()
+        }
+    }
 }

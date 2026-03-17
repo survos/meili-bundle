@@ -11,13 +11,14 @@
 {% block body %}
 
 <div class="chat-layout" {{ stimulus_controller(ctrl, {
-    streamUrl:   streamUrl,
-    templateUrl: templateUrl,
-    schemaUrl:   schemaUrl|default(''),
-    indexName:   indexName,
-    meiliHost:   meiliHost,
-    meiliApiKey: meiliApiKey,
-    primaryKey:  primaryKey|default('id'),
+    streamUrl:    streamUrl,
+    templateUrl:  templateUrl,
+    schemaUrl:    schemaUrl|default(''),
+    indexName:    indexName,
+    meiliHost:    meiliHost,
+    meiliApiKey:  meiliApiKey,
+    primaryKey:   primaryKey|default('id'),
+    initialQuery: initialQuery|default(''),
 }) }}>
 
   {# ── Left panel: conversation ── #}
@@ -34,11 +35,23 @@
           <div class="text-muted" style="font-size:.75rem">{{ baseIndexName }}</div>
         </div>
       </div>
-      <button class="btn btn-sm btn-ghost-secondary ms-auto"
-              {{ stimulus_action(ctrl, 'clearHistory') }}
-              title="Clear conversation">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-      </button>
+      <div class="ms-auto d-flex align-items-center gap-2">
+        {# Mobile-only button to open detail panel #}
+        <button class="btn btn-sm btn-ghost-secondary d-lg-none detail-panel-open-btn"
+                type="button"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#detailOffcanvas"
+                aria-controls="detailOffcanvas"
+                title="Show detail panel"
+                {{ stimulus_target(ctrl, 'detailOpenBtn') }}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+        </button>
+        <button class="btn btn-sm btn-ghost-secondary"
+                {{ stimulus_action(ctrl, 'clearHistory') }}
+                title="Clear conversation">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+        </button>
+      </div>
     </div>
 
     {# Messages #}
@@ -97,12 +110,27 @@
 
   </div>
 
-  {# ── Right panel: detail view ── #}
-  <div class="detail-panel card card-flat">
+  {# ── Right panel: detail view (offcanvas on mobile, inline on desktop) ── #}
+  <div class="offcanvas offcanvas-end detail-panel card card-flat"
+       tabindex="-1"
+       id="detailOffcanvas"
+       aria-labelledby="detailOffcanvasLabel"
+       data-bs-scroll="true"
+       {{ stimulus_target(ctrl, 'detailPanel') }}>
 
-    <div class="detail-panel-header" {{ stimulus_target(ctrl, 'detailHeader') }}>
-      <span class="fw-semibold" style="font-size:.9rem">Detail view</span>
-      <span class="badge bg-secondary-lt text-secondary ms-auto" style="font-size:.7rem">Select a result</span>
+    <div class="detail-panel-header">
+      <span class="fw-semibold detail-panel-title"
+            id="detailOffcanvasLabel"
+            {{ stimulus_target(ctrl, 'detailTitle') }}
+            style="font-size:.9rem">Detail view</span>
+      <span class="badge bg-secondary-lt text-secondary ms-auto detail-panel-badge"
+            {{ stimulus_target(ctrl, 'detailBadge') }}
+            style="font-size:.7rem">Select a result</span>
+      {# Close button — only shown when rendered as offcanvas on mobile #}
+      <button type="button"
+        class="btn-close detail-panel-close ms-2"
+        aria-label="Close"
+        {{ stimulus_action(ctrl, 'closeDetail') }}></button>
     </div>
 
     <div class="detail-panel-body" {{ stimulus_target(ctrl, 'detailBody') }}>
