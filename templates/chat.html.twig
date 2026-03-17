@@ -19,6 +19,18 @@
     meiliApiKey:  meiliApiKey,
     primaryKey:   primaryKey|default('id'),
     initialQuery: initialQuery|default(''),
+    debugMode:    false,
+    debugContext: {
+      workspace: workspace,
+      chatWorkspace: chatWorkspace,
+      workspaceTemplate: workspaceTemplate,
+      workspaceCfg: workspaceCfg,
+      livePrompts: livePrompts,
+      indexSettings: indexSettings,
+      liveIndexSettings: liveIndexSettings,
+      chatApiKeyPresent: chatApiKeyPresent,
+      chatKeyDebug: chatKeyDebug,
+    },
 }) }}>
 
   {# ── Left panel: conversation ── #}
@@ -36,6 +48,10 @@
         </div>
     </div>
     <div class="ms-auto d-flex align-items-center gap-2">
+      <div class="form-check form-switch mb-0">
+        <input class="form-check-input" type="checkbox" id="debugToggle" {{ stimulus_target(ctrl, 'debugToggle') }}>
+        <label class="form-check-label small" for="debugToggle">Debug</label>
+      </div>
       <button class="btn btn-sm btn-ghost-secondary"
               type="button"
               data-bs-toggle="collapse"

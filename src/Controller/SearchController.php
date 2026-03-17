@@ -229,11 +229,21 @@ class SearchController extends AbstractController
         $indexSettings = $this->meiliService->getIndexSetting($indexName) ?? [];
         $meiliConfig   = $this->meiliService->getConfig();
         $primaryKey    = (string) ($indexSettings['primaryKey'] ?? 'id');
+        $liveIndexSettings = null;
         $schemaUrl     = $this->schemaUrlForRequest($request, $workspaceCfg);
         $collectionOverview = null;
         $chatApiKey = $this->chatWorkspaceAccessKeyService->resolveApiKey($meiliIndexUid, $resolvedWorkspace);
         $clientApiKey = $this->meiliServerKeyService->resolveApiKey($meiliIndexUid);
         $chatKeyDebug = $this->chatWorkspaceAccessKeyService->debugInfo($meiliIndexUid, $resolvedWorkspace);
+
+        try {
+            $liveIndexSettings = $this->meiliService->getIndexEndpoint($meiliIndexUid)->getSettings();
+        } catch (\Throwable $exception) {
+            $this->logger?->warning('Unable to fetch live index settings for chat debug.', [
+                'index' => $meiliIndexUid,
+                'exception' => $exception,
+            ]);
+        }
 
         try {
             $this->collectionMetadataService->warmup($meiliIndexUid, $schemaUrl);
@@ -259,6 +269,8 @@ class SearchController extends AbstractController
             'curatorName'        => $this->curatorName($workspaceCfg, $indexName),
             'initialQuery'       => $request->query->getString('q'),
             'embedders'          => $indexSettings['embedders'] ?? [],
+            'indexSettings'      => $indexSettings,
+            'liveIndexSettings'  => is_array($liveIndexSettings) ? $liveIndexSettings : null,
             'livePrompts'        => $livePrompts,
             'templateUrl'        => $this->generateUrl('meili_template', ['templateName' => $indexName]),
             'indexDashboardUrl'  => $this->indexDashboardUrl($indexName),
@@ -276,13 +288,14 @@ class SearchController extends AbstractController
 
     /**
      * SSE endpoint: proxies a message to Meilisearch chatCompletions and streams the response.
+     * Add ?debug=1 for non-streaming mode (easier to debug).
      */
     #[Route('/chat/{indexName}/{workspace}/stream', name: 'meili_chat_stream', methods: ['POST'], options: ['expose' => true])]
     public function chatStream(
         Request $request,
         string $indexName,
         string $workspace,
-    ): StreamedResponse {
+    ): Response {
         $resolvedWorkspace = $this->chatWorkspaceResolver->resolveRequestedWorkspace($this->meiliService->uidForBase($indexName, $request->getLocale()), $workspace);
         $workspaceTemplate = $resolvedWorkspace !== null
             ? $this->workspaceTemplateForResolvedWorkspace($resolvedWorkspace, $this->meiliService->uidForBase($indexName, $request->getLocale()))
@@ -314,10 +327,10 @@ class SearchController extends AbstractController
         }
         $model  = $workspaceCfg['model'] ?? 'gpt-4o-mini';
 
+        // Debug mode: non-streaming for easier debugging
+        $debugMode = $request->query->getBoolean('debug') || $request->query->getBoolean('no-stream');
+
         // Prepend a system message that pins the index UID for this session.
-        // The workspace is shared across all indexes, so without this the AI
-        // may search any available index (e.g. meili_product) regardless of
-        // which index page the user came from.
         $indexPinMessage = [
             'role'    => 'system',
             'content' => sprintf(
@@ -344,7 +357,7 @@ class SearchController extends AbstractController
         $payload = json_encode([
             'model'    => $model,
             'messages' => $messages,
-            'stream'   => true,
+            'stream'   => !$debugMode,
             'tools'    => [
                 [
                     'type'     => 'function',
@@ -402,6 +415,11 @@ class SearchController extends AbstractController
                 ],
             ],
         ]);
+
+        // Debug mode: non-streaming request
+        if ($debugMode) {
+            return $this->chatNonStreaming($host, $apiKey, $resolvedWorkspace, $payload, $meiliIndexUid);
+        }
 
         // Build a cache key from the full request payload (workspace + index + messages).
         // Strip the injected index-pin system message so the key is stable across sessions.
@@ -658,5 +676,46 @@ class SearchController extends AbstractController
     public function showLiquid(AdminContext $context, string $indexName): Response
     {
         return new Response();
+    }
+
+    /**
+     * Non-streaming chat for debugging - returns full JSON response.
+     */
+    private function chatNonStreaming(
+        string $host,
+        string $apiKey,
+        string $workspace,
+        string $payload,
+        string $indexUid,
+    ): Response {
+        $url = sprintf('%s/chats/%s/chat/completions', $host, $workspace);
+
+        $ctx = stream_context_create(['http' => [
+            'method'  => 'POST',
+            'header'  => implode("\r\n", [
+                "Authorization: Bearer $apiKey",
+                'Content-Type: application/json',
+            ]),
+            'content' => $payload,
+            'ignore_errors' => true,
+        ]]);
+
+        $response = file_get_contents($url, false, $ctx);
+        $decoded = json_decode($response, true);
+
+        // Log details for debugging
+        $this->logger?->info('Meili chat non-streaming response', [
+            'workspace' => $workspace,
+            'index' => $indexUid,
+            'url' => $url,
+            'payload' => json_decode($payload, true),
+            'response' => $decoded,
+        ]);
+
+        if ($decoded === null) {
+            return new Response($response, 500, ['Content-Type' => 'application/json']);
+        }
+
+        return new Response(json_encode($decoded, JSON_PRETTY_PRINT), 200, ['Content-Type' => 'application/json']);
     }
 }

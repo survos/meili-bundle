@@ -4,7 +4,7 @@ export default class extends Controller {
 
   static targets = [
     "messages", "input", "detailBody", "detailTitle", "detailBadge",
-    "typing", "sendBtn", "detailPanel", "detailOpenBtn",
+    "typing", "sendBtn", "detailPanel", "detailOpenBtn", "debugToggle",
   ]
 
   static values = {
@@ -16,6 +16,8 @@ export default class extends Controller {
     meiliHost:    String,
     meiliApiKey:  String,
     initialQuery: { type: String, default: "" },
+    debugMode:    { type: Boolean, default: false },
+    debugContext: { type: Object, default: {} },
   }
 
   connect() {
@@ -30,6 +32,7 @@ export default class extends Controller {
     this._renderTimer = null
     this._offcanvas   = null
     this._lastToolIndexUid = this.indexNameValue
+    this._debugSnapshotShown = false
 
     // Click delegation for "Show details" buttons inside messages
     this.messagesTarget.addEventListener("click", (e) => {
@@ -61,6 +64,99 @@ export default class extends Controller {
       try { this._offcanvas.dispose() } catch (_) {}
       this._offcanvas = null
     }
+  }
+
+  // ── Debug Toggle ────────────────────────────────────────────────────────────
+
+  debugToggleTargetConnected() {
+    this.debugToggleTarget.addEventListener('change', (e) => {
+      this.debugModeValue = e.target.checked
+      if (this.debugModeValue) {
+        this._debugSnapshotShown = false
+        this._appendDebugSnapshot(true)
+      }
+    })
+  }
+
+  _redactSecrets(value, keyName = "") {
+    const key = String(keyName || "")
+    const isSecretKey = /(api[-_]?key|token|secret|password|bearer|authorization)/i.test(key)
+
+    if (isSecretKey && value !== null && value !== undefined && value !== "") {
+      return "[redacted]"
+    }
+
+    if (Array.isArray(value)) {
+      return value.map(v => this._redactSecrets(v, key))
+    }
+
+    if (value && typeof value === "object") {
+      const redacted = {}
+      for (const [k, v] of Object.entries(value)) {
+        redacted[k] = this._redactSecrets(v, k)
+      }
+      return redacted
+    }
+
+    return value
+  }
+
+  async _appendDebugSnapshot(force = false) {
+    if (!this.debugModeValue) return
+    if (this._debugSnapshotShown && !force) return
+
+    await this._ensureTemplate()
+
+    let templateSource = this._twigSource ?? null
+    if (!templateSource && this.templateUrlValue) {
+      try {
+        const r = await fetch(this.templateUrlValue)
+        if (r.ok) templateSource = await r.text()
+      } catch (_) {}
+    }
+
+    const ctx = this.debugContextValue || {}
+    const snapshot = {
+      index: {
+        uid: this.indexNameValue,
+        primaryKey: this.primaryKeyValue,
+        schemaUrl: this.schemaUrlValue || null,
+        compiledSettings: this._redactSecrets(ctx.indexSettings ?? null),
+        liveSettings: this._redactSecrets(ctx.liveIndexSettings ?? null),
+      },
+      workspace: {
+        name: ctx.workspace ?? null,
+        resolved: ctx.chatWorkspace ?? null,
+        template: ctx.workspaceTemplate ?? null,
+        config: this._redactSecrets(ctx.workspaceCfg ?? null),
+        livePrompts: this._redactSecrets(ctx.livePrompts ?? null),
+        chatKeyDebug: this._redactSecrets(ctx.chatKeyDebug ?? null),
+        hasSearchKey: Boolean(this.meiliApiKeyValue),
+        hasChatKey: Boolean(ctx.chatApiKeyPresent),
+      },
+      template: {
+        url: this.templateUrlValue,
+        block: this._twigBlock ?? null,
+        source: templateSource,
+      },
+    }
+
+    const details = document.createElement("details")
+    details.className = "chat-sources chat-debug-snapshot"
+    details.open = true
+
+    const summary = document.createElement("summary")
+    summary.textContent = "Debug snapshot (index + workspace + prompts + template)"
+    details.appendChild(summary)
+
+    const pre = document.createElement("pre")
+    pre.className = "chat-sources-json"
+    pre.textContent = JSON.stringify(snapshot, null, 2)
+    details.appendChild(pre)
+
+    this.messagesTarget.appendChild(details)
+    this._scrollBottom()
+    this._debugSnapshotShown = true
   }
 
   // ── Offcanvas ─────────────────────────────────────────────────────────────
@@ -115,8 +211,9 @@ export default class extends Controller {
   clearHistory() {
     this.history = []
     Array.from(this.messagesTarget.querySelectorAll(
-      ".chat-bubble, .chat-sources, .chat-search-note"
+      ".chat-bubble, .chat-sources, .chat-search-note, .chat-debug-snapshot"
     )).forEach(el => el.remove())
+    this._debugSnapshotShown = false
   }
 
   // ── Marked ───────────────────────────────────────────────────────────────
@@ -481,6 +578,10 @@ export default class extends Controller {
     const toolCalls = {}
 
     try {
+      if (this.debugModeValue) {
+        await this._appendDebugSnapshot()
+      }
+
       const resp = await fetch(this.streamUrlValue, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
