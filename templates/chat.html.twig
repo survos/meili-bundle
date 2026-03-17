@@ -30,17 +30,19 @@
         <span class="avatar avatar-sm avatar-rounded bg-primary-lt text-primary">
           {{ ux_icon('mdi:robot-outline', {width: '16px', height: '16px'}) }}
         </span>
-        <div>
-          <div class="fw-semibold lh-1" style="font-size:.9rem">{{ curatorName }}</div>
-          <div class="text-muted" style="font-size:.75rem">{{ baseIndexName }}</div>
+        <div class="small">
+          <div class="fw-semibold lh-1">{{ curatorName }}</div>
+          <div class="text-muted" style="font-size:.65rem">{{ baseIndexName }}</div>
         </div>
     </div>
-    <div class="chat-debug-prompt">
-      <div class="chat-debug-prompt-label">Client key</div>
-      <pre class="chat-debug-pre">readonly_search={{ meiliApiKey ? 'present' : 'missing' }}
-chatCompletionKey={{ chatApiKeyPresent ? 'present' : 'missing' }}</pre>
-    </div>
     <div class="ms-auto d-flex align-items-center gap-2">
+      <button class="btn btn-sm btn-ghost-secondary"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#chatDebugPanel"
+              title="Toggle debug info">
+        {{ ux_icon('tabler:bug', {width: '14px', height: '14px'}) }}
+      </button>
       {# Mobile-only button to open detail panel #}
       <button class="btn btn-sm btn-ghost-secondary d-lg-none detail-panel-open-btn"
               type="button"
@@ -57,6 +59,15 @@ chatCompletionKey={{ chatApiKeyPresent ? 'present' : 'missing' }}</pre>
         {{ ux_icon('tabler:trash', {width: '14px', height: '14px'}) }}
       </button>
     </div>
+    </div>
+
+    {# Debug panel: show prompt config #}
+    <div class="chat-debug-prompt collapse" id="chatDebugPanel" style="font-size: .7rem;">
+      <div class="chat-debug-prompt-label">Prompt Config</div>
+      <pre class="chat-debug-pre small mb-1" style="max-height: 150px; overflow-y: auto; font-size: .65rem;">{{ livePrompts|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>
+      <div class="chat-debug-prompt-label">Workspace: <code>{{ workspace }}</code></div>
+      <div class="chat-debug-prompt-label">Index: <code>{{ indexName }}</code></div>
+      <div class="chat-debug-prompt-label">Search Key: {{ meiliApiKey ? 'present' : 'missing' }} | Chat Key: {{ chatApiKeyPresent ? 'present' : 'missing' }}</div>
     </div>
 
     {% if livePrompts is null %}
@@ -122,12 +133,13 @@ chatCompletionKey={{ chatApiKeyPresent ? 'present' : 'missing' }}</pre>
 
   </div>
 
-  {# ── Right panel: detail view (offcanvas on mobile, inline on desktop) ── #}
+  {# ── Right panel: detail view (offcanvas on mobile, inline on desktop) — collapsible #}
   <div class="offcanvas offcanvas-end detail-panel card card-flat"
        tabindex="-1"
        id="detailOffcanvas"
        aria-labelledby="detailOffcanvasLabel"
        data-bs-scroll="true"
+       style="width: 350px;"
        {{ stimulus_target(ctrl, 'detailPanel') }}>
 
     <div class="detail-panel-header">
