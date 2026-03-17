@@ -1,0 +1,115 @@
+{% extends "@SurvosTabler/layout/base.html.twig" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Meili Registry</h3>
+            </div>
+            <div class="card-body">
+                <p><strong>Locale:</strong> {{ locale }}</p>
+                <p><strong>Multilingual:</strong> {{ multilingual }}</p>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h3 class="card-title">Compiled Registry (Attributes)</h3>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-vcenter card-table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Base name</th>
+                                <th>Label</th>
+                                <th>Index Name</th>
+                                <th>Actions</th>
+                                <th>Multilingual</th>
+                                <th>Locale</th>
+                                <th>Target locales</th>
+                                <th>Primary key</th>
+                                <th>Persisted groups</th>
+                                <th>Persisted fields</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in rows %}
+                            <tr>
+                                <td>{{ row.baseName }}</td>
+                                <td>{{ row.label }}</td>
+                                <td><code>{{ row.indexName }}</code></td>
+                                <td>
+                                    <a href="{{ path('meili_insta', {indexName: row.indexName}) }}" class="btn btn-sm btn-outline-primary">Browse</a>
+                                    {% if row.workspaces|length > 0 %}
+                                    <div class="btn-group">
+                                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">Chat</button>
+                                        <div class="dropdown-menu">
+                                            {% for workspace in row.workspaces %}
+                                            <a class="dropdown-item" href="{{ path('meili_chat', {indexName: row.indexName, workspace: workspace}) }}">{{ workspace }}</a>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td>{{ row.multilingual }}</td>
+                                <td>{{ row.locale }}</td>
+                                <td>{{ row.targetLocales }}</td>
+                                <td>{{ row.primaryKey }}</td>
+                                <td>{{ row.persistedGroups }}</td>
+                                <td>{{ row.persistedFieldsCount }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="10" class="text-muted">No registry entries found.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h3 class="card-title">Database Registry (Synced)</h3>
+            </div>
+            <div class="card-body">
+                {% if dbRows is empty %}
+                    <p class="text-muted">No database registry entries found. Run: <code>bin/console meili:registry:sync</code></p>
+                {% else %}
+                <div class="table-responsive">
+                    <table class="table table-vcenter card-table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Index UID</th>
+                                <th>Primary key</th>
+                                <th>Documents</th>
+                                <th>Updated</th>
+                                <th>Status</th>
+                                <th>Search key</th>
+                                <th>Chat keys</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in dbRows %}
+                            <tr>
+                                <td><code>{{ row.indexName }}</code></td>
+                                <td>{{ row.primaryKey }}</td>
+                                <td>{{ row.documentCount }}</td>
+                                <td>{{ row.updatedAt }}</td>
+                                <td>{{ row.status }}</td>
+                                <td>{{ row.searchKey }}</td>
+                                <td>{{ row.chatKeys }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

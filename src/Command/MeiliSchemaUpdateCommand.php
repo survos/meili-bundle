@@ -40,11 +40,11 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 {
     public function __construct(
         private readonly UrlGeneratorInterface $urlGenerator,
-        #[Autowire('%survos_meili.chat%')] private readonly array $chatConfig = [],
         private readonly ChatWorkspaceAccessKeyService $chatWorkspaceAccessKeyService,
         private readonly ChatWorkspaceResolver $chatWorkspaceResolver,
         private readonly MeiliServerKeyService $meiliServerKeyService,
         private readonly ?TwigEnvironment $twig = null,
+        #[Autowire('%survos_meili.chat%')] private readonly array $chatConfig = [],
     ) {
         parent::__construct();
     }
@@ -76,8 +76,11 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
         #[Option('Fail if locale is not in resolver policy')]
         bool $strictLocale = false,
 
-        #[Option('Sync chat workspaces and managed Meili keys (requires master key)')]
+        #[Option('Sync chat workspaces (requires master key)')]
         ?bool $chat = null,
+
+        #[Option('Create and sync managed index keys (requires master key)')]
+        bool $keys = false,
 
         #[Option('Skip pushing embedders (useful when reindexing; semantic search is disabled until re-enabled)')]
         bool $noEmbedders = false,
@@ -251,9 +254,13 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 
         $this->renderIndexLinks($io, $bases, $sourceLocales);
 
+        $uniqueIndexUids = array_values(array_unique($processedIndexUids));
+        if ($keys) {
+            $this->syncManagedKeys($io, $dumpSettings, $force, $uniqueIndexUids);
+        }
+
         if ($chat === true) {
-            $this->syncManagedKeys($io, $dumpSettings, $force, array_values(array_unique($processedIndexUids)));
-            $this->syncChat($io, $dumpSettings, $force);
+            $this->syncChat($io, $dumpSettings, $force, $keys);
         }
 
         return Command::SUCCESS;
@@ -276,7 +283,7 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
         }
 
         if (!$force) {
-            $io->warning('Use --force together with --chat to create managed Meili keys.');
+            $io->warning('Use --force together with --keys to create managed Meili keys.');
 
             return;
         }
@@ -312,7 +319,7 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
         }
     }
 
-    private function syncChat(SymfonyStyle $io, bool $dumpSettings, bool $force): void
+    private function syncChat(SymfonyStyle $io, bool $dumpSettings, bool $force, bool $createKeys): void
     {
         $client      = $this->meili->getMeiliClient();
         $meiliConfig = $this->meili->getConfig();
@@ -385,14 +392,31 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
                     continue;
                 }
 
-                $key = $this->chatWorkspaceAccessKeyService->ensureApiKey($indexUid, $actualWorkspace);
-                $io->writeln(sprintf(
-                    '  [%s] %s chat key %s (uid=%s)',
-                    $indexUid,
-                    $key['created'] ? 'created' : 'verified',
-                    $key['created'] ? 'stored in registry' : 'already available',
-                    $key['keyUid']
-                ));
+                if ($createKeys) {
+                    $key = $this->chatWorkspaceAccessKeyService->ensureApiKey($indexUid, $actualWorkspace);
+                    $io->writeln(sprintf(
+                        '  [%s] %s chat key %s (uid=%s)',
+                        $indexUid,
+                        $key['created'] ? 'created' : 'verified',
+                        $key['created'] ? 'stored in registry' : 'already available',
+                        $key['keyUid']
+                    ));
+                } else {
+                    $debug = $this->chatWorkspaceAccessKeyService->debugInfo($indexUid, $actualWorkspace);
+                    if ($debug['hasApiKey']) {
+                        $io->writeln(sprintf(
+                            '  [%s] chat key already in registry (uid=%s)',
+                            $indexUid,
+                            $debug['keyUid'] ?? '?'
+                        ));
+                    } else {
+                        $io->warning(sprintf(
+                            'No registry chat key for %s/%s. Re-run with --keys to create it.',
+                            $indexUid,
+                            $actualWorkspace
+                        ));
+                    }
+                }
 
                 $applied = $client->chatWorkspace($actualWorkspace)->updateSettings($settings);
                 $io->writeln(sprintf(

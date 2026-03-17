@@ -108,6 +108,8 @@ final class MeiliRegistryReportCommand extends Command
                 (string)$info->documentCount,
                 $info->updatedAt?->format('Y-m-d H:i:s') ?? '',
                 $info->status ?? '',
+                $info->hasSearchApiKey() ? 'yes' : 'no',
+                (string) $info->chatWorkspaceKeyCount(),
             ];
         }
 
@@ -115,7 +117,7 @@ final class MeiliRegistryReportCommand extends Command
         if ($dbRows === []) {
             $io->writeln('No database registry entries found. Run: bin/console meili:registry:sync');
         } else {
-            $io->table(['Index UID', 'Primary key', 'Documents', 'Updated', 'Status'], $dbRows);
+            $io->table(['Index UID', 'Primary key', 'Documents', 'Updated', 'Status', 'Search key', 'Chat keys'], $dbRows);
         }
 
         if ($io->isVerbose()) {

@@ -9,12 +9,15 @@ use Meilisearch\Exceptions\ApiException;
 use Survos\MeiliBundle\Entity\IndexInfo;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
 
+use function is_string;
 use function sha1;
 use function sprintf;
 use function substr;
 
 final class MeiliServerKeyService
 {
+    public const SEARCH_KEY_ALIAS = 'readonly_search';
+
     public function __construct(
         private readonly MeiliService $meiliService,
         private readonly ?IndexInfoRepository $indexInfoRepository = null,
@@ -28,16 +31,12 @@ final class MeiliServerKeyService
      */
     public function ensureServerKeys(array $indexUids): array
     {
-        $keys = [];
-        foreach ($this->serverKeyDefinitions() as $alias => $definition) {
-            $keys[$alias] = $this->ensureKey($alias, $definition['actions']);
-        }
+        $searchKey = $this->ensureKey(self::SEARCH_KEY_ALIAS, ['search', 'documents.get', 'indexes.get']);
+        $keys = [self::SEARCH_KEY_ALIAS => $searchKey];
 
         foreach ($indexUids as $indexUid) {
             $entity = $this->loadOrCreateIndexInfo($indexUid);
-            foreach ($keys as $alias => $key) {
-                $entity->setServerKeyAccess($alias, $key['apiKey'], $key['keyUid']);
-            }
+            $entity->setServerKeyAccess(self::SEARCH_KEY_ALIAS, $searchKey['apiKey'], $searchKey['keyUid']);
         }
 
         $this->entityManager?->flush();
@@ -45,29 +44,40 @@ final class MeiliServerKeyService
         return $keys;
     }
 
-    public function resolveApiKey(string $indexUid, string $alias): ?string
+    public function resolveApiKey(string $indexUid): ?string
     {
         $entity = $this->indexInfoRepository?->find($indexUid);
 
-        return $entity?->getServerApiKey($alias);
+        return $entity?->getServerApiKey(self::SEARCH_KEY_ALIAS);
     }
 
     /**
-     * @return array<string,array{actions:list<string>}>
+     * Sync an already-existing managed search key into index registry.
      */
-    private function serverKeyDefinitions(): array
+    public function syncRegistryKey(string $indexUid): bool
     {
-        return [
-            'admin' => [
-                'actions' => ['*'],
-            ],
-            'readonly_admin' => [
-                'actions' => ['search', 'documents.get', 'indexes.get', 'stats.get', 'tasks.get', 'settings.get'],
-            ],
-            'readonly_search' => [
-                'actions' => ['search', 'documents.get', 'indexes.get'],
-            ],
-        ];
+        if ($this->entityManager === null || $this->indexInfoRepository === null) {
+            return false;
+        }
+
+        $keyUid = $this->buildKeyUid(self::SEARCH_KEY_ALIAS);
+
+        try {
+            $key = $this->meiliService->getMeiliClient()->getKey($keyUid);
+        } catch (ApiException) {
+            return false;
+        }
+
+        $apiKey = $key->getKey();
+        if (!is_string($apiKey) || $apiKey === '') {
+            return false;
+        }
+
+        $entity = $this->loadOrCreateIndexInfo($indexUid);
+        $entity->setServerKeyAccess(self::SEARCH_KEY_ALIAS, $apiKey, (string) ($key->getUid() ?? $keyUid));
+        $this->entityManager->flush();
+
+        return true;
     }
 
     /**

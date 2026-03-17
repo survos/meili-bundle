@@ -255,6 +255,43 @@ class IndexInfo
         return is_string($apiKey) && $apiKey !== '' ? $apiKey : null;
     }
 
+    public function hasSearchApiKey(): bool
+    {
+        return $this->getServerApiKey('readonly_search') !== null;
+    }
+
+    public function chatWorkspaceKeyCount(): int
+    {
+        $registry = $this->settings[self::REGISTRY_KEY] ?? null;
+        if (!is_array($registry)) {
+            return 0;
+        }
+
+        $workspaces = $registry[self::CHAT_WORKSPACES_KEY] ?? null;
+        if (!is_array($workspaces)) {
+            return 0;
+        }
+
+        $count = 0;
+        foreach ($workspaces as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+
+            $apiKey = $entry['apiKey'] ?? null;
+            if (is_string($apiKey) && $apiKey !== '') {
+                ++$count;
+            }
+        }
+
+        return $count;
+    }
+
+    public function hasChatWorkspaceKeys(): bool
+    {
+        return $this->chatWorkspaceKeyCount() > 0;
+    }
+
     public function getServerKeyUid(string $alias): ?string
     {
         $keyUid = $this->getServerKeyAccess($alias)['keyUid'] ?? null;

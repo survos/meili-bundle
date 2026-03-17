@@ -27,9 +27,11 @@ use Survos\MeiliBundle\Components\InstantSearchComponent;
 use Survos\MeiliBundle\Controller\MeiliAdminController;
 use Survos\MeiliBundle\Controller\MeiliFileProxyController;
 use Survos\MeiliBundle\Controller\MeiliProxyController;
+use Survos\MeiliBundle\Controller\MeiliRegistryController;
 use Survos\MeiliBundle\Controller\SearchController;
 use Survos\MeiliBundle\Controller\TemplateController;
 use Survos\MeiliBundle\EventListener\DoctrineEventListener;
+use Survos\MeiliBundle\Menu\MeiliMenuSubscriber;
 use Survos\MeiliBundle\MessageHandler\BatchIndexEntitiesMessageHandler;
 use Survos\MeiliBundle\Registry\MeiliRegistry;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
@@ -83,6 +85,11 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->tag('doctrine.event_listener', ['event' => 'postUpdate'])
             ->tag('doctrine.event_listener', ['event' => 'preRemove'])
             ->tag('doctrine.event_listener', ['event' => 'postPersist']);
+
+        // Menu subscriber (only works when tabler-bundle is installed)
+        $builder->autowire(MeiliMenuSubscriber::class)
+            ->setAutoconfigured(true)
+            ->setPublic(false);
 
         if (class_exists(\EasyCorp\Bundle\EasyAdminBundle\Config\MenuItem::class)) {
             $builder->autowire(MeiliEasyAdminMenuFactory::class)
@@ -263,6 +270,12 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ->addTag('container.service_subscriber')
             ->addTag('controller.service_arguments')
             ->setArgument('$meiliService', new Reference('meili_service'))
+            ->setAutoconfigured(true)
+            ->setPublic(true);
+
+        $builder->autowire(MeiliRegistryController::class)
+            ->addTag('container.service_subscriber')
+            ->addTag('controller.service_arguments')
             ->setAutoconfigured(true)
             ->setPublic(true);
 

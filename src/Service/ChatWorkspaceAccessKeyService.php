@@ -39,6 +39,13 @@ final class ChatWorkspaceAccessKeyService
         return $apiKey;
     }
 
+    public function hasRegistryKey(string $indexUid, string $workspace): bool
+    {
+        $entity = $this->indexInfoRepository?->find($indexUid);
+
+        return $entity?->getChatWorkspaceApiKey($workspace) !== null;
+    }
+
     /**
      * @return array{status:string,keyUid:?string,hasApiKey:bool,source:string}
      */
@@ -167,6 +174,43 @@ final class ChatWorkspaceAccessKeyService
             'keyUid' => $resolvedKeyUid,
             'created' => true,
         ];
+    }
+
+    /**
+     * Sync an already-existing chat workspace key into index registry.
+     */
+    public function syncRegistryKey(string $indexUid, string $workspace): bool
+    {
+        if ($this->indexInfoRepository === null || $this->entityManager === null) {
+            return false;
+        }
+
+        $entity = $this->indexInfoRepository->find($indexUid);
+        if ($entity === null) {
+            $entity = new IndexInfo($indexUid, $this->fetchPrimaryKey($indexUid));
+            $this->entityManager->persist($entity);
+        }
+
+        $storedKeyUid = $entity->getChatWorkspaceKeyUid($workspace);
+        $keyUid = $this->isValidKeyUid($storedKeyUid)
+            ? $storedKeyUid
+            : $this->buildKeyUid($indexUid, $workspace);
+
+        try {
+            $key = $this->meiliService->getMeiliClient()->getKey($keyUid);
+        } catch (ApiException) {
+            return false;
+        }
+
+        $apiKey = $key->getKey();
+        if (!is_string($apiKey) || $apiKey === '') {
+            return false;
+        }
+
+        $entity->setChatWorkspaceAccess($workspace, $apiKey, $key->getUid() ?? $keyUid);
+        $this->entityManager->flush();
+
+        return true;
     }
 
     private function buildKeyUid(string $indexUid, string $workspace): string

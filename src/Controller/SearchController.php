@@ -157,7 +157,7 @@ class SearchController extends AbstractController
             'server' => $useProxy
                 ? $this->router->generate('meili_proxy', [], UrlGeneratorInterface::ABSOLUTE_URL)
                 : $this->meiliService->getHost(),
-            'apiKey'  => $this->meiliServerKeyService->resolveApiKey($meiliIndexUid, 'readonly_search'),
+            'apiKey'  => $this->meiliServerKeyService->resolveApiKey($meiliIndexUid),
 
             // Index identifiers
             'indexName'     => $meiliIndexUid,  // actual Meili UID (what JS uses)
@@ -231,6 +231,7 @@ class SearchController extends AbstractController
         $schemaUrl     = $this->schemaUrlForRequest($request, $workspaceCfg);
         $collectionOverview = null;
         $chatApiKey = $this->chatWorkspaceAccessKeyService->resolveApiKey($meiliIndexUid, $resolvedWorkspace);
+        $clientApiKey = $this->meiliServerKeyService->resolveApiKey($meiliIndexUid);
         $chatKeyDebug = $this->chatWorkspaceAccessKeyService->debugInfo($meiliIndexUid, $resolvedWorkspace);
 
         try {
@@ -261,7 +262,8 @@ class SearchController extends AbstractController
             'templateUrl'        => $this->generateUrl('meili_template', ['templateName' => $indexName]),
             'indexDashboardUrl'  => $this->indexDashboardUrl($indexName),
             'meiliHost'          => rtrim($meiliConfig['host'] ?? 'http://localhost:7700', '/'),
-            'meiliApiKey'        => $chatApiKey,
+            'meiliApiKey'        => $clientApiKey,
+            'chatApiKeyPresent'  => $chatApiKey !== null,
             'chatKeyDebug'       => $chatKeyDebug,
             'streamUrl'          => $this->generateUrl('meili_chat_stream', [
                 'indexName' => $indexName,
@@ -304,7 +306,7 @@ class SearchController extends AbstractController
         $apiKey = $this->chatWorkspaceAccessKeyService->resolveApiKey($meiliIndexUid, $resolvedWorkspace);
         if ($apiKey === null) {
             throw new RuntimeException(sprintf(
-                'No registry-backed chat API key exists for index "%s" and workspace "%s". Run "bin/console meili:settings:update --force" first.',
+                'No registry-backed chat API key exists for index "%s" and workspace "%s". Run "bin/console meili:settings:update --chat --keys --force" first.',
                 $meiliIndexUid,
                 $resolvedWorkspace
             ));

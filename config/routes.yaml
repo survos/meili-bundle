@@ -7,3 +7,6 @@ survos_meili:
             - '../src/Controller/MeiliAdminController.php'
             - '../src/Controller/SearchController.php'
             - '../src/Controller/AbstractMeiliController.php'
+            - '../src/Controller/MeiliFileProxyController.php'
+            - '../src/Controller/MeiliProxyController.php'
+            - '../src/Controller/TemplateController.php'
