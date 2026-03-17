@@ -29,13 +29,15 @@ export default class extends Controller {
     this._twigSource  = null
     this._renderTimer = null
     this._offcanvas   = null
+    this._lastToolIndexUid = this.indexNameValue
 
     // Click delegation for "Show details" buttons inside messages
     this.messagesTarget.addEventListener("click", (e) => {
       const btn = e.target.closest(".chat-show-detail, [data-doc-id]")
       if (!btn) return
       const docId = btn.dataset.docId ?? btn.dataset.hitId
-      if (docId) this.showDetail(docId, btn.dataset.docTitle ?? docId)
+      const docIndexUid = btn.dataset.indexUid ?? this._lastToolIndexUid ?? this.indexNameValue
+      if (docId) this.showDetail(docId, btn.dataset.docTitle ?? docId, docIndexUid)
     })
 
     this._loadMarked()
@@ -164,7 +166,7 @@ export default class extends Controller {
   }
 
   // ── Detail panel ──────────────────────────────────────────────────────────
-  async showDetail(docId, label) {
+  async showDetail(docId, label, indexUid = null) {
 
     if (!this.hasDetailBodyTarget) return
 
@@ -198,8 +200,9 @@ export default class extends Controller {
     try {
       const headers = { "Content-Type": "application/json" }
       if (this.meiliApiKeyValue) headers["Authorization"] = "Bearer " + this.meiliApiKeyValue
+      const resolvedIndexUid = indexUid ?? this._lastToolIndexUid ?? this.indexNameValue
       const r = await fetch(
-        `${this.meiliHostValue}/indexes/${this.indexNameValue}/documents/${encodeURIComponent(docId)}`,
+        `${this.meiliHostValue}/indexes/${resolvedIndexUid}/documents/${encodeURIComponent(docId)}`,
         { headers }
       )
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
@@ -330,32 +333,61 @@ export default class extends Controller {
   }
 
   // ── Sources block ─────────────────────────────────────────────────────────
-  _addSourcesBlock(documents) {
-    const docs = Array.isArray(documents) ? documents : Object.values(documents)
-    if (!docs.length) return
+  _addSourcesBlock(documents, indexUid = null) {
+    const rawEntries = Array.isArray(documents)
+      ? documents.map((value, i) => ({ sourceKey: null, value, fallback: i }))
+      : Object.entries(documents).map(([sourceKey, value], i) => ({ sourceKey, value, fallback: i }))
+    const entries = rawEntries.map(({ sourceKey, value, fallback }) => this._normalizeSourceEntry(value, fallback, indexUid, sourceKey))
+
+    if (!entries.length) return
 
     const details = document.createElement("details")
     details.className = "chat-sources"
 
     const summary = document.createElement("summary")
-    summary.textContent = `${docs.length} source${docs.length > 1 ? "s" : ""} from Meilisearch`
+    summary.textContent = `${entries.length} source${entries.length > 1 ? "s" : ""} from Meilisearch`
     details.appendChild(summary)
 
     const list = document.createElement("div")
     list.className = "chat-sources-list"
 
-    docs.forEach((doc, i) => {
-      const pk    = doc[this.primaryKeyValue] ?? doc.meili_id ?? doc.id ?? doc.sku ?? doc.code ?? doc._id ?? Object.values(doc)[0] ?? i
-      const title = doc.title ?? doc.name ?? doc.label ?? `#${pk}`
+    const missingPrimaryKey = []
+
+    entries.forEach((entry, i) => {
+      const doc = entry.doc
+      if (!doc || typeof doc !== "object") {
+        missingPrimaryKey.push({ index: i, reason: "Source entry is not an object", source: entry.raw })
+        return
+      }
+
+      const docIndexUid = entry.indexUid ?? indexUid
+      const pk = this._extractPrimaryKey(doc)
+      const title = doc.title ?? doc.name ?? doc.label ?? (pk !== null ? `#${pk}` : `Result ${i + 1}`)
       const btn   = document.createElement("button")
       btn.className = "btn btn-sm btn-outline-primary btn-show-detail"
       btn.textContent = String(title).slice(0, 32)
       btn.title = `Show details for: ${title}`
+      if (pk === null) {
+        missingPrimaryKey.push({ index: i, reason: `Missing primary key field \"${this.primaryKeyValue}\"`, source: entry.raw })
+        return
+      }
+
       btn.dataset.docId    = String(pk)
       btn.dataset.docTitle = String(title).slice(0, 50)
-      btn.addEventListener("click", () => this.showDetail(btn.dataset.docId, btn.dataset.docTitle))
+      if (docIndexUid) {
+        btn.dataset.indexUid = docIndexUid
+      }
+      btn.addEventListener("click", () => this.showDetail(btn.dataset.docId, btn.dataset.docTitle, docIndexUid))
       list.appendChild(btn)
     })
+
+    if (missingPrimaryKey.length > 0) {
+      const error = document.createElement("div")
+      error.className = "alert alert-danger m-2"
+      error.innerHTML = `Tool source payload error: ${missingPrimaryKey.length} source item(s) did not include required primary key <code>${this.primaryKeyValue}</code>.`
+      details.appendChild(error)
+    }
+
     details.appendChild(list)
 
     const jsonDetails = document.createElement("details")
@@ -365,7 +397,7 @@ export default class extends Controller {
     jsonSummary.textContent = "Raw JSON"
     const pre = document.createElement("pre")
     pre.className = "chat-sources-json"
-    pre.textContent = JSON.stringify(docs, null, 2)
+    pre.textContent = JSON.stringify(entries.map(entry => entry.raw), null, 2)
     jsonDetails.appendChild(jsonSummary)
     jsonDetails.appendChild(pre)
     details.appendChild(jsonDetails)
@@ -373,12 +405,60 @@ export default class extends Controller {
     this.messagesTarget.appendChild(details)
 
     // Auto-show first doc in detail panel
-    const first = docs[0]
-    const pk    = first[this.primaryKeyValue] ?? first.meili_id ?? first.id ?? first.sku ?? first.code ?? first._id ?? Object.values(first)[0]
-    const title = first.title ?? first.name ?? first.label ?? `#${pk}`
-    this.showDetail(String(pk), String(title).slice(0, 50))
+    const firstWithPk = entries.find(entry => entry.doc && this._extractPrimaryKey(entry.doc) !== null)
+    if (firstWithPk) {
+      const pk = this._extractPrimaryKey(firstWithPk.doc)
+      const title = firstWithPk.doc.title ?? firstWithPk.doc.name ?? firstWithPk.doc.label ?? `#${pk}`
+      this.showDetail(String(pk), String(title).slice(0, 50), firstWithPk.indexUid ?? indexUid)
+    }
 
     this._scrollBottom()
+  }
+
+  _normalizeSourceEntry(entry, fallback, defaultIndexUid = null, sourceKey = null) {
+    let raw = entry
+    let doc = entry
+    let indexUid = defaultIndexUid
+
+    if (entry && typeof entry === "object") {
+      indexUid = entry.index_uid ?? entry.indexUid ?? entry.index ?? defaultIndexUid
+
+      if (entry.document && typeof entry.document === "object") {
+        doc = entry.document
+      } else if (entry.source && typeof entry.source === "object") {
+        doc = entry.source
+      } else if (entry.hit && typeof entry.hit === "object") {
+        doc = entry.hit
+      }
+    }
+
+    if (doc && typeof doc === "object") {
+      if (sourceKey && !(this.primaryKeyValue in doc)) {
+        doc = { ...doc, [this.primaryKeyValue]: sourceKey }
+      }
+    } else {
+      doc = null
+    }
+
+    return { raw, doc, indexUid }
+  }
+
+  _extractPrimaryKey(doc) {
+    const key = this.primaryKeyValue
+    if (!(key in doc)) {
+      return null
+    }
+
+    const value = doc[key]
+    if (value === null || value === undefined) {
+      return null
+    }
+
+    if (typeof value === "string" && value.trim() === "") {
+      return null
+    }
+
+    return value
   }
 
   // ── Send ──────────────────────────────────────────────────────────────────
@@ -393,6 +473,7 @@ export default class extends Controller {
 
     this._addBubble("user", text)
     this.history.push({ role: "user", content: text })
+    const detailButtonsBefore = this.messagesTarget.querySelectorAll("[data-doc-id]").length
 
     const bubble    = this._addBubble("assistant", "")
     bubble.classList.add("streaming")
@@ -454,6 +535,7 @@ export default class extends Controller {
                     try {
                       const params = JSON.parse(args.function_parameters ?? "{}")
                       if (params.index_uid) {
+                        this._lastToolIndexUid = params.index_uid
                         const note = document.createElement("div")
                         note.className = "chat-search-note"
                         note.textContent = `${params.index_uid}${params.q ? ' · "' + params.q + '"' : ""}`
@@ -463,7 +545,7 @@ export default class extends Controller {
                     } catch (_) {}
 
                   } else if (tc.name === "_meiliSearchSources") {
-                    this._addSourcesBlock(args.documents ?? args)
+                    this._addSourcesBlock(args.documents ?? args, this._lastToolIndexUid ?? this.indexNameValue)
 
                   } else if (tc.name === "_meiliAppendConversationMessage") {
                     const msg = { role: args.role }
@@ -506,6 +588,13 @@ export default class extends Controller {
       if (reply) {
         this._renderMarkdown(bubble, reply)
         this.history.push({ role: "assistant", content: reply })
+        const detailButtonsAfter = this.messagesTarget.querySelectorAll("[data-doc-id]").length
+        if (detailButtonsAfter === detailButtonsBefore) {
+          const warning = document.createElement("div")
+          warning.className = "alert alert-warning chat-search-note"
+          warning.innerHTML = `No document identifiers were returned for this answer, so \"Show details\" is unavailable. Expected <code>${this.primaryKeyValue}</code> in tool sources or <code>[id:value]</code> markers.`
+          this.messagesTarget.appendChild(warning)
+        }
       }
       this._setBusy(false)
       this.inputTarget.focus()

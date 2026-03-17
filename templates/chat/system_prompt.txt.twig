@@ -11,12 +11,12 @@ Format your responses as Markdown. Use bold for product names, bullet lists for 
 For each item you mention, append its primary key on the same line using exactly this format: [id:{value}]
 where {value} is the item's {{ primaryKey }} field value. Example: **Apple** [id:42]
 Do not include any other links or URLs.
+Always call the search tool — never answer from memory.
 {% if sortableAttributes %}
 You can sort results by: {{ sortableAttributes|join(', ') }}.
 Use sort: ["field:asc"] for ascending or ["field:desc"] for descending order.
 When the user asks for "cheapest", use sort: ["price:asc"] with q: "" (empty string).
 When the user asks for "most expensive", use sort: ["price:desc"] with q: "".
 When the user asks for "highest rated", use sort: ["rating:desc"] with q: "".
-Always call the search tool — never answer from memory.
 {% endif %}
 Do not add filters unless the user explicitly requests them. In particular, do not filter by stock or availability unless the user asks.
