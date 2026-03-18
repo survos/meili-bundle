@@ -5,6 +5,7 @@ namespace Survos\MeiliBundle\Compiler;
 
 use Doctrine\ORM\Mapping as ORM;
 use ReflectionClass;
+use Survos\MeiliBundle\Metadata\AiChatInput;
 use Survos\MeiliBundle\Metadata\Facet;
 use Survos\MeiliBundle\Metadata\FacetWidget;
 use Survos\MeiliBundle\Metadata\Fields;
@@ -60,6 +61,7 @@ final class MeiliIndexPass implements CompilerPassInterface
 
                 $ref = new ReflectionClass($fqcn);
                 $facetMap = $this->collectFacetMap($ref);
+                $chatInputMap = $this->collectChatInputMap($ref);
 
                 foreach ($ref->getAttributes(MeiliIndex::class) as $attr) {
                     /** @var MeiliIndex $cfg */
@@ -175,6 +177,13 @@ final class MeiliIndexPass implements CompilerPassInterface
                         }
                     }
 
+                    $chatDocumentTemplate = $this->buildChatDocumentTemplate($cfg->primaryKey, $chatInputMap);
+                    if ($chatDocumentTemplate !== null) {
+                        $indexSchema['chat'] = [
+                            'documentTemplate' => $chatDocumentTemplate,
+                        ];
+                    }
+
                     // Convert Fields object to array structure expected by MeiliPayloadBuilder
                     $persistedObj = $cfg->persisted;
                     if ($persistedObj instanceof Fields) {
@@ -196,6 +205,7 @@ final class MeiliIndexPass implements CompilerPassInterface
                         'embedders'   => $cfg->embedders,
                         'chats'       => $cfg->chats,
                         'prompts'     => $cfg->prompts,
+                        'chatInputs'  => array_keys($chatInputMap),
                         'autoIndex'   => $cfg->autoIndex,
                         'ui'          => $cfg->ui,
                         'instaView'   => $instaViewHints,
@@ -309,6 +319,73 @@ final class MeiliIndexPass implements CompilerPassInterface
         }
 
         return $map;
+    }
+
+    /** @return array<string,array{label:?string,order:int,position:int}> */
+    private function collectChatInputMap(ReflectionClass $ref): array
+    {
+        $map = [];
+        $position = 0;
+
+        foreach ($ref->getProperties() as $p) {
+            foreach ($p->getAttributes(AiChatInput::class) as $a) {
+                /** @var AiChatInput $input */
+                $input = $a->newInstance();
+                $map[$p->getName()] = [
+                    'label' => $input->label,
+                    'order' => $input->order,
+                    'position' => $position++,
+                ];
+            }
+        }
+
+        foreach ($ref->getMethods() as $m) {
+            foreach ($m->getAttributes(AiChatInput::class) as $a) {
+                /** @var AiChatInput $input */
+                $input = $a->newInstance();
+                $name = $m->getName();
+                if (str_starts_with($name, 'get') && strlen($name) > 3) {
+                    $name = lcfirst(substr($name, 3));
+                }
+                $map[$name] = [
+                    'label' => $input->label,
+                    'order' => $input->order,
+                    'position' => $position++,
+                ];
+            }
+        }
+
+        uasort($map, static function (array $a, array $b): int {
+            $byOrder = $a['order'] <=> $b['order'];
+            if ($byOrder !== 0) {
+                return $byOrder;
+            }
+
+            return $a['position'] <=> $b['position'];
+        });
+
+        return $map;
+    }
+
+    /** @param array<string,array{label:?string,order:int,position:int}> $chatInputMap */
+    private function buildChatDocumentTemplate(string $primaryKey, array $chatInputMap): ?string
+    {
+        if ($chatInputMap === []) {
+            return null;
+        }
+
+        $lines = [sprintf('id: {{ doc.%s }}', $primaryKey)];
+
+        foreach ($chatInputMap as $field => $meta) {
+            if ($field === $primaryKey) {
+                continue;
+            }
+
+            $label = $meta['label'] ?? $field;
+            $lines[] = sprintf('{%% if doc.%1$s != nil %%}%2$s: {{ doc.%1$s }}{%% endif %%}', $field, $label);
+        }
+
+        return implode("\n", $lines);
     }
 
     /**
