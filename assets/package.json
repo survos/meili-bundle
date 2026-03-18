@@ -34,17 +34,17 @@
       }
     },
     "importmap": {
-      "@tacman1123/twig-browser": "^0.4.5",
+      "@tacman1123/twig-browser": "^0.4.14",
       "debug": "^4.4.3",
       "fos-routing": "^0.0.6",
-      "instantsearch.js": "^4.85.2",
-      "instantsearch.js/es/widgets": "^4.85.2",
-      "instantsearch.css/themes/algolia.min.css": "^8.5.1",
-      "@meilisearch/instant-meilisearch": "^0.29",
+      "instantsearch.js": "^4.90.0",
+      "instantsearch.js/es/widgets": "^4.90.0",
+      "instantsearch.css/themes/algolia.min.css": "^8.12.0",
+      "@meilisearch/instant-meilisearch": "^0.29.1",
       "@stimulus-components/dialog": "*",
       "meilisearch": "*",
-      "@andypf/json-viewer": "^2.1",
-      "pretty-print-json": "^3.0.4"
+      "@andypf/json-viewer": "^2.2.4",
+      "pretty-print-json": "^3.0.7"
     }
   },
   "peerDependencies": {
@@ -54,8 +54,8 @@
     "@hotwired/stimulus": "^3.2.2"
   },
   "dependencies": {
-    "@tacman1123/twig-browser": "^0.4.5",
-    "@tabler/core": "^1.0.0",
-    "instantsearch.css": "^8.5.1"
+    "@tacman1123/twig-browser": "^0.4.14",
+    "@tabler/core": "^1.4.0",
+    "instantsearch.css": "^8.12.0"
   }
 }
