@@ -7,6 +7,7 @@ namespace Survos\MeiliBundle\Menu;
 use Survos\MeiliBundle\Registry\MeiliRegistry;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 
 class MeiliMenuSubscriber implements EventSubscriberInterface
 {
@@ -14,6 +15,7 @@ class MeiliMenuSubscriber implements EventSubscriberInterface
         private readonly MeiliRegistry $registry,
         private readonly ?MeiliService $meiliService = null,
         private readonly ?string $meiliHost = null,
+        private readonly ?AuthorizationCheckerInterface $authorizationChecker = null,
     ) {
     }
 
@@ -42,6 +44,8 @@ class MeiliMenuSubscriber implements EventSubscriberInterface
             return;
         }
 
+        $isAdmin = $this->authorizationChecker?->isGranted('ROLE_ADMIN') ?? false;
+
         $menu = $event->getMenu();
         $submenu = $menu->addChild('Meili Search');
 
@@ -54,7 +58,7 @@ class MeiliMenuSubscriber implements EventSubscriberInterface
             'routeParameters' => ['indexName' => 'index_info'],
         ]);
 
-        if ($this->meiliHost) {
+        if ($isAdmin && $this->meiliHost) {
             $submenu->addChild('Meili Server', [
                 'uri' => $this->meiliHost,
                 'linkAttributes' => ['target' => '_blank'],
