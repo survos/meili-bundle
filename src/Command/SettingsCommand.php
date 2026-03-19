@@ -50,18 +50,17 @@ use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Yaml\Yaml;
 
-#[AsCommand(
-    hidden: true,
-    name: 'meili:settings',
-    aliases: ['meili:schema:update'],
-    description: 'view and set meilisearch settings',
-)]
+//#[AsCommand(
+//    hidden: true,
+//    name: 'meili:settings',
+//    aliases: ['meili:schema:update'],
+//    description: 'view and set meilisearch settings',
+//)]
 class SettingsCommand # extends Command
 {
     private SymfonyStyle $io;
     public function __construct(
         protected ParameterBagInterface                       $bag,
-        protected EntityManagerInterface                      $entityManager,
         private LoggerInterface                               $logger,
         private MeiliService                                  $meiliService,
         private SettingsService                               $settingsService,

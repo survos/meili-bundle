@@ -88,6 +88,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
 
         // Menu subscriber (only works when tabler-bundle is installed)
         $builder->autowire(MeiliMenuSubscriber::class)
+            ->setArgument('$meiliHost', $config['host'])
             ->setAutoconfigured(true)
             ->setPublic(false);
 
@@ -113,28 +114,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
         $builder->setParameter('survos_meili.pricing', $config['pricing'] ?? []);
         $builder->setParameter('survos_meili.meili_settings', $config['meili_settings'] ?? []);
         $builder->setParameter('survos_meili.file_proxy', $config['file_proxy'] ?? []);
-        // Default workspace: if no workspaces are declared, seed meili_assistant so
-        // indexes with chats:['meili_assistant'] work out of the box without any YAML.
-        $chatConfig = $config['chat'] ?? [];
-        if (empty($chatConfig['workspaces'])) {
-            $chatConfig['workspaces']['meili_assistant'] = [
-                'source'  => 'openAi',
-                'model'   => 'gpt-4o-mini',
-                'apiKey'  => null,
-                'indexes' => [],
-                'examples' => [],
-                'prompts' => [],
-                'label'   => null,
-                'schemaUrl' => null,
-                'detailUrlPattern' => null,
-                'baseUrl' => null,
-                'orgId'   => null,
-                'projectId' => null,
-                'apiVersion' => null,
-                'deploymentId' => null,
-            ];
-        }
-        $builder->setParameter('survos_meili.chat', $chatConfig);
+        $builder->setParameter('survos_meili.chat', $config['chat'] ?? []);
 
         // IMPORTANT: define MeiliServiceConfig via factory (no object literals in container dump)
         $builder->register(MeiliServiceConfig::class)

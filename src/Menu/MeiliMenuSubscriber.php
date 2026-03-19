@@ -13,12 +13,12 @@ class MeiliMenuSubscriber implements EventSubscriberInterface
     public function __construct(
         private readonly MeiliRegistry $registry,
         private readonly ?MeiliService $meiliService = null,
+        private readonly ?string $meiliHost = null,
     ) {
     }
 
     public static function getSubscribedEvents(): array
     {
-        // Only subscribe if tabler-bundle's MenuEvent exists
         if (!class_exists(\Survos\TablerBundle\Event\MenuEvent::class)) {
             return [];
         }
@@ -30,12 +30,10 @@ class MeiliMenuSubscriber implements EventSubscriberInterface
 
     public function onNavbarMenu($event): void
     {
-        // Skip if no indexes are registered
         if (empty($this->registry->names())) {
             return;
         }
 
-        // Check if meili is enabled/available
         $isEnabled = $this->meiliService && method_exists($this->meiliService, 'isEnabled')
             ? $this->meiliService->isEnabled()
             : true;
@@ -45,21 +43,27 @@ class MeiliMenuSubscriber implements EventSubscriberInterface
         }
 
         $menu = $event->getMenu();
+        $submenu = $menu->addChild('Meili Search');
 
-        // Add Meili submenu
-        $submenu = $this->addSubmenu($menu, 'Meili Search');
-        $submenu->addChild('registry', [
+        $submenu->addChild('Registry', [
             'route' => 'meili_registry',
-            'label' => 'Registry',
         ]);
-    }
 
-    private function addSubmenu($menu, string $label, ?string $icon = null): mixed
-    {
-        $submenu = $menu->addChild($label);
-        if ($icon) {
-            $submenu->setAttribute('icon', $icon);
+        $submenu->addChild('Index of Indexes', [
+            'route' => 'meili_insta',
+            'routeParameters' => ['indexName' => 'index_info'],
+        ]);
+
+        if ($this->meiliHost) {
+            $submenu->addChild('Meili Server', [
+                'uri' => $this->meiliHost,
+                'linkAttributes' => ['target' => '_blank'],
+            ]);
+
+            $submenu->addChild('Riccox UI', [
+                'uri' => 'https://meilisearch-ui.vercel.app/',
+                'linkAttributes' => ['target' => '_blank'],
+            ]);
         }
-        return $submenu;
     }
 }
