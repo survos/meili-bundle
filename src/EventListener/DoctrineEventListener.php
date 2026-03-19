@@ -61,13 +61,16 @@ class DoctrineEventListener
     public function postFlush(PostFlushEventArgs $args): void
     {
         if (self::$dispatching || !$this->messageBus) {
-            dd(self::$dispatching, $this->messageBus);
+            return;
+        }
+
+        if (empty($this->pendingIndexOperations) && empty($this->pendingRemoveOperations)) {
             return;
         }
 
         self::$dispatching = true;
-            $this->dispatchPendingMessages();
         try {
+            $this->dispatchPendingMessages();
         } finally {
             self::$dispatching = false;
         }
@@ -123,8 +126,6 @@ class DoctrineEventListener
                 $normalized[] = $this->meiliPayloadBuilder->build($object, $persistedConfig);
             }
 
-
-
             SurvosUtils::removeNullsAndEmptyArrays($normalized);
 
             $this->logger?->info(sprintf(
@@ -134,7 +135,6 @@ class DoctrineEventListener
             ));
 
             $stamps = [];
-//            $stamps[] = new TransportNamesStamp('meili');
             if (class_exists(TagStamp::class)) {
                 $stamps[] = new TagStamp(new \ReflectionClass($entityClass)->getShortName());
             }
@@ -142,40 +142,20 @@ class DoctrineEventListener
                 $stamps[] = new TransportNamesStamp($transport);
             }
 
-            if ($fancyNewWay = false) {
-                $plan  = $this->meiliService->makePlan(
-                    entityClass:    $entityClass,
-                    locale:         $languuageForIndex,   // e.g. 'en'
-                    explicitIndexName: $indexName,       // or null to derive
-                    primaryKeyName: $pk,
-                    transport:      $transport
-                );
-
-// optional: force index creation + set language now
-                $this->meiliService->getOrCreateLocaleIndex(
-                    entityClass:     $plan->entityClass,
-                    locale:          $plan->locale,
-                    explicitIndexName: $plan->indexName,
-                    primaryKeyName:  $plan->primaryKeyName,
-                    autoCreate:      true
-                );
-
-// later, per batch of ids:
-                $this->meiliService->dispatchBatchForPlan($plan, $chunk, reload: true);
-
-            } else {
-                $message = new BatchIndexEntitiesMessage(
+            $message = new BatchIndexEntitiesMessage(
+                $entityClass,
+                $normalized,
+                reload: false,
+                primaryKeyName: $this->getPrimaryKey($entityClass)
+            );
+            try {
+                $this->messageBus->dispatch($message, $stamps);
+            } catch (\Exception $e) {
+                $this->logger?->error(sprintf(
+                    "Failed to dispatch index message for %s: %s",
                     $entityClass,
-                    $normalized,
-                    reload: false,
-                    primaryKeyName: $this->getPrimaryKey($entityClass)
-                );
-                    $this->messageBus->dispatch($message, $stamps);
-                try {
-                } catch (\Exception $e) {
-                    dd($entityClass, $normalized[0], $e);
-
-                }
+                    $e->getMessage()
+                ));
             }
         }
 
@@ -217,16 +197,11 @@ class DoctrineEventListener
             return;
         }
 
-
-
         if (!in_array($object::class, $this->meiliService->indexedEntities)) {
             return;
         }
 
-        // normalization may be slow, so move this to the message handler
         $id = $this->propertyAccessor->getValue($object, $this->getPrimaryKey($object::class));
-
-        // BUT the entity is already hydrated, so maybe it _is_ better to do it here.
 
         if (!$id) {
             $this->logger?->warning(sprintf(
@@ -235,6 +210,7 @@ class DoctrineEventListener
             ));
             return;
         }
+
         $this->pendingIndexOperations[$object::class][] = $object;
     }
 

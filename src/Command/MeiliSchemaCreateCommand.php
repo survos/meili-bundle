@@ -15,7 +15,8 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use function Symfony\Component\String\u;
 
-#[AsCommand('meili:schema:create', '(re)-create Meilisearch index.  Does NOT update settings')]
+#[AsCommand('meili:schema:create', '(deprecated) Use meili:settings:update instead')]
+/** @deprecated Use meili:settings:update --force */
 final class MeiliSchemaCreateCommand extends MeiliBaseCommand
 {
     public function __invoke(
