@@ -39,7 +39,14 @@ class DoctrineEventListener
 
     private bool $enabled = true;
 
-    public function disable(): void { $this->enabled = false; }
+    public function disable(): void
+    {
+        $this->enabled = false;
+        // Clear any operations queued before disable() was called
+        $this->pendingIndexOperations  = [];
+        $this->pendingRemoveOperations = [];
+    }
+
     public function enable(): void  { $this->enabled = true; }
 
     public function __construct(
@@ -60,7 +67,7 @@ class DoctrineEventListener
 
     public function postFlush(PostFlushEventArgs $args): void
     {
-        if (self::$dispatching || !$this->messageBus) {
+        if (!$this->enabled || self::$dispatching || !$this->messageBus) {
             return;
         }
 
