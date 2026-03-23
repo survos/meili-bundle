@@ -45,6 +45,7 @@ class MeiliMenuSubscriber implements EventSubscriberInterface
         }
 
         $isAdmin = $this->authorizationChecker?->isGranted('ROLE_ADMIN') ?? false;
+        $isAdmin = true; // check env for 'dev'
 
         $menu = $event->getMenu();
         $submenu = $menu->addChild('Meili Search');
