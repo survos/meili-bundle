@@ -71,6 +71,8 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
 {
     use HasAssetMapperTrait;
 
+    public const ASSET_NAMESPACE = '@survos/meili';
+
     protected string $extensionAlias = 'survos_meili';
 
     public function loadExtension(array $config, ContainerConfigurator $container, ContainerBuilder $builder): void
@@ -600,13 +602,6 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
                 ],
             ],
         ]);
-    }
-
-    public function getPaths(): array
-    {
-        $dir = realpath(__DIR__ . '/../assets/');
-        assert(file_exists($dir), $dir);
-        return [$dir => '@survos/meili'];
     }
 
     public function build(ContainerBuilder $container): void
