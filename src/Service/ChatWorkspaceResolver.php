@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Survos\MeiliBundle\Service;
 
 use function array_key_first;
+use function array_keys;
 use function array_merge;
 use function array_unique;
 use function array_values;
@@ -104,6 +105,19 @@ final class ChatWorkspaceResolver
         /** @var list<string> $legacyUids */
         $legacyUids = $workspaceCfg['indexes'] ?? [];
 
-        return array_values(array_unique(array_merge($indexUidsFromAttribute, $legacyUids)));
+        $resolved = array_values(array_unique(array_merge($indexUidsFromAttribute, $legacyUids)));
+        if ($resolved !== []) {
+            return $resolved;
+        }
+
+        $allIndexUids = [];
+        foreach (array_keys($rawSettings) as $baseName) {
+            if (!is_string($baseName) || $baseName === '') {
+                continue;
+            }
+            $allIndexUids[] = $this->indexNameResolver->uidFor($baseName, null);
+        }
+
+        return array_values(array_unique($allIndexUids));
     }
 }

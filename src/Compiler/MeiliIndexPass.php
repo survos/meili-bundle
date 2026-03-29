@@ -371,7 +371,11 @@ final class MeiliIndexPass implements CompilerPassInterface
     private function buildChatDocumentTemplate(string $primaryKey, array $chatInputMap): ?string
     {
         if ($chatInputMap === []) {
-            return null;
+            return str_replace('%', '%%', implode("\n", [
+                sprintf('id: {{ doc.%s }}', $primaryKey),
+                sprintf('{%% for field in fields %%}{%% if field.is_searchable and field.name != "%s" and field.value != nil %%}{{ field.name }}: {{ field.value }}', $primaryKey),
+                '{% endif %}{% endfor %}',
+            ]));
         }
 
         $lines = [sprintf('id: {{ doc.%s }}', $primaryKey)];
@@ -385,7 +389,7 @@ final class MeiliIndexPass implements CompilerPassInterface
             $lines[] = sprintf('{%% if doc.%1$s != nil %%}%2$s: {{ doc.%1$s }}{%% endif %%}', $field, $label);
         }
 
-        return implode("\n", $lines);
+        return str_replace('%', '%%', implode("\n", $lines));
     }
 
     /**

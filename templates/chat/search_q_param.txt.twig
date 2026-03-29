@@ -1,10 +1,12 @@
-A keyword search string for a product catalog. Translate the user's intent into concrete product keywords that are likely to appear in product titles, descriptions, or categories — not the user's phrasing verbatim.
+A keyword query string for this index.
+
+Translate user intent into likely index terms (titles, descriptions, tags, genres, subjects), not a long natural sentence.
+Prefer short keyword phrases.
 
 Examples of translation:
-- "housewarming gifts" → "home decor" or "kitchen" or "candle"
-- "cool gifts for techies" → "gadget" or "electronics" or "smart"
-- "something for a runner" → "running shoes" or "fitness tracker"
-- "treat for my dog" → "dog treat" or "pet"
+- "items of interest to medical people" -> "nurse hospital medical healthcare"
+- "funny and action movies" -> "comedy action"
+- "wartime hospital scenes" -> "war hospital nurse"
 
-If the first search returns no results, try a broader or different keyword before giving up.
-Use an empty string "" only when the user wants all results sorted with no keyword filter (e.g. "cheapest", "highest rated").
+If the first search returns no results, try broader or adjacent keywords before giving up.
+Use an empty string "" only when the user wants a pure sort with no keyword constraint.

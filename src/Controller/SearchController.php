@@ -229,6 +229,10 @@ class SearchController extends AbstractController
         $indexSettings = $this->meiliService->getIndexSetting($indexName) ?? [];
         $meiliConfig   = $this->meiliService->getConfig();
         $primaryKey    = (string) ($indexSettings['primaryKey'] ?? 'id');
+        $workspaceIndexUids = $workspaceTemplate !== null
+            ? $this->chatWorkspaceResolver->resolveWorkspaceIndexes($workspaceTemplate, $workspaceCfg)
+            : [];
+        $allowTemplateCopy = count($workspaceIndexUids) <= 1;
         $liveIndexSettings = null;
         $schemaUrl     = $this->schemaUrlForRequest($request, $workspaceCfg);
         $collectionOverview = null;
@@ -265,8 +269,8 @@ class SearchController extends AbstractController
             'workspaceCfg'       => $workspaceCfg,
             'schemaUrl'          => $schemaUrl,
             'collectionOverview' => is_array($collectionOverview) ? $collectionOverview : null,
-            'welcomeExamples'    => $this->welcomeExamples($workspaceCfg),
-            'curatorName'        => $this->curatorName($workspaceCfg, $indexName),
+            'welcomeExamples'    => $this->welcomeExamples($workspaceCfg, $indexName, $indexSettings, $allowTemplateCopy),
+            'curatorName'        => $this->curatorName($workspaceCfg, $indexName, $allowTemplateCopy),
             'initialQuery'       => $request->query->getString('q'),
             'embedders'          => $indexSettings['embedders'] ?? [],
             'indexSettings'      => $indexSettings,
@@ -620,45 +624,106 @@ class SearchController extends AbstractController
      * @param array<string,mixed> $workspaceCfg
      * @return list<string>
      */
-    private function welcomeExamples(array $workspaceCfg): array
+    private function welcomeExamples(array $workspaceCfg, string $indexName, array $indexSettings, bool $allowTemplateExamples): array
     {
-        $examples = $workspaceCfg['examples'] ?? [];
-        if (!is_array($examples)) {
-            return [];
-        }
-
-        $normalized = [];
-        foreach ($examples as $example) {
-            if (is_string($example) && $example !== '') {
-                $normalized[] = $example;
+        $indexScoped = $workspaceCfg['examplesByIndex'][$indexName] ?? [];
+        if (is_array($indexScoped)) {
+            $normalized = [];
+            foreach ($indexScoped as $example) {
+                if (is_string($example) && $example !== '') {
+                    $normalized[] = $example;
+                }
+            }
+            if ($normalized !== []) {
+                return $normalized;
             }
         }
 
-        if ($normalized !== []) {
-            return $normalized;
+        if ($allowTemplateExamples) {
+            $examples = $workspaceCfg['examples'] ?? [];
+            if (is_array($examples)) {
+                $normalized = [];
+                foreach ($examples as $example) {
+                    if (is_string($example) && $example !== '') {
+                        $normalized[] = $example;
+                    }
+                }
+                if ($normalized !== []) {
+                    return $normalized;
+                }
+            }
         }
 
-        return [
-            'Tell me about this collection.',
-            'What kinds of objects do you have, and how are they categorized?',
-            'Give me a list of 7 items that a 5th-grade boy would be interested in and a 1-sentence description why.',
-            'Show me a few surprising or unusual items from the collection.',
+        $label = $this->humanizeIndexName($indexName);
+        $collection = \strtolower($label);
+
+        $filterable = [];
+        foreach ($indexSettings['filterableAttributes'] ?? [] as $field) {
+            if (!is_string($field) || $field === '' || $field === 'id') {
+                continue;
+            }
+            $filterable[] = $field;
+            if (count($filterable) >= 2) {
+                break;
+            }
+        }
+
+        $examples = [
+            sprintf('What kinds of %s are in this collection?', $collection),
+            sprintf('Show me 5 notable %s with one sentence each.', $collection),
         ];
+
+        if ($filterable !== []) {
+            $examples[] = sprintf(
+                'Find %s by %s.',
+                $collection,
+                implode(' and ', array_map(fn (string $field): string => $this->humanizeField($field), $filterable))
+            );
+        }
+
+        $examples[] = sprintf('Show a few surprising or unusual %s.', $collection);
+
+        return $examples;
     }
 
     /**
      * @param array<string,mixed> $workspaceCfg
      */
-    private function curatorName(array $workspaceCfg, string $indexName): string
+    private function curatorName(array $workspaceCfg, string $indexName, bool $allowTemplateLabel): string
     {
-        $label = $workspaceCfg['label'] ?? $indexName;
-        if (!is_string($label) || $label === '') {
-            $label = $indexName;
+        $indexScoped = $workspaceCfg['curatorNameByIndex'][$indexName] ?? null;
+        if (is_string($indexScoped) && $indexScoped !== '') {
+            return $indexScoped;
         }
 
-        $label = ucwords(str_replace(['_', '-'], ' ', $label));
+        $explicit = $workspaceCfg['curatorName'] ?? null;
+        if (is_string($explicit) && $explicit !== '') {
+            return $explicit;
+        }
+
+        if ($allowTemplateLabel) {
+            $label = $workspaceCfg['label'] ?? $indexName;
+            if (!is_string($label) || $label === '') {
+                $label = $indexName;
+            }
+            $label = ucwords(str_replace(['_', '-'], ' ', $label));
+            return sprintf('%s Curator', $label);
+        }
+
+        $label = $this->humanizeIndexName($indexName);
 
         return sprintf('%s Curator', $label);
+    }
+
+    private function humanizeIndexName(string $indexName): string
+    {
+        $base = str_starts_with($indexName, 'meili_') ? substr($indexName, 6) : $indexName;
+        return ucwords(str_replace(['_', '-'], ' ', $base));
+    }
+
+    private function humanizeField(string $field): string
+    {
+        return \strtolower(str_replace(['_', '-'], ' ', $field));
     }
 
     private function workspaceTemplateForResolvedWorkspace(string $workspace, string $indexUid): ?string

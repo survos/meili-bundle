@@ -13,6 +13,7 @@ export default class extends Controller {
     schemaUrl:    String,
     indexName:    String,
     primaryKey:   { type: String, default: "id" },
+    iconsMap:     { type: Object, default: {} },
     meiliHost:    String,
     meiliApiKey:  String,
     initialQuery: { type: String, default: "" },
@@ -33,12 +34,19 @@ export default class extends Controller {
     this._offcanvas   = null
     this._lastToolIndexUid = this.indexNameValue
     this._debugSnapshotShown = false
+    this._latestSourceRows = []
+
+    globalThis.__survosIconsMap = {
+      ...(globalThis.__survosIconsMap || {}),
+      ...(this.iconsMapValue || {}),
+    }
 
     // Click delegation for "Show details" buttons inside messages
     this.messagesTarget.addEventListener("click", (e) => {
       const btn = e.target.closest(".chat-show-detail, [data-doc-id]")
       if (!btn) return
-      const docId = btn.dataset.docId ?? btn.dataset.hitId
+      const rawDocId = btn.dataset.docId ?? btn.dataset.hitId
+      const docId = this._resolveDocId(rawDocId)
       const docIndexUid = btn.dataset.indexUid ?? this._lastToolIndexUid ?? this.indexNameValue
       if (docId) this.showDetail(docId, btn.dataset.docTitle ?? docId, docIndexUid)
     })
@@ -232,7 +240,9 @@ export default class extends Controller {
     if (this._engine) return this._engine
     try {
       const { createEngine } = await import("@tacman1123/twig-browser")
+      const { installSymfonyTwigAPI } = await import("@tacman1123/twig-browser/adapters/symfony")
       this._engine = createEngine()
+      installSymfonyTwigAPI(this._engine)
       this._engine.registerFunction("sais_encode", (url) =>
         btoa(url).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
       )
@@ -255,11 +265,27 @@ export default class extends Controller {
       const result = await loadTemplateFromUrl(engine, this.templateUrlValue)
       this._twigBlock  = result.blockName
       this._twigSource = result.source
+      this._assertUxIconsConfigured(this._twigSource)
     } catch (e) {
       console.error("[chat] template load failed:", e)
       this._twigBlock = null
     }
     return this._twigBlock
+  }
+
+  _assertUxIconsConfigured(source) {
+    if (typeof source !== "string" || !source.includes("ux_icon(")) {
+      return
+    }
+
+    const map = globalThis.__survosIconsMap
+    if (map && typeof map === "object" && Object.keys(map).length > 0) {
+      return
+    }
+
+    const message = "[chat] Twig template uses ux_icon() but no icons were provided. Pass iconsMap in stimulus values or set window.__survosIconsMap. If using Symfony UX Icons, run: bin/console ux:icons:lock"
+    console.error(message)
+    throw new Error(message)
   }
 
   // ── Detail panel ──────────────────────────────────────────────────────────
@@ -435,6 +461,15 @@ export default class extends Controller {
       ? documents.map((value, i) => ({ sourceKey: null, value, fallback: i }))
       : Object.entries(documents).map(([sourceKey, value], i) => ({ sourceKey, value, fallback: i }))
     const entries = rawEntries.map(({ sourceKey, value, fallback }) => this._normalizeSourceEntry(value, fallback, indexUid, sourceKey))
+    this._latestSourceRows = entries
+      .map((entry) => {
+        const pk = entry?.doc && typeof entry.doc === "object" ? this._extractPrimaryKey(entry.doc) : null
+        return {
+          pk: pk === null || pk === undefined ? null : String(pk),
+          indexUid: entry?.indexUid ?? indexUid ?? this.indexNameValue,
+        }
+      })
+      .filter((row) => row.pk !== null)
 
     if (!entries.length) return
 
@@ -522,40 +557,118 @@ export default class extends Controller {
 
       if (entry.document && typeof entry.document === "object") {
         doc = entry.document
+      } else if (typeof entry.document === "string") {
+        doc = this._docFromTextSource(entry.document)
       } else if (entry.source && typeof entry.source === "object") {
         doc = entry.source
+      } else if (typeof entry.source === "string") {
+        doc = this._docFromTextSource(entry.source)
       } else if (entry.hit && typeof entry.hit === "object") {
         doc = entry.hit
+      } else if (typeof entry.hit === "string") {
+        doc = this._docFromTextSource(entry.hit)
       }
+    } else if (typeof entry === "string") {
+      doc = this._docFromTextSource(entry)
     }
 
-    if (doc && typeof doc === "object") {
-      if (sourceKey && !(this.primaryKeyValue in doc)) {
-        doc = { ...doc, [this.primaryKeyValue]: sourceKey }
-      }
-    } else {
+    if (!(doc && typeof doc === "object")) {
       doc = null
     }
 
     return { raw, doc, indexUid }
   }
 
-  _extractPrimaryKey(doc) {
+  _docFromTextSource(text) {
+    const pk = this._extractPrimaryKeyFromText(text)
+    if (pk === null) {
+      return null
+    }
+    return { [this.primaryKeyValue]: pk, _sourceText: String(text) }
+  }
+
+  _extractPrimaryKeyFromText(text) {
+    if (typeof text !== "string") {
+      return null
+    }
+
     const key = this.primaryKeyValue
-    if (!(key in doc)) {
+    const patterns = [
+      new RegExp(`^\\s*${key}\\s*[:=]\\s*(.+)\\s*$`, "im"),
+      /^\s*id\s*[:=]\s*(.+)\s*$/im,
+      /\[id\s*:\s*([^\]]+)\]/i,
+    ]
+
+    for (const pattern of patterns) {
+      const match = text.match(pattern)
+      if (!match || !match[1]) {
+        continue
+      }
+      const value = String(match[1]).trim().replace(/^['"]|['"]$/g, "")
+      if (value !== "") {
+        return value
+      }
+    }
+
+    return null
+  }
+
+  _extractPrimaryKey(doc) {
+    const candidateKeys = [
+      this.primaryKeyValue,
+      "id",
+      "documentId",
+      "document_id",
+      "_id",
+    ]
+
+    for (const key of candidateKeys) {
+      if (!(key in doc)) {
+        continue
+      }
+
+      const value = doc[key]
+      if (value === null || value === undefined) {
+        continue
+      }
+
+      if (typeof value === "string" && value.trim() === "") {
+        continue
+      }
+
+      return value
+    }
+
+    return null
+  }
+
+  _resolveDocId(rawDocId) {
+    if (rawDocId === null || rawDocId === undefined) {
       return null
     }
 
-    const value = doc[key]
-    if (value === null || value === undefined) {
+    const marker = String(rawDocId).trim()
+    if (marker === "") {
       return null
     }
 
-    if (typeof value === "string" && value.trim() === "") {
-      return null
+    const sourceRows = Array.isArray(this._latestSourceRows) ? this._latestSourceRows : []
+    if (sourceRows.some((row) => row.pk === marker)) {
+      return marker
     }
 
-    return value
+    if (/^\d+$/.test(marker)) {
+      const ordinal = Number(marker)
+      if (ordinal >= 1 && ordinal <= sourceRows.length) {
+        const mapped = sourceRows[ordinal - 1]?.pk
+        if (mapped) {
+          console.warn(`[chat] remapped marker id ${marker} to source primary key ${mapped}`)
+          return mapped
+        }
+      }
+    }
+
+    return marker
   }
 
   // ── Send ──────────────────────────────────────────────────────────────────
