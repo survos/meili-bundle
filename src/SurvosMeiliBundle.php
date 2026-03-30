@@ -5,8 +5,7 @@ declare(strict_types=1);
 namespace Survos\MeiliBundle;
 
 use Survos\BabelBundle\Service\LocaleContext;
-use Survos\CoreBundle\HasAssetMapperInterface;
-use Survos\CoreBundle\Traits\HasAssetMapperTrait;
+use Survos\CoreBundle\Bundle\AssetMapperBundle;
 use Survos\MeiliBundle\Bridge\EasyAdmin\MeiliEasyAdminDashboardHelper;
 use Survos\MeiliBundle\Bridge\EasyAdmin\MeiliEasyAdminMenuFactory;
 use Survos\MeiliBundle\Command\ExportCommand;
@@ -64,14 +63,11 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Reference;
-use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
 use Twig\Environment;
 
-class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterface
+class SurvosMeiliBundle extends AssetMapperBundle
 {
-    use HasAssetMapperTrait;
-
-    public const ASSET_NAMESPACE = '@survos/meili';
+    public const ASSET_PACKAGE = 'meili';
 
     protected string $extensionAlias = 'survos_meili';
 
@@ -588,20 +584,7 @@ class SurvosMeiliBundle extends AbstractBundle implements HasAssetMapperInterfac
             ]);
         }
 
-        if (!$this->isAssetMapperAvailable($builder)) {
-            return;
-        }
-
-        $dir = realpath(__DIR__ . '/../assets/');
-        assert(file_exists($dir), $dir);
-
-        $builder->prependExtensionConfig('framework', [
-            'asset_mapper' => [
-                'paths' => [
-                    $dir => '@survos/meili',
-                ],
-            ],
-        ]);
+        parent::prependExtension($container, $builder);
     }
 
     public function build(ContainerBuilder $container): void

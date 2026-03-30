@@ -1,14 +1,14 @@
 <h1>COMPONENT insta_search.html.twig</h1>
 
-{% set _sc = '@survos/meili-bundle/insta' %}
-{% set _sc_modal = '@survos/meili-bundle/json' %}
+{% set _sc = '@survos/meili/insta' %}
+{% set _sc_modal = '@survos/meili/json' %}
 {{ _sc }}
 
 {% set globals = {
     serverUrl: server|default(null),
     serverApiKey: apiKey|default(null),
     indexName: indexName,
-    _sc_modal: _sc_modal|default('@survos/meili-bundle/json'),
+    _sc_modal: _sc_modal|default('@survos/meili/json'),
     debug: app.request.get('debug', false)
 } %}
 {% set icons = {

@@ -85,7 +85,7 @@ export default class extends Controller {
     });
 
     this.globals = safeParse(this.globalsJsonValue, {});
-    if (!this.globals._sc_modal) this.globals._sc_modal = '@survos/meili-bundle/json';
+    if (!this.globals._sc_modal) this.globals._sc_modal = '@survos/meili/json';
 
     this.icons  = safeParse(this.iconsJsonValue, {});
     window.__survosIconsMap = this.icons || {};

@@ -349,7 +349,7 @@ export default class extends Controller {
         serverUrl:    this.meiliHostValue,
         serverApiKey: this.meiliApiKeyValue,
         indexName:    this.indexNameValue,
-        _sc_modal:    "@survos/meili-bundle/json",
+        _sc_modal:    "@survos/meili/json",
         debug:        false,
         details:      true,
         chatBaseUrl:  "",
@@ -363,7 +363,7 @@ export default class extends Controller {
         _scoreDetails: doc._rankingScoreDetails ?? null,
         _isSemantic:   false,
         icons:         {},
-        _sc_modal:     "@survos/meili-bundle/json",
+        _sc_modal:     "@survos/meili/json",
         hints:         {},
         view:          {},
       }
