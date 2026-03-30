@@ -8,6 +8,7 @@ use Survos\MeiliBundle\Service\IndexNameResolver;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
@@ -24,7 +25,7 @@ final class TemplateController extends AbstractController
     }
 
     #[Route('/template/{templateName}', name: 'meili_template')]
-    public function jsTemplate(string $templateName): Response
+    public function jsTemplate(string $templateName, Request $request): Response
     {
         // Normalize locale suffix: "movies_en" → "movies"
         $templateName = preg_replace('/_..$/', '', $templateName);
@@ -67,7 +68,7 @@ final class TemplateController extends AbstractController
             [$config, $settings] = $this->buildConfigFromProfile($templateName, $profile);
         } else {
             // Fallback: no profile.json → synthesize config from Meilisearch index settings
-            [$config, $settings] = $this->buildConfigFromSettings($templateName);
+            [$config, $settings] = $this->buildConfigFromSettings($templateName, $request->getLocale());
         }
 //        dd(config: $config, settings: $settings);
 
@@ -82,9 +83,9 @@ final class TemplateController extends AbstractController
      *
      * @return array{0: array, 1: array}
      */
-    private function buildConfigFromSettings(string $indexName): array
+    private function buildConfigFromSettings(string $indexName, ?string $locale): array
     {
-        $uid = $this->meiliService->uidForBase($indexName, null);
+        $uid = $this->meiliService->uidForBase($indexName, $locale);
         $primaryKey = 'id';
 
         // If the index is missing entirely, still render *something* instead of throwing.
