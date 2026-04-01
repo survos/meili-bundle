@@ -11,6 +11,7 @@
  */
 
 import { createEngine } from '@tacman1123/twig-browser';
+import { installSymfonyTwigAPI } from '@tacman1123/twig-browser/adapters/symfony';
 
 let _engine = null;
 let _engineReady = null; // Promise that resolves once async setup is done
@@ -29,10 +30,15 @@ export function installTwigEngine() {
     btoa(url).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
   );
 
-  // Wire path() from the generated FOS routing module (async, best-effort).
+  // Wire Symfony Twig helpers (incl. path()) from generated FOS routes.
   _engineReady = import('@survos/js-twig/generated/fos_routes.js')
-    .then(({ path }) => { _engine.registerFunction('path', path); })
-    .catch(() => { /* module not installed — path() will throw a clear error if called */ });
+    .then(({ path }) => {
+      installSymfonyTwigAPI(_engine, { pathGenerator: path });
+    })
+    .catch(() => {
+      // Keep engine usable even when routes module is unavailable.
+      installSymfonyTwigAPI(_engine);
+    });
 
   return _engine;
 }
