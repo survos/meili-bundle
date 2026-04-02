@@ -35,9 +35,15 @@ export function installTwigEngine() {
     .then(({ path }) => {
       installSymfonyTwigAPI(_engine, { pathGenerator: path });
     })
-    .catch(() => {
-      // Keep engine usable even when routes module is unavailable.
-      installSymfonyTwigAPI(_engine);
+    .catch((error) => {
+      const msg = [
+        '[meili-bundle] path() is unavailable in twig-browser.',
+        'Install and enable Survos JS Twig routing support:',
+        '  composer require survos/js-twig-bundle',
+        'Then clear cache so @survos/js-twig/generated/fos_routes.js is generated.',
+      ].join('\n');
+      console.error(msg, error);
+      throw new Error(msg);
     });
 
   return _engine;
