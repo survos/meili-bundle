@@ -85,7 +85,7 @@ export default class extends Controller {
     });
 
     this.globals = safeParse(this.globalsJsonValue, {});
-    if (!this.globals._sc_modal) this.globals._sc_modal = '@survos/meili/json';
+    if (!this.globals._sc_modal) this.globals._sc_modal = '@survos/meili-bundle/json';
 
     this.icons  = safeParse(this.iconsJsonValue, {});
     window.__survosIconsMap = this.icons || {};
@@ -174,6 +174,13 @@ export default class extends Controller {
    */
   async openDetail(url, title = '') {
     if (!this.hasDetailPanelTarget) return;
+
+    // Guard: bootstrap may not be loaded on all pages
+    if (typeof bootstrap === 'undefined' || !bootstrap.Offcanvas) {
+      console.warn('Bootstrap Offcanvas not available, opening in new tab');
+      window.open(url, '_blank');
+      return;
+    }
 
     // Set title and show loader while fetching
     if (this.hasDetailPanelTitleTarget) this.detailPanelTitleTarget.textContent = title;

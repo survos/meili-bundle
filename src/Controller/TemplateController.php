@@ -24,6 +24,42 @@ final class TemplateController extends AbstractController
     ) {
     }
 
+    /**
+     * Get the JS template source for a given template name.
+     * Used by other controllers to render hits with custom view state.
+     */
+    public function getJsTemplate(string $templateName, ?string $locale = null): string
+    {
+        // Normalize locale suffix: "movies_en" → "movies"
+        $templateName = preg_replace('/_..$/', '', $templateName);
+
+        // Strip configured prefix
+        $prefix = $this->meiliService->getPrefix() ?? '';
+        $unprefixed = ($prefix !== '' && str_starts_with($templateName, $prefix))
+            ? substr($templateName, strlen($prefix))
+            : $templateName;
+
+        // Template hierarchy
+        $candidates = array_unique(array_filter([$unprefixed, $templateName]));
+        if (str_contains($unprefixed, '_')) {
+            $agg = explode('_', $unprefixed, 2)[0] ?? null;
+            if (is_string($agg) && $agg !== '') {
+                $candidates[] = $agg;
+            }
+        }
+        $candidates[] = 'default';
+
+        foreach ($candidates as $candidate) {
+            $path = $this->jsTemplateDir . $candidate . '.html.twig';
+            if (file_exists($path)) {
+                return file_get_contents($path) ?: '';
+            }
+        }
+
+        // Fallback: generate from profile or settings
+        return $this->generateJsTwigFromConfig([], []);
+    }
+
     #[Route('/template/{templateName}', name: 'meili_template')]
     public function jsTemplate(string $templateName, Request $request): Response
     {
@@ -487,7 +523,7 @@ final class TemplateController extends AbstractController
      */
 // inside your TemplateController (or wherever this lives)
 
-    private function generateJsTwigFromConfig(array $config, array $settings): string
+    public function generateJsTwigFromConfig(array $config, array $settings): string
     {
         // 1) Defaults for the flat Twig config
         $defaults = [
@@ -772,9 +808,10 @@ $settingsJson
         {% endif %}
 
         {# ------------------------------------------------------------------ #}
-        {# Generic key/value dump: show "too much" by iterating the hit       #}
+        {# Generic key/value dump: show only when detailed=true                #}
         {# ------------------------------------------------------------------ #}
 
+        {% if detailed %}
         <dl class="row small text-body-secondary mb-0 mt-2">
             {% for key, value in hit %}
     {% set show = true %}
@@ -824,6 +861,7 @@ $settingsJson
     {% endif %}
 {% endfor %}
         </dl>
+        {% endif %}
     </div>
 
     <div class="card-footer bg-transparent border-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -863,6 +901,30 @@ $settingsJson
             >
                 {{ ux_icon('json')|raw }}
                 <span>Details</span>
+            </button>
+
+            {# Media/show link - tries common routes based on hit data #}
+            {% set showUrl = null %}
+            {% if hit.name and hit.aggregator %}
+                {% set showUrl = path('inst_show', {instId: hit.name}) %}
+            {% elseif pk %}
+                {% set showUrl = '/media/' ~ pk %}
+            {% endif %}
+            {% if showUrl %}
+            <a href="{{ showUrl }}" target="_blank" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1" title="View record">
+                {{ ux_icon('tabler:file-info')|raw }}
+                <span>Record</span>
+            </a>
+            {% endif %}
+
+            {# Detail panel trigger #}
+            <button
+                class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
+                data-detail-url="{{ path('meili_hit', {indexName: _config.indexName|default(indexName), id: pk}) }}"
+                data-detail-title="{{ title|striptags }}"
+            >
+                {{ ux_icon('tabler:info-circle')|raw }}
+                <span>More</span>
             </button>
         </div>
     </div>

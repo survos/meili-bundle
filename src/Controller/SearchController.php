@@ -13,6 +13,7 @@ use Survos\MeiliBundle\Service\ChatWorkspaceResolver;
 use Survos\MeiliBundle\Service\CollectionMetadataService;
 use Survos\MeiliBundle\Service\MeiliServerKeyService;
 use Survos\MeiliBundle\Service\MeiliService;
+use Survos\MeiliBundle\Controller\TemplateController;
 use Symfony\Bridge\Twig\Attribute\Template;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -86,6 +87,7 @@ class SearchController extends AbstractController
     #[Route('/index/{indexName}', name: 'meili_insta', options: ['expose' => true])]
     #[Route('/index/{indexName}', name: 'meili_insta_locale', options: ['expose' => true])]
     #[Route('/embedder/{indexName}/{embedder}', name: 'meili_insta_embed', options: ['expose' => true])]
+    #[Route('/hit/{indexName}/{id}', name: 'meili_hit', options: ['expose' => true])]
     #[Template('@SurvosMeili/insta.html.twig')]
     public function index(
         Request $request,
@@ -189,6 +191,45 @@ class SearchController extends AbstractController
             'chatWorkspace'      => $this->chatWorkspaceResolver->workspaceForIndex($meiliIndexUid),
             'indexDashboardUrl'  => $this->indexDashboardUrl($baseIndexName),
         ];
+    }
+
+    /**
+     * Render a single hit in detailed view for the detail panel.
+     */
+    #[Route('/hit/{indexName}/{id}', name: 'meili_hit', options: ['expose' => true])]
+    public function hit(Request $request, string $indexName, string $id): Response
+    {
+        $locale = $request->getLocale();
+        $meiliIndexUid = $this->meiliService->uidForBase($indexName, $locale);
+
+        // Fetch the document from Meilisearch
+        $index = $this->meiliService->getIndexEndpoint($meiliIndexUid);
+        try {
+            $document = $index->getDocument($id);
+        } catch (\Throwable $e) {
+            return new Response('<div class="alert alert-danger">Document not found: ' . $e->getMessage() . '</div>');
+        }
+
+        // Get the config to pass the primary key and other settings
+        $indexConfig = $this->meiliService->getIndexSetting($indexName)
+            ?? ['template' => $indexName, 'primaryKey' => 'id', 'baseName' => $indexName, 'facets' => []];
+        $primaryKey = $indexConfig['primaryKey'] ?? 'id';
+
+        // Get the template from TemplateController (reuse existing logic)
+        $templateController = $this->container->get(TemplateController::class);
+        $templateSource = $templateController->getJsTemplate($indexName, $request->getLocale());
+
+        // Render with detailed=true
+        $twig = $this->container->get('twig');
+        $template = $twig->createTemplate($templateSource);
+        $content = $twig->render($template, [
+            'hit' => (array) $document,
+            '_config' => array_merge($indexConfig, ['indexName' => $indexName]),
+            'view' => ['detailed' => true],
+            'globals' => ['_sc_modal' => '@survos/meili-bundle/json'],
+        ]);
+
+        return new Response($content);
     }
 
     /**
