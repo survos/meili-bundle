@@ -62,6 +62,12 @@ final class MeiliFieldHeuristic
                 continue;
             }
 
+            // Title-like fields should be searchable, not facetable.
+            if ($this->looksLikeTitleText($name)) {
+                $searchableFields[] = $name;
+                continue;
+            }
+
             // Heuristic: numeric / float => sortable, facetable if low cardinality
             if (\in_array('int', $types, true) || \in_array('float', $types, true)
                 || $storageHint === 'float' || $storageHint === 'int') {
@@ -163,5 +169,12 @@ final class MeiliFieldHeuristic
             || \str_contains($lower, 'key')
             || \str_contains($lower, 'hash')
             || \str_contains($lower, 'slug');
+    }
+
+    private function looksLikeTitleText(string $field): bool
+    {
+        $lower = strtolower($field);
+
+        return in_array($lower, ['title', 'headline', 'subhead', 'subtitle'], true);
     }
 }

@@ -15,6 +15,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Routing\Exception\RouteNotFoundException;
 use Doctrine\ORM\EntityManagerInterface;
 use Survos\MeiliBundle\Entity\IndexInfo;
+use Survos\MeiliBundle\Service\MeiliFieldHeuristic;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Yaml\Yaml;
 
@@ -32,6 +33,7 @@ final class MeiliFlushFileCommand
     public function __construct(
         private readonly MeiliService $meili,
         private readonly MeiliNdjsonUploader $uploader,
+        private readonly MeiliFieldHeuristic $meiliFieldHeuristic,
         private readonly UrlGeneratorInterface $urlGenerator,
         private readonly IndexNameResolver $indexNameResolver,
         private readonly EntityManagerInterface $entityManager,
@@ -52,6 +54,8 @@ final class MeiliFlushFileCommand
         bool $wait = false,
         #[Option('Reset index before flush')]
         bool $reset = false,
+        #[Option('Apply Meilisearch settings inferred from the dataset/profile before upload')]
+        bool $profileSettings = false,
     ): int {
         if (($name === null || $name === '') && $dataset !== null && $dataset !== '') {
             $name = $this->indexNameResolver->baseFromDataset($dataset);
@@ -109,6 +113,29 @@ final class MeiliFlushFileCommand
         }
 
         $index = $this->meili->getOrCreateIndex($indexUid, primaryKey: $primaryKey, autoCreate: true);
+        if ($profileSettings) {
+            $profilePath = $this->resolveProfilePath($dataset, $path);
+            if ($profilePath === null) {
+                $io->warning('Profile settings requested, but no profile file was found.');
+            } else {
+                $settings = $this->settingsFromProfile($profilePath);
+                if ($settings !== []) {
+                    $settingsTask = $index->updateSettings($settings);
+                    $settingsTaskUid = $settingsTask->getTaskUid();
+                    $io->writeln(sprintf('Settings task UID: %s', (string) $settingsTaskUid));
+                    if ($wait) {
+                        $task = $this->meili->waitForTask((int) $settingsTaskUid);
+                        $io->writeln(sprintf('Settings task status: %s', (string) ($task['status'] ?? 'unknown')));
+                        if (($task['status'] ?? null) !== 'succeeded') {
+                            $io->error(sprintf('Settings task failed: %s', json_encode($task['error'] ?? $task)));
+                            return Command::FAILURE;
+                        }
+                    }
+                } else {
+                    $io->warning(sprintf('No Meili settings were inferred from %s', $profilePath));
+                }
+            }
+        }
         $io->title("Flushing file to $indexUid");
         $io->writeln(sprintf('File: %s (%d bytes)', $path, $size));
         $io->writeln(sprintf('Primary key: %s', $primaryKey));
@@ -215,5 +242,31 @@ final class MeiliFlushFileCommand
 
         $this->entityManager->persist($entity);
         $this->entityManager->flush();
+    }
+
+    private function resolveProfilePath(?string $dataset, string $jsonlPath): ?string
+    {
+        if ($dataset === null || $dataset === '') {
+            throw new \RuntimeException('Profile settings require --dataset so canonical stage paths can be resolved.');
+        }
+
+        if ($this->pathsFactory === null) {
+            throw new \RuntimeException('Profile settings require DatasetPathsFactoryInterface; pass --dataset in an app with import/data paths configured.');
+        }
+
+        $paths = $this->pathsFactory->for($dataset);
+        $profilePath = $paths->profileObjectPath();
+
+        return is_file($profilePath) ? $profilePath : null;
+    }
+
+    private function settingsFromProfile(string $profilePath): array
+    {
+        $raw = json_decode((string) file_get_contents($profilePath), true);
+        if (!is_array($raw) || !is_array($raw['fields'] ?? null)) {
+            return [];
+        }
+
+        return $this->meiliFieldHeuristic->suggestFromFields($raw['fields'])->toSettingsArray();
     }
 }

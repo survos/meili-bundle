@@ -69,7 +69,7 @@ final class PopulateCommand extends MeiliBaseCommand
         #[Option('Comma-separated subset of locales to index', 'only-locales')]
         ?string $onlyLocales = null,
 
-        #[Option('Run synchronously (default true)', 'sync')]
+        #[Option('Run synchronously (default false)', 'sync')]
         ?bool $sync = null,
 
         #[Option('Wait for Meili tasks after each batch when sync is enabled (default true)', 'wait')]
@@ -84,7 +84,7 @@ final class PopulateCommand extends MeiliBaseCommand
         $this->io = $io;
         $this->init();
 
-        $sync ??= true;
+        $sync ??= false;
         $wait ??= true;
         $fetch ??= true;
         $dump ??= false;

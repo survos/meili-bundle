@@ -105,7 +105,13 @@ class SearchController extends AbstractController
 
         // Index configuration is base-keyed
         $indexConfig = $this->meiliService->getIndexSetting($baseIndexName)
-            ?? ['template' => $baseIndexName, 'primaryKey' => 'id', 'baseName' => $baseIndexName, 'facets' => []];
+            ?? [
+                'template' => $baseIndexName,
+                'primaryKey' => 'id',
+                'baseName' => $baseIndexName,
+                'facets' => [],
+                'instantsearch' => ['routing' => false],
+            ];
 
         // Locale-agnostic template selection
         $templateName = $indexConfig['template'] ?? $baseIndexName;

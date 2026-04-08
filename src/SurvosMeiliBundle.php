@@ -547,6 +547,7 @@ class SurvosMeiliBundle extends AssetMapperBundle
                     'home'      => 'material-symbols:home-outline',
                     'browse'    => 'mdi:list-box-outline',
                     'search'    => 'tabler:search',
+                    'info'    => 'tabler:info-circle',
                     'meili'     => 'tabler:search',
                     'database'  => 'mdi:database',
                     // actions / hits

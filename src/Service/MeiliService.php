@@ -658,7 +658,7 @@ ORDER BY n.nspname, c.relname;"
      *
      * @return array<string,mixed> Raw task payload (status, type, duration, error, etc.)
      */
-    public function waitForTask(int|Task $taskUid, int $timeoutMs = 600_000, int $pollMs = 250): array
+    public function waitForTask(int|Task $taskUid, int $timeoutMs = 600_000, int $pollMs = 1000): array
     {
         $start = \microtime(true);
         $client = $this->getMeiliClient();

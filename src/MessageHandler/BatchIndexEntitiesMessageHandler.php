@@ -256,9 +256,9 @@ final class BatchIndexEntitiesMessageHandler
             );
             $taskId = $this->uploader->uploadDocuments($index, $iter, $primaryKey);
             if ($sync) {
-                $task = $client->getTask($taskId)->wait();
-                if ($task->getStatus() !== TaskStatus::Succeeded) {
-                    $this->logger?->error('Meilisearch task failed (sync mode)', [$index->getUid(), $task->getStatus(), $task->getError()]);
+                $task = $this->meiliService->waitForTask((int) $taskId);
+                if (($task['status'] ?? null) !== 'succeeded') {
+                    $this->logger?->error('Meilisearch task failed (sync mode)', [$index->getUid(), $task['status'] ?? null, $task['error'] ?? null]);
                 }
             }
         } else {
@@ -266,9 +266,11 @@ final class BatchIndexEntitiesMessageHandler
             // If it's a list of IDs (legacy), reload should have been set.
 //            dd($message->entityData);
             $taskUid = $this->uploader->uploadDocuments($index, $message->entityData, $primaryKey);
-            $task = $client->getTask($taskUid)->wait();
-            if ($task->getStatus() !== TaskStatus::Succeeded) {
-                $this->logger?->error('Meilisearch task failed (async mode)', [$index->getUid(), $task->getStatus(), $task->getError()]);
+            if ($sync && $taskUid !== null) {
+                $task = $this->meiliService->waitForTask((int) $taskUid);
+                if (($task['status'] ?? null) !== 'succeeded') {
+                    $this->logger?->error('Meilisearch task failed (sync mode)', [$index->getUid(), $task['status'] ?? null, $task['error'] ?? null]);
+                }
             }
         }
     }
