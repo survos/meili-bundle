@@ -164,7 +164,7 @@ bin/console meili:flush:file
 ## `meili:mcp:test`
 
 Smoke-test the AI tool layer from the CLI without starting an AI agent.
-Only available when `symfony/ai-bundle` is installed.
+Only available when `symfony/ai-agent` is installed.
 
 ```bash
 bin/console meili:mcp:test search_index meili_product "wireless headphones"

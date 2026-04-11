@@ -21,7 +21,7 @@ Your Symfony app *is* the MCP server.
 ### 1. Install the AI and MCP bundles
 
 ```bash
-composer require symfony/ai-bundle symfony/mcp-bundle
+composer require symfony/ai-agent symfony/mcp-bundle
 ```
 
 ### 2. Add the MCP route

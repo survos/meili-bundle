@@ -54,7 +54,7 @@
     "suggest": {
         "api-platform/core": "Required for admin dashboard integration",
         "api-platform/doctrine-orm": "Leverage doctrine in api-platform",
-        "symfony/ai-bundle": "Required for exposing Meilisearch as Symfony AI agent tools (MCP / tool-calling workflows)",
+        "symfony/ai-agent": "Required for exposing Meilisearch as Symfony AI agent tools and loading the bundle tool classes",
         "symfony/mcp-bundle": "Required to expose Meilisearch tools as an MCP server (Claude Desktop, MCP Inspector, etc.)"
     },
 

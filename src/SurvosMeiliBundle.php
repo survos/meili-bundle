@@ -291,8 +291,12 @@ class SurvosMeiliBundle extends AssetMapperBundle
             ->setPublic(true)
             ->setAutoconfigured(true);
 
-        // AI agent tools + test command: registered when either symfony/ai-agent or symfony/mcp-bundle is installed.
-        if (class_exists(\Symfony\AI\Agent\Toolbox\Attribute\AsTool::class) || class_exists(\Mcp\Capability\Attribute\McpTool::class)) {
+        // AI agent tools depend on symfony/ai-agent classes/interfaces directly.
+        // MCP support is additive, but MCP alone is not enough to load these tool classes.
+        if (
+            class_exists(\Symfony\AI\Agent\Toolbox\Attribute\AsTool::class)
+            && interface_exists(\Symfony\AI\Agent\Toolbox\Source\HasSourcesInterface::class)
+        ) {
             foreach ([
                 SearchIndexTool::class,
                 GetDocumentTool::class,
@@ -302,16 +306,13 @@ class SurvosMeiliBundle extends AssetMapperBundle
             ] as $toolClass) {
                 $builder->autowire($toolClass)
                     ->setPublic(true)
-                    ->setAutoconfigured(true); // picks up #[AsTool] via symfony/ai-bundle autoconfigure
+                    ->setAutoconfigured(true); // picks up #[AsTool] via symfony/ai-agent autoconfigure
             }
 
-            // Test command only makes sense when AI agent toolbox is available (it invokes tools directly).
-            if (class_exists(\Symfony\AI\Agent\Toolbox\Attribute\AsTool::class)) {
-                $builder->autowire(MeiliMcpTestCommand::class)
-                    ->setPublic(true)
-                    ->setAutoconfigured(true)
-                    ->addTag('console.command');
-            }
+            $builder->autowire(MeiliMcpTestCommand::class)
+                ->setPublic(true)
+                ->setAutoconfigured(true)
+                ->addTag('console.command');
         }
     }
 
