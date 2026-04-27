@@ -6,46 +6,29 @@ namespace Survos\MeiliBundle\Menu;
 
 use Survos\MeiliBundle\Registry\MeiliRegistry;
 use Survos\MeiliBundle\Service\MeiliService;
-use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Survos\TablerBundle\Event\MenuEvent;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 
-class MeiliMenuSubscriber implements EventSubscriberInterface
+class MeiliMenuSubscriber
 {
     public function __construct(
         private readonly MeiliRegistry $registry,
         private readonly ?MeiliService $meiliService = null,
         private readonly ?string $meiliHost = null,
         private readonly ?AuthorizationCheckerInterface $authorizationChecker = null,
-    ) {
-    }
+    ) {}
 
-    public static function getSubscribedEvents(): array
-    {
-        if (!class_exists(\Survos\TablerBundle\Event\MenuEvent::class)) {
-            return [];
-        }
-
-        return [
-            \Survos\TablerBundle\Event\MenuEvent::NAVBAR_MENU => 'onNavbarMenu',
-        ];
-    }
-
-    public function onNavbarMenu($event): void
+    #[AsEventListener(event: MenuEvent::ADMIN_NAVBAR_MENU)]
+    public function onAdminNavbarMenu(MenuEvent $event): void
     {
         if (empty($this->registry->names())) {
             return;
         }
 
-        $isEnabled = $this->meiliService && method_exists($this->meiliService, 'isEnabled')
-            ? $this->meiliService->isEnabled()
-            : true;
-
-        if (!$isEnabled) {
+        if ($this->meiliService && method_exists($this->meiliService, 'isEnabled') && !$this->meiliService->isEnabled()) {
             return;
         }
-
-        $isAdmin = $this->authorizationChecker?->isGranted('ROLE_ADMIN') ?? false;
-        $isAdmin = true; // check env for 'dev'
 
         $menu = $event->getMenu();
         $submenu = $menu->addChild('Meili Search');
@@ -59,7 +42,7 @@ class MeiliMenuSubscriber implements EventSubscriberInterface
             'routeParameters' => ['indexName' => 'index_info'],
         ]);
 
-        if ($isAdmin && $this->meiliHost) {
+        if ($this->meiliHost) {
             $submenu->addChild('Meili Server', [
                 'uri' => $this->meiliHost,
                 'linkAttributes' => ['target' => '_blank'],
