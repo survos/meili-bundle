@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Survos\MeiliBundle\Controller;
 
 use Adbar\Dot;
@@ -17,10 +19,31 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapQueryParameter;
 use Symfony\Component\Routing\Attribute\Route;
-use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Routing\RouterInterface;
 use Symfony\UX\Chartjs\Builder\ChartBuilderInterface;
 use Symfony\UX\Chartjs\Model\Chart;
+
+use function addcslashes;
+use function array_key_first;
+use function array_map;
+use function array_merge;
+use function array_slice;
+use function array_values;
+use function count;
+use function file_get_contents;
+use function get_defined_vars;
+use function json_decode;
+use function ltrim;
+use function mb_substr;
+use function rawurlencode;
+use function rtrim;
+use function sprintf;
+use function str_repeat;
+use function str_starts_with;
+use function strlen;
+use function strtolower;
+use function substr;
+use function trim;
 
 class MeiliAdminController extends AbstractController
 {
@@ -213,7 +236,7 @@ class MeiliAdminController extends AbstractController
 
             $facetCounts[$fieldName] = $counts;
 
-            if ($this->chartBuilder && \count($counts) > 0) {
+            if ($this->chartBuilder && count($counts) > 0) {
                 $facetCharts[$fieldName] = $this->buildFacetChart($fieldName, $counts);
             }
         }
@@ -242,7 +265,7 @@ class MeiliAdminController extends AbstractController
         $labels = array_map(fn($c) => mb_substr($c['label'] ?: '(empty)', 0, 25), $chartData);
         $values = array_map(fn($c) => $c['count'], $chartData);
 
-        $chartType = \count($chartData) <= 6 ? Chart::TYPE_PIE : Chart::TYPE_BAR;
+        $chartType = count($chartData) <= 6 ? Chart::TYPE_PIE : Chart::TYPE_BAR;
 
         $chart = $this->chartBuilder->createChart($chartType);
         $chart->setData([
@@ -252,7 +275,7 @@ class MeiliAdminController extends AbstractController
                 'backgroundColor' => array_slice(
                     array_merge(self::CHART_COLORS, self::CHART_COLORS, self::CHART_COLORS),
                     0,
-                    \count($chartData)
+                    count($chartData)
                 ),
                 'data' => $values,
             ]],
@@ -275,7 +298,7 @@ class MeiliAdminController extends AbstractController
     }
 
     #[Route(path: '/docs', name: 'meili_admin_docs', methods: ['GET'])]
-    #[Template('@SurvosMeiliAdmin/docs.html.twig')]
+    #[Template('@SurvosMeili/docs.html.twig')]
     public function docs(): Response|array
     {
         $url = 'https://raw.githubusercontent.com/meilisearch/open-api/refs/heads/main/open-api.json';
@@ -339,7 +362,7 @@ class MeiliAdminController extends AbstractController
                     'backgroundColor' => array_slice(
                         array_merge(self::CHART_COLORS, self::CHART_COLORS, self::CHART_COLORS),
                         0,
-                        \count($chartData)
+                        count($chartData)
                     ),
                     'data' => array_values($chartData),
                 ]],
@@ -363,43 +386,33 @@ class MeiliAdminController extends AbstractController
     }
 
     #[Route('/meili/admin{anything}', name: 'survos_meili_admin', defaults: ['anything' => null], requirements: ['anything' => '.+'])]
-    public function dashboard(UrlGeneratorInterface $urlGenerator): Response
+    public function dashboard(): Response
     {
-        $config = json_decode(<<<END
-{
-  "modulePrefix": "meiliadmin",
-  "environment": "production",
-  "rootURL": "/",
-  "locationType": "history",
-  "EmberENV": {
-    "FEATURES": {},
-    " APPLICATION_TEMPLATE_WRAPPER": false,
-    " DEFAULT_ASYNC_OBSERVERS": true,
-    " JQUERY_INTEGRATION": false,
-    " TEMPLATE_ONLY_GLIMMER_COMPONENTS": true
-  },
-  "APP": {
-    "meilisearch": { "url": "http://localhost:7700", "key": "MASTER_KEY" },
-    "name": "meiliadmin",
-    "version": "0.0.0+bd7f85d7"
-  }
-}
-END
-        );
-
-        $config->rootURL = $urlGenerator->generate('survos_meili_admin');
-
-        return $this->render('@SurvosMeiliAdmin/dashboard.html.twig', [
-            'config'        => $config,
-            'encodedConfig' => json_encode($config),
-            'controller_name' => 'MeiliAdminController',
-        ]);
+        return $this->redirectToRoute('riccox_meili_admin');
     }
 
     #[Route('/riccox/{anything}', name: 'riccox_meili_admin', defaults: ['anything' => null], requirements: ['anything' => '.+'])]
-    public function riccox(Request $request, UrlGeneratorInterface $urlGenerator): Response
+    public function riccox(Request $request, ?string $anything = null): Response
     {
-        return $this->render('@SurvosMeiliAdmin/riccox.html.twig', []);
+        $baseUrl = rtrim($this->meiliUiUrl, '/');
+        $indexName = trim((string) $anything, '/');
+
+        if ($indexName === '') {
+            return $this->redirect($baseUrl);
+        }
+
+        if (str_starts_with($indexName, 'index/')) {
+            return $this->redirect($baseUrl . '/' . ltrim($indexName, '/'));
+        }
+
+        $requestLocale = strtolower((string) $request->getLocale());
+        $isMultilingual = $this->resolver->isMultiLingualFor($indexName, $requestLocale);
+        $uidLocale = $isMultilingual ? $requestLocale : null;
+        $resolvedUid = $this->meiliService->getIndexSetting($indexName) === null
+            ? $indexName
+            : $this->resolver->uidFor($indexName, $uidLocale, $isMultilingual);
+
+        return $this->redirect($baseUrl . '/index/' . rawurlencode($resolvedUid));
     }
 
     #[Route(path: '/stats/{indexName}.{_format}', name: 'survos_index_stats', methods: ['GET'])]
