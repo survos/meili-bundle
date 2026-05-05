@@ -73,16 +73,6 @@ bin/console meili:schema:update --force
 
 ---
 
-## `meili:schema:create`
-
-Create an index in Meilisearch (without pushing field settings).
-
-```bash
-bin/console meili:schema:create product
-```
-
----
-
 ## `meili:schema:validate`
 
 Check that the Meilisearch index settings match what the `#[MeiliIndex]` attributes declare.

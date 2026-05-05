@@ -15,7 +15,6 @@ use Survos\MeiliBundle\Command\MeilEstimatorCommand;
 use Survos\MeiliBundle\Command\MeiliFlushFileCommand;
 use Survos\MeiliBundle\Command\MeiliRegistrySyncCommand;
 use Survos\MeiliBundle\Command\MeiliRegistryReportCommand;
-use Survos\MeiliBundle\Command\MeiliSchemaCreateCommand;
 use Survos\MeiliBundle\Command\MeiliSchemaUpdateCommand;
 use Survos\MeiliBundle\Command\MeiliSchemaValidateCommand;
 use Survos\MeiliBundle\Command\MeiliSuggestSettingsCommand;
@@ -167,7 +166,6 @@ class SurvosMeiliBundle extends AssetMapperBundle
             MeiliRegistrySyncCommand::class,
             ExportCommand::class,
             IterateIndexesCommand::class,
-            MeiliSchemaCreateCommand::class,
             MeiliSchemaUpdateCommand::class,
             MeilEstimatorCommand::class,
             MeiliSchemaValidateCommand::class,
