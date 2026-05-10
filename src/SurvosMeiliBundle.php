@@ -6,6 +6,7 @@ namespace Survos\MeiliBundle;
 
 use Survos\BabelBundle\Service\LocaleContext;
 use Survos\CoreBundle\Bundle\AssetMapperBundle;
+use Survos\CoreBundle\Traits\HasConfigurableRoutes;
 use Survos\MeiliBundle\Bridge\EasyAdmin\MeiliEasyAdminDashboardHelper;
 use Survos\MeiliBundle\Bridge\EasyAdmin\MeiliEasyAdminMenuFactory;
 use Survos\MeiliBundle\Command\ExportCommand;
@@ -66,12 +67,17 @@ use Twig\Environment;
 
 class SurvosMeiliBundle extends AssetMapperBundle
 {
+    use HasConfigurableRoutes;
+
     public const ASSET_PACKAGE = 'meili';
 
     protected string $extensionAlias = 'survos_meili';
 
     public function loadExtension(array $config, ContainerConfigurator $container, ContainerBuilder $builder): void
     {
+        $this->captureRouteConfig($config);
+        $this->registerRouteLoader($builder);
+
         $services = $container->services();
 
         $services
@@ -316,8 +322,12 @@ class SurvosMeiliBundle extends AssetMapperBundle
 
     public function configure(DefinitionConfigurator $definition): void
     {
-        $definition->rootNode()
-            ->children()
+        $children = $definition->rootNode()->children();
+        $this->addRouteOptions($children, '/meili');
+        $children
+            // TODO: review — `core_name` is really an app-level differentiator
+            // (used to distinguish multiple meili instances per project). Should
+            // probably be renamed and/or moved closer to the index settings.
             ->scalarNode('core_name')->defaultValue('core')->end()
             ->booleanNode('enabled')->defaultTrue()->end()
             ->scalarNode('meiliUiUrl')
@@ -591,5 +601,6 @@ class SurvosMeiliBundle extends AssetMapperBundle
     {
         parent::build($container);
         $container->addCompilerPass(new MeiliIndexPass());
+        $this->addRouteLoaderCompilerPass($container);
     }
 }

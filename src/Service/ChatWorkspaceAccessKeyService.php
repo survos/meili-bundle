@@ -4,6 +4,8 @@ declare(strict_types=1);
 namespace Survos\MeiliBundle\Service;
 
 use Doctrine\ORM\EntityManagerInterface;
+use Meilisearch\Contracts\CreateKeyQuery;
+use Meilisearch\Contracts\KeyAction;
 use Meilisearch\Exceptions\ApiException;
 use Psr\Log\LoggerInterface;
 use Survos\MeiliBundle\Entity\IndexInfo;
@@ -125,14 +127,14 @@ final class ChatWorkspaceAccessKeyService
             ? $storedKeyUid
             : $this->buildKeyUid($indexUid, $workspace);
         try {
-            $key = $this->meiliService->getMeiliClient()->createKey([
-                'uid' => $keyUid,
-                'name' => sprintf('Chat access for %s (%s)', $workspace, $indexUid),
-                'description' => sprintf('Scoped chat key for workspace %s restricted to index %s', $workspace, $indexUid),
-                'actions' => ['*'],
-                'indexes' => [$indexUid],
-                'expiresAt' => new \DateTimeImmutable('+5 years'),
-            ]);
+            $key = $this->meiliService->getMeiliClient()->createKey(new CreateKeyQuery(
+                actions: [KeyAction::Any],
+                indexes: [$indexUid],
+                name: sprintf('Chat access for %s (%s)', $workspace, $indexUid),
+                description: sprintf('Scoped chat key for workspace %s restricted to index %s', $workspace, $indexUid),
+                uid: $keyUid,
+                expiresAt: new \DateTimeImmutable('+5 years'),
+            ));
         } catch (ApiException $exception) {
             try {
                 $existing = $this->meiliService->getMeiliClient()->getKey($keyUid);
