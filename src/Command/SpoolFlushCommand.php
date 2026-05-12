@@ -13,13 +13,12 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 #[AsCommand(name: 'meili:spool:flush', description: 'Send JsonlBundle spools to Meilisearch as NDJSON')]
-final class SpoolFlushCommand extends Command
+final class SpoolFlushCommand
 {
     public function __construct(
         private readonly JsonlSpooler $spooler,
         private readonly MeiliService $meili,
         private readonly MeiliNdjsonUploader $uploader,
-    ) { parent::__construct(); }
 
     public function __invoke(
         SymfonyStyle $io,

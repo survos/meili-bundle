@@ -56,7 +56,7 @@ use Symfony\Component\Yaml\Yaml;
 //    aliases: ['meili:schema:update'],
 //    description: 'view and set meilisearch settings',
 //)]
-class SettingsCommand # extends Command
+class SettingsCommand #
 {
     private SymfonyStyle $io;
     public function __construct(
@@ -69,7 +69,6 @@ class SettingsCommand # extends Command
         #[Autowire('%kernel.enabled_locales%')] private array $enabledLocales=[],
     )
     {
-//        parent::__construct();
     }
 
     /**

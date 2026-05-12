@@ -12,7 +12,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 #[AsCommand('meili:schema:validate', 'Compare compiled schema with Meilisearch remote settings')]
-final class MeiliSchemaValidateCommand extends Command
+final class MeiliSchemaValidateCommand
 {
     /** @param array<string,array<string,mixed>> $indexSettings (indexName => settings)
      *  @param array<string,string>               $indexEntities (indexName => FQCN)
@@ -23,7 +23,6 @@ final class MeiliSchemaValidateCommand extends Command
 //        private readonly array $indexEntities,
 //        private readonly ?string $prefix = null, // e.g. '%survos_meili.prefix%'
     ) {
-        parent::__construct();
     }
 
     public function __invoke(

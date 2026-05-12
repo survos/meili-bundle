@@ -28,7 +28,7 @@ use function trim;
     name: 'meili:registry:report',
     description: 'Report base Meili index registry entries (optionally probe server).'
 )]
-final class MeiliRegistryReportCommand extends Command
+final class MeiliRegistryReportCommand
 {
     public function __construct(
         private readonly MeiliRegistry $registry,
@@ -36,7 +36,6 @@ final class MeiliRegistryReportCommand extends Command
         private readonly IndexNameResolver $resolver,
         private readonly IndexInfoRepository $indexInfoRepository,
     ) {
-        parent::__construct();
     }
 
     public function __invoke(
