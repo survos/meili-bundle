@@ -95,7 +95,11 @@
                         <tbody>
                             {% for row in dbRows %}
                             <tr>
-                                <td><code>{{ row.indexName }}</code></td>
+                                <td>
+                                    <a href="{{ path('meili_insta', {indexName: row.searchIndexName}) }}">
+                                        <code>{{ row.indexName }}</code>
+                                    </a>
+                                </td>
                                 <td>{{ row.primaryKey }}</td>
                                 <td>{{ row.documentCount }}</td>
                                 <td>{{ row.updatedAt }}</td>

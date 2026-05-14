@@ -8,6 +8,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminRoute;
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use Psr\Log\LoggerInterface;
 use RuntimeException;
+use Survos\ImgproxyBundle\Service\ImgproxyUrlBuilder;
 use Survos\MeiliBundle\Service\ChatWorkspaceAccessKeyService;
 use Survos\MeiliBundle\Service\ChatWorkspaceResolver;
 use Survos\MeiliBundle\Service\CollectionMetadataService;
@@ -54,6 +55,7 @@ class SearchController extends AbstractController
         private readonly CollectionMetadataService $collectionMetadataService,
         private readonly MeiliServerKeyService $meiliServerKeyService,
         private readonly RouterInterface $router,
+        private readonly ?ImgproxyUrlBuilder $imgproxyUrlBuilder = null,
         #[Autowire('%survos_meili.chat%')] private readonly array $chatConfig = [],
         private readonly ?LoggerInterface $logger = null,
         private readonly ?CacheInterface $cache = null,
@@ -196,6 +198,7 @@ class SearchController extends AbstractController
             // Chat workspace name for this index (null if none configured)
             'chatWorkspace'      => $this->chatWorkspaceResolver->workspaceForIndex($meiliIndexUid),
             'indexDashboardUrl'  => $this->indexDashboardUrl($baseIndexName),
+            'imgproxyHost'       => $this->imgproxyUrlBuilder?->host,
         ];
     }
 
@@ -232,7 +235,10 @@ class SearchController extends AbstractController
             'hit' => (array) $document,
             '_config' => array_merge($indexConfig, ['indexName' => $indexName]),
             'view' => ['detailed' => true],
-            'globals' => ['_sc_modal' => '@survos/meili-bundle/json'],
+            'globals' => [
+                '_sc_modal' => '@survos/meili-bundle/json',
+                'imgproxyHost' => $this->imgproxyUrlBuilder?->host,
+            ],
         ]);
 
         return new Response($content);

@@ -447,6 +447,7 @@
     serverApiKey: apiKey,
     indexName: indexName,
     _sc_modal: '@survos/meili-bundle/json',
+    imgproxyHost: imgproxyHost,
     debug: debug,
     chatBaseUrl:   path('meili_chat',  {indexName: 'INDEXNAME', workspace: 'meili_assistant'}),
     searchBaseUrl: path('meili_insta', {indexName: 'INDEXNAME'}),
@@ -469,11 +470,25 @@
 
   {% set _sc = '@survos/meili-bundle/insta' %}
   {% set _sc_modal = '@survos/meili-bundle/json' %}
+  {% set _sc_imgproxy = '@survos/imgproxy/imgproxy' %}
   {% set templateUrl = path('meili_template', { templateName: templateName }) %}
 
   {# set default to false during production or when this is completely debugged #}
   {% set sanity = app.request.query.get('sanity', true) %}
     {% set grid = app.request.query.get('class', 'grid-' ~ app.request.query.get('grid')|default(2)) %}
+
+  <div
+    {{ stimulus_controller(_sc_imgproxy, {
+      host: imgproxyHost,
+      endpoint: path('survos_imgproxy_url'),
+      preset: 'ai_thumbnail'
+    }) }}
+    class="survos-imgproxy-scope">
+
+  <div class="small text-muted text-break mb-2">
+    imgproxy controller:
+    <code {{ stimulus_target(_sc_imgproxy, 'status') }}>waiting for imgproxy controller; host={{ imgproxyHost ?: '(missing)' }}</code>
+  </div>
 
   <div
     {{ stimulus_controller(_sc, {
@@ -787,5 +802,6 @@
     </div>
   </div>
 
+  </div>
   </div>
 {% endblock %}

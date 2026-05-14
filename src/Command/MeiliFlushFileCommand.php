@@ -5,6 +5,7 @@ namespace Survos\MeiliBundle\Command;
 
 use Survos\MeiliBundle\Service\IndexNameResolver;
 use Survos\MeiliBundle\Service\MeiliNdjsonUploader;
+use Survos\MeiliBundle\Service\MeiliServerKeyService;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\ImportBundle\Contract\DatasetPathsFactoryInterface;
 use Symfony\Component\Console\Attribute\Argument;
@@ -38,6 +39,7 @@ final class MeiliFlushFileCommand
         private readonly IndexNameResolver $indexNameResolver,
         private readonly EntityManagerInterface $entityManager,
         private readonly ?DatasetPathsFactoryInterface $pathsFactory = null,
+        private readonly MeiliServerKeyService $serverKeyService,
     ) {
     }
 
@@ -77,7 +79,8 @@ final class MeiliFlushFileCommand
             }
 
             $paths = $this->pathsFactory->for($dataset);
-            $path = $paths->normalizedObjectPath;
+            $enrichPath = str_replace('20_normalize', '60_enrich', $paths->normalizedObjectPath);
+            $path = is_file($enrichPath) ? $enrichPath : $paths->normalizedObjectPath;
         }
 
         if ($path === null || $path === '') {
@@ -154,6 +157,15 @@ final class MeiliFlushFileCommand
         }
 
         $this->registerIndexInfo($indexUid, $primaryKey, $taskUid);
+
+        if ($profileSettings) {
+            $keys = $this->serverKeyService->ensureServerKeys([$indexUid]);
+            foreach ($keys as $alias => $key) {
+                $io->writeln(sprintf('  [key:%s] %s (uid=%s)', $alias,
+                    $key['created'] ? 'created' : 'verified', $key['keyUid']));
+            }
+        }
+
         $this->renderIndexLink($io, $name, $sourceLocale);
         $io->success('Done.');
         return Command::SUCCESS;

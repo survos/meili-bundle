@@ -84,6 +84,7 @@ class MeiliRegistryController extends AbstractController
         foreach ($this->indexInfoRepository->findAll() as $info) {
             $dbRows[] = [
                 'indexName' => $info->indexName,
+                'searchIndexName' => $meili->baseNameFromUid($info->indexName),
                 'primaryKey' => $info->primaryKey,
                 'documentCount' => (string)$info->documentCount,
                 'updatedAt' => $info->updatedAt?->format('Y-m-d H:i:s') ?? '',

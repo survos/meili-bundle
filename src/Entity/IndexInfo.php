@@ -25,6 +25,7 @@ use Doctrine\ORM\Mapping as ORM;
  */
 #[ORM\Entity(repositoryClass: IndexInfoRepository::class)]
 #[MeiliIndex(
+    name: 'meili',
     primaryKey: 'indexName',
     searchable: ['label', 'description', 'aggregator', 'institution', 'indexName'],
     filterable: ['aggregator', 'institution', 'locale', 'country', 'documentCount', 'status'],
@@ -33,7 +34,7 @@ use Doctrine\ORM\Mapping as ORM;
     displayed: ['indexName', 'label', 'description', 'aggregator', 'institution',
                 'country', 'locale', 'documentCount', 'status', 'settings',
                 'primaryKey', 'createdAt', 'updatedAt', 'lastIndexed'],
-//    chats: ['meili_assistant'],
+    chats: ['meili_assistant'],
     ui: ['columns' => 3, 'layout' => 'neutral'],
 )]
 class IndexInfo
