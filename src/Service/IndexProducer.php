@@ -37,6 +37,16 @@ final class IndexProducer
             $stamps[] = new TransportNamesStamp($transport);
         }
 
+        if ($this->entityManager->getMetadataFactory()->isTransient($target->class)) {
+            throw new \LogicException(sprintf(
+                'Class "%s" is not a Doctrine entity and cannot be streamed by meili:populate. ' .
+                'For file-backed collections use: bin/console meili:flush-file %s --dataset=mus/%s',
+                $target->class,
+                $target->base,
+                $target->base,
+            ));
+        }
+
         $streamer  = new DoctrinePrimaryKeyStreamer($this->entityManager, $target->class);
         $generator = $streamer->stream($batchSize);
 

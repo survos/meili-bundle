@@ -38,8 +38,8 @@ final class MeiliFlushFileCommand
         private readonly UrlGeneratorInterface $urlGenerator,
         private readonly IndexNameResolver $indexNameResolver,
         private readonly EntityManagerInterface $entityManager,
-        private readonly ?DatasetPathsFactoryInterface $pathsFactory = null,
         private readonly MeiliServerKeyService $serverKeyService,
+        private readonly ?DatasetPathsFactoryInterface $pathsFactory = null,
     ) {
     }
 
