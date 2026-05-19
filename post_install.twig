@@ -1,0 +1,12 @@
+  <info>survos/meili-bundle installed.</info>
+
+  Set your Meilisearch credentials in <comment>.env.local</comment>:
+    MEILI_SERVER=http://127.0.0.1:7700
+    MEILI_ADMIN_KEY=your-admin-key
+    MEILI_SEARCH_KEY=your-search-key
+
+  Run migrations to create the index tracking table:
+    <comment>symfony console doctrine:schema:update --force</comment>
+
+  Then open the listing:
+    <comment>symfony open:local --path={{ open }}</comment>

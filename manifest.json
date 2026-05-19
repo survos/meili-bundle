@@ -1,0 +1,13 @@
+{
+    "bundles": {
+        "Survos\\MeiliBundle\\SurvosMeiliBundle": ["all"]
+    },
+    "env": {
+        "MEILI_SERVER": "http://127.0.0.1:7700",
+        "MEILI_ADMIN_KEY": "",
+        "MEILI_SEARCH_KEY": ""
+    },
+    "migrations": true,
+    "open": "/meili/listing",
+    "post-install": "post_install.twig"
+}

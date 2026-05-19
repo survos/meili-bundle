@@ -59,7 +59,7 @@ class IndexInfo
     #[ORM\Column(type: 'integer')]
     public int $documentCount = 0;
 
-    #[ORM\Column(type: Types::JSON, options: ['jsonb' => true])]
+    #[ORM\Column(type: Types::JSONB)]
     public array $settings = [];
 
     #[ORM\Column(nullable: true)]
