@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Command;
 
-use Survos\CoreBundle\Service\SurvosUtils;
 use Survos\MeiliBundle\Service\DoctrinePrimaryKeyStreamer;
 use Survos\MeiliBundle\Service\IndexProducer;
 use Survos\MeiliBundle\Service\TargetPlanner;

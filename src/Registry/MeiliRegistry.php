@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Registry;
 
-use Survos\CoreBundle\Service\SurvosUtils;
 
 final class MeiliRegistry
 {

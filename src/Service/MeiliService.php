@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
 
+use Survos\DataContracts\Util\Arrays;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\EntityRepository;
 use Meilisearch\Client;
@@ -15,7 +16,6 @@ use Meilisearch\Endpoints\Indexes;
 use Meilisearch\Exceptions\ApiException;
 use Psr\Http\Client\ClientInterface;
 use Psr\Log\LoggerInterface;
-use Survos\CoreBundle\Service\SurvosUtils;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
 use Survos\MeiliBundle\Message\BatchRemoveEntitiesMessage;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
@@ -538,7 +538,7 @@ ORDER BY n.nspname, c.relname;"
 
             foreach ($entities as $entity) {
                 $normalized = $this->normalizer->normalize($entity, 'array', ['groups' => $groups]);
-                $normalized = SurvosUtils::removeNullsAndEmptyArrays($normalized);
+                $normalized = Arrays::sparse($normalized);
 
                 $json = json_encode($normalized);
                 $size = $json ? strlen($json) : 0;

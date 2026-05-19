@@ -4,6 +4,7 @@
 
 namespace Survos\MeiliBundle\EventListener;
 
+use Survos\DataContracts\Util\Arrays;
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
 use Doctrine\ORM\Event\PostFlushEventArgs;
 use Doctrine\ORM\Event\PostPersistEventArgs;
@@ -12,7 +13,6 @@ use Doctrine\ORM\Event\PrePersistEventArgs;
 use Doctrine\ORM\Event\PreRemoveEventArgs;
 use Doctrine\ORM\Events;
 use Psr\Log\LoggerInterface;
-use Survos\CoreBundle\Service\SurvosUtils;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
 use Survos\MeiliBundle\Message\BatchRemoveEntitiesMessage;
 use Survos\MeiliBundle\Service\MeiliPayloadBuilder;
@@ -133,7 +133,7 @@ class DoctrineEventListener
                 $normalized[] = $this->meiliPayloadBuilder->build($object, $persistedConfig);
             }
 
-            SurvosUtils::removeNullsAndEmptyArrays($normalized);
+            Arrays::sparse($normalized);
 
             $this->logger?->info(sprintf(
                 "Dispatching batch index message for %d %s entities",

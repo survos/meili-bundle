@@ -29,7 +29,6 @@ use Doctrine\ORM\EntityManagerInterface;
 use Meilisearch\Endpoints\Indexes;
 use Psr\Log\LoggerInterface;
 //use Survos\ApiGrid\Service\DatatableService;
-use Survos\CoreBundle\Service\SurvosUtils;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\SettingsService;
 use Symfony\Component\Console\Attribute\Argument;

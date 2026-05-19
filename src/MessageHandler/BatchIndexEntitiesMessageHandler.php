@@ -3,12 +3,12 @@ declare(strict_types=1);
 
 namespace Survos\MeiliBundle\MessageHandler;
 
+use Survos\DataContracts\Util\Arrays;
 use Doctrine\ORM\EntityManagerInterface;
 use Meilisearch\Contracts\TaskStatus;
 use Meilisearch\Endpoints\Indexes;
 use Psr\Log\LoggerInterface;
 use Survos\BabelBundle\Service\LocaleContext;
-use Survos\CoreBundle\Service\SurvosUtils;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
 use Survos\MeiliBundle\Service\IndexNameResolver;
 use Survos\MeiliBundle\Service\MeiliNdjsonUploader;
@@ -508,7 +508,7 @@ final class BatchIndexEntitiesMessageHandler
             }
 
             $doc = $this->payloadBuilder->build($entity, $persisted);
-            $doc = SurvosUtils::removeNullsAndEmptyArrays($doc);
+            $doc = Arrays::sparse($doc);
 
             if (!\is_array($doc)) {
                 $this->logger?->warning('payloadBuilder returned non-array', [

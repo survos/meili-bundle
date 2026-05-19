@@ -19,6 +19,7 @@ final class SpoolFlushCommand
         private readonly JsonlSpooler $spooler,
         private readonly MeiliService $meili,
         private readonly MeiliNdjsonUploader $uploader,
+    ) {}
 
     public function __invoke(
         SymfonyStyle $io,

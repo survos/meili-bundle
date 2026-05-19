@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Survos\MeiliBundle;
 
 use Survos\BabelBundle\Service\LocaleContext;
-use Survos\CoreBundle\Bundle\AssetMapperBundle;
-use Survos\CoreBundle\Traits\HasConfigurableRoutes;
+use Survos\Kit\AbstractUxBundle;
+use Survos\Kit\Traits\HasConfigurableRoutes;
 use Survos\MeiliBundle\Bridge\EasyAdmin\MeiliEasyAdminDashboardHelper;
 use Survos\MeiliBundle\Bridge\EasyAdmin\MeiliEasyAdminMenuFactory;
 use Survos\MeiliBundle\Command\ExportCommand;
@@ -65,7 +65,7 @@ use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigura
 use Symfony\Component\DependencyInjection\Reference;
 use Twig\Environment;
 
-class SurvosMeiliBundle extends AssetMapperBundle
+class SurvosMeiliBundle extends AbstractUxBundle
 {
     use HasConfigurableRoutes;
 
