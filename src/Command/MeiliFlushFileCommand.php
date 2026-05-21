@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Command;
 
+use Survos\MeiliBundle\Service\ChatWorkspaceAccessKeyService;
+use Survos\MeiliBundle\Service\ChatWorkspaceResolver;
 use Survos\MeiliBundle\Service\IndexNameResolver;
 use Survos\MeiliBundle\Service\MeiliNdjsonUploader;
 use Survos\MeiliBundle\Service\MeiliServerKeyService;
@@ -39,6 +41,8 @@ final class MeiliFlushFileCommand
         private readonly IndexNameResolver $indexNameResolver,
         private readonly EntityManagerInterface $entityManager,
         private readonly MeiliServerKeyService $serverKeyService,
+        private readonly ChatWorkspaceAccessKeyService $chatWorkspaceAccessKeyService,
+        private readonly ChatWorkspaceResolver $chatWorkspaceResolver,
         private readonly ?DatasetPathsFactoryInterface $pathsFactory = null,
     ) {
     }
@@ -58,6 +62,10 @@ final class MeiliFlushFileCommand
         bool $reset = false,
         #[Option('Apply Meilisearch settings inferred from the dataset/profile before upload')]
         bool $profileSettings = false,
+        #[Option('Create and sync managed index API keys (requires master key)')]
+        bool $keys = false,
+        #[Option('Sync chat workspaces for this index (requires master key)')]
+        bool $chat = false,
     ): int {
         if (($name === null || $name === '') && $dataset !== null && $dataset !== '') {
             $name = $this->indexNameResolver->baseFromDataset($dataset);
@@ -158,12 +166,21 @@ final class MeiliFlushFileCommand
 
         $this->registerIndexInfo($indexUid, $primaryKey, $taskUid);
 
-        if ($profileSettings) {
-            $keys = $this->serverKeyService->ensureServerKeys([$indexUid]);
-            foreach ($keys as $alias => $key) {
-                $io->writeln(sprintf('  [key:%s] %s (uid=%s)', $alias,
+        if ($keys) {
+            $io->section('Managed Meili keys');
+            $managedKeys = $this->serverKeyService->ensureServerKeys([$indexUid]);
+            foreach ($managedKeys as $alias => $key) {
+                $io->writeln(sprintf('  [%s] %s (uid=%s)', $alias,
                     $key['created'] ? 'created' : 'verified', $key['keyUid']));
             }
+        }
+
+        if ($chat) {
+            $io->section('Chat workspaces');
+            $workspace = $this->chatWorkspaceResolver->actualWorkspaceName($name, $indexUid);
+            $apiKey    = $this->chatWorkspaceAccessKeyService->ensureApiKey($indexUid, $workspace);
+            $io->writeln(sprintf('  [%s] workspace key %s', $workspace,
+                $apiKey['created'] ? 'created' : 'verified'));
         }
 
         $this->renderIndexLink($io, $name, $sourceLocale);

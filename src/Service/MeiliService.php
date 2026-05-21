@@ -14,6 +14,7 @@ use Meilisearch\Contracts\TasksQuery;
 use Meilisearch\Contracts\TasksResults;
 use Meilisearch\Endpoints\Indexes;
 use Meilisearch\Exceptions\ApiException;
+use Meilisearch\Exceptions\InvalidResponseBodyException;
 use Psr\Http\Client\ClientInterface;
 use Psr\Log\LoggerInterface;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
@@ -319,7 +320,7 @@ final class MeiliService
 
         try {
             $client->getIndex($uid);
-        } catch (ApiException $exception) {
+        } catch (ApiException|InvalidResponseBodyException $exception) {
             if ($exception->httpStatus === 404) {
                 if ($autoCreate) {
                     $task = $client->createIndex($uid, ['primaryKey' => $primaryKey]);
@@ -400,7 +401,7 @@ final class MeiliService
             $index->deleteAllDocuments();
             $client->deleteIndex($uid)->wait();
             $this->logger?->warning(sprintf('Index %s purged+deleted.', $uid));
-        } catch (ApiException $exception) {
+        } catch (ApiException|InvalidResponseBodyException $exception) {
             if (($exception->errorCode ?? null) === 'index_not_found' || $exception->httpStatus === 404) {
                 return;
             }
