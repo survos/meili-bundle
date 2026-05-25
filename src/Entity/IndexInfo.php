@@ -9,6 +9,10 @@ use function is_array;
 use function is_string;
 use Survos\MeiliBundle\Metadata\Facet;
 use Survos\MeiliBundle\Metadata\MeiliIndex;
+use Survos\FieldBundle\Attribute\EntityMeta;
+use Survos\FieldBundle\Attribute\RouteIdentity;
+use Survos\FieldBundle\Entity\RouteIdentityTrait;
+use Survos\FieldBundle\Entity\RouteParametersInterface;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
 use Doctrine\ORM\Mapping as ORM;
 
@@ -23,6 +27,8 @@ use Doctrine\ORM\Mapping as ORM;
  * This entity is itself indexed in Meilisearch so you can search/chat across
  * all known collections without leaving the app.
  */
+#[EntityMeta(icon: 'tabler:search', group: 'Meili', label: 'Indexes')]
+#[RouteIdentity(field: 'indexName')]
 #[ORM\Entity(repositoryClass: IndexInfoRepository::class)]
 #[MeiliIndex(
     name: 'meili',
@@ -37,8 +43,9 @@ use Doctrine\ORM\Mapping as ORM;
     chats: ['meili_assistant'],
     ui: ['columns' => 3, 'layout' => 'neutral'],
 )]
-class IndexInfo
+class IndexInfo implements RouteParametersInterface, \Stringable
 {
+    use RouteIdentityTrait;
     private const REGISTRY_KEY = '_registry';
     private const CHAT_WORKSPACES_KEY = 'chatWorkspaces';
     private const SERVER_KEYS_KEY = 'serverKeys';
@@ -319,5 +326,10 @@ class IndexInfo
 
         $registry[self::SERVER_KEYS_KEY] = $serverKeys;
         $this->settings[self::REGISTRY_KEY] = $registry;
+    }
+
+    public function __toString(): string
+    {
+        return $this->label ?? $this->indexName;
     }
 }
