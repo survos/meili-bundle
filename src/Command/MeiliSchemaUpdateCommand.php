@@ -263,7 +263,7 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
         }
 
         if ($chat === true) {
-            $this->syncChat($io, $dumpSettings, $force, $keys);
+            $this->syncChat($io, $dumpSettings, $force, $keys, $uniqueIndexUids);
         }
 
         return Command::SUCCESS;
@@ -322,7 +322,8 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
         }
     }
 
-    private function syncChat(SymfonyStyle $io, bool $dumpSettings, bool $force, bool $createKeys): void
+    /** @param list<string> $limitIndexUids */
+    private function syncChat(SymfonyStyle $io, bool $dumpSettings, bool $force, bool $createKeys, array $limitIndexUids = []): void
     {
         $client      = $this->meili->getMeiliClient();
         $meiliConfig = $this->meili->getConfig();
@@ -364,8 +365,18 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
         // 2. Sync each workspace template into one actual workspace per index
         foreach ($workspaces as $name => $cfg) {
             $workspaceIndexUids = $this->chatWorkspaceResolver->resolveWorkspaceIndexes($name, $cfg);
+            if ($limitIndexUids !== []) {
+                $workspaceIndexUids = array_values(array_filter(
+                    $workspaceIndexUids,
+                    static fn(string $indexUid): bool => in_array($indexUid, $limitIndexUids, true)
+                ));
+            }
 
             if ($workspaceIndexUids === []) {
+                if ($limitIndexUids !== []) {
+                    continue;
+                }
+
                 throw new RuntimeException(sprintf('Workspace "%s" is not attached to any indexes.', $name));
             }
             $io->writeln(sprintf('Workspace template "%s" indexes: %s', $name, implode(', ', $workspaceIndexUids)));

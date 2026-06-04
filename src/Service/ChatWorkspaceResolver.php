@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
 
+use Survos\MeiliBundle\Entity\IndexInfo;
+use Survos\MeiliBundle\Repository\IndexInfoRepository;
 use function array_key_first;
 use function array_keys;
 use function array_merge;
@@ -22,6 +24,7 @@ final class ChatWorkspaceResolver
         private readonly MeiliService $meiliService,
         private readonly IndexNameResolver $indexNameResolver,
         private readonly array $chatConfig = [],
+        private readonly ?IndexInfoRepository $indexInfoRepository = null,
     ) {
     }
 
@@ -78,6 +81,13 @@ final class ChatWorkspaceResolver
             }
         }
 
+        foreach ($this->registryChatWorkspaceNames($indexUid) as $actualWorkspace) {
+            $template = $this->templateFromActualWorkspace($actualWorkspace, $indexUid);
+            if ($template !== null && isset($this->chatConfig['workspaces'][$template])) {
+                $templates[] = $template;
+            }
+        }
+
         if ($templates !== []) {
             return array_values(array_unique($templates));
         }
@@ -102,10 +112,12 @@ final class ChatWorkspaceResolver
             }
         }
 
+        $indexUidsFromRegistry = $this->resolveWorkspaceIndexesFromRegistry($workspace);
+
         /** @var list<string> $legacyUids */
         $legacyUids = $workspaceCfg['indexes'] ?? [];
 
-        $resolved = array_values(array_unique(array_merge($indexUidsFromAttribute, $legacyUids)));
+        $resolved = array_values(array_unique(array_merge($indexUidsFromAttribute, $indexUidsFromRegistry, $legacyUids)));
         if ($resolved !== []) {
             return $resolved;
         }
@@ -119,5 +131,71 @@ final class ChatWorkspaceResolver
         }
 
         return array_values(array_unique($allIndexUids));
+    }
+    /**
+     * @return list<string>
+     */
+    private function resolveWorkspaceIndexesFromRegistry(string $workspace): array
+    {
+        if ($this->indexInfoRepository === null) {
+            return [];
+        }
+
+        $indexUids = [];
+        foreach ($this->indexInfoRepository->findAll() as $indexInfo) {
+            if (!$indexInfo instanceof IndexInfo) {
+                continue;
+            }
+
+            foreach ($this->registryChatWorkspaceNames($indexInfo->indexName) as $actualWorkspace) {
+                if ($actualWorkspace === $workspace || $this->templateFromActualWorkspace($actualWorkspace, $indexInfo->indexName) === $workspace) {
+                    $indexUids[] = $indexInfo->indexName;
+                }
+            }
+        }
+
+        return array_values(array_unique($indexUids));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function registryChatWorkspaceNames(string $indexUid): array
+    {
+        $indexInfo = $this->indexInfoRepository?->find($indexUid);
+        if (!$indexInfo instanceof IndexInfo) {
+            return [];
+        }
+
+        $registry = $indexInfo->settings['_registry'] ?? null;
+        if (!is_array($registry)) {
+            return [];
+        }
+
+        $workspaces = $registry['chatWorkspaces'] ?? null;
+        if (!is_array($workspaces)) {
+            return [];
+        }
+
+        $names = [];
+        foreach (array_keys($workspaces) as $workspaceName) {
+            if (is_string($workspaceName) && $workspaceName !== '') {
+                $names[] = $workspaceName;
+            }
+        }
+
+        return array_values(array_unique($names));
+    }
+
+    private function templateFromActualWorkspace(string $actualWorkspace, string $indexUid): ?string
+    {
+        $prefix = $indexUid . '_';
+        if (!str_starts_with($actualWorkspace, $prefix)) {
+            return null;
+        }
+
+        $template = substr($actualWorkspace, strlen($prefix));
+
+        return $template !== '' ? $template : null;
     }
 }
