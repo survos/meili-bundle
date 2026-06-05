@@ -14,8 +14,7 @@ import { instantMeiliSearch } from '@meilisearch/instant-meilisearch';
 
 // import * as bootstrap from 'bootstrap';
 
-// new, might not be right
-import '../debug/fetch_tap.js';
+// fetch_tap is an opt-in dev tool — import '../debug/fetch_tap.js' manually when needed.
 import { createDebug } from '../debug/debug.js';
 import {
   searchBox,

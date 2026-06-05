@@ -28,7 +28,6 @@ export default class extends Dialog {
     connect() {
         super.connect();
         this.index = false;
-        console.log(this.serverUrlValue, this.serverApiKeyValue);
         // this.data = JSON.parse(this.dataValue);
         // console.log(this.data);
     }
@@ -52,8 +51,6 @@ export default class extends Dialog {
 
 
     initialize() {
-        console.log("initialize from " + this.identifier);
-
         super.initialize()
         // Called once when the controller is first instantiated (per element)
 
@@ -77,7 +74,6 @@ export default class extends Dialog {
 
     modal(e) {
         // we could move the index logic here, so we have have a title
-        console.log({hitId: e.currentTarget.dataset.hitId});
         this.hitId = e.currentTarget.dataset.hitId;
         this.open();
     }
@@ -99,7 +95,6 @@ export default class extends Dialog {
 // → { b: 2, c: { e: 5 } }
 
                 // const html = prettyPrintJson.toHtml(clean);
-                console.log(hit);
                 // this.userStatusOutlets.forEach(outlet => {
                 //     console.log(outlet);
                 // })
@@ -125,7 +120,6 @@ export default class extends Dialog {
                 jsonViewer.expandIconType = "square"
                 jsonViewer.data = clean
 
-                console.log(jsonViewer, jsonViewer.data);
                 this.contentTarget.innerHTML = "";
                 this.contentTarget.appendChild(jsonViewer);
 

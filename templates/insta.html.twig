@@ -486,10 +486,12 @@
     }) }}
     class="survos-imgproxy-scope">
 
+  {% if debug %}
   <div class="small text-muted text-break mb-2">
     imgproxy controller:
     <code {{ stimulus_target(_sc_imgproxy, 'status') }}>waiting for imgproxy controller; host={{ imgproxyHost ?: '(missing)' }}</code>
   </div>
+  {% endif %}
 
   <div
     {{ stimulus_controller(_sc, {
