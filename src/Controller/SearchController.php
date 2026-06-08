@@ -115,7 +115,9 @@ class SearchController extends AbstractController
                 'instantsearch' => ['routing' => false],
             ];
 
-        // Locale-agnostic template selection
+        $indexConfig["instantsearch"] = is_array($indexConfig["instantsearch"] ?? null) ? $indexConfig["instantsearch"] : [];
+        $indexConfig["instantsearch"]["routing"] ??= false;
+
         $templateName = $indexConfig['template'] ?? $baseIndexName;
 
         // Fetch server settings using the UID

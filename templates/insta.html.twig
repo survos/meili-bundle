@@ -448,7 +448,7 @@
     indexName: indexName,
     baseIndexName: baseIndexName,
     _sc_modal: '@survos/meili-bundle/json',
-    imgproxyHost: imgproxyHost,
+    imgproxyHost: imgproxyHost|default(false),
     debug: debug,
     chatBaseUrl:   path('meili_chat',  {indexName: 'INDEXNAME', workspace: 'meili_assistant'}),
     searchBaseUrl: path('meili_insta', {indexName: 'INDEXNAME'}),
@@ -479,12 +479,16 @@
     {% set grid = app.request.query.get('class', 'grid-' ~ app.request.query.get('grid')|default(2)) %}
 
   <div
+    {# only if imgproxy-bundle is installed! #}
+    {% if imgproxyHost|default(false) %}
     {{ stimulus_controller(_sc_imgproxy, {
       host: imgproxyHost,
       endpoint: path('survos_imgproxy_url'),
       preset: 'observe'
     }) }}
-    class="survos-imgproxy-scope">
+    class="survos-imgproxy-scope"
+    {% endif %}
+    >
 
   {% if debug %}
   <div class="small text-muted text-break mb-2">

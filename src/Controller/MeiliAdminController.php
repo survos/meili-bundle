@@ -262,8 +262,12 @@ class MeiliAdminController extends AbstractController
     private function buildFacetChart(string $fieldName, array $counts, int $maxItems = 10): Chart
     {
         $chartData = array_slice($counts, 0, $maxItems);
-        $labels = array_map(fn($c) => mb_substr($c['label'] ?: '(empty)', 0, 25), $chartData);
-        $values = array_map(fn($c) => $c['count'], $chartData);
+        $labels = array_map(static function (array $count): string {
+            $label = $count["label"] ?? null;
+
+            return mb_substr((string) ($label === null || $label === "" ? "(empty)" : $label), 0, 25);
+        }, $chartData);
+        $values = array_map(static fn (array $count): int => (int) ($count["count"] ?? 0), $chartData);
 
         $chartType = count($chartData) <= 6 ? Chart::TYPE_PIE : Chart::TYPE_BAR;
 
