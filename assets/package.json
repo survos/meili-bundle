@@ -38,9 +38,9 @@
       "instantsearch.js": "^4.101.1",
       "instantsearch.js/es/widgets": "^4.101.1",
       "instantsearch.css/themes/algolia.min.css": "^8.17.0",
-      "@meilisearch/instant-meilisearch": "^0.31.1",
+      "@meilisearch/instant-meilisearch": "^0.30.0",
       "@stimulus-components/dialog": "*",
-      "meilisearch": "^0.58.0",
+      "meilisearch": "0.54.0",
       "@andypf/json-viewer": "^2.8.0",
       "pretty-print-json": "^3.0.8"
     }
