@@ -4,7 +4,7 @@
  * Purpose: Console-only diagnostics using the official Meilisearch JS client.
  * Notes: This never blocks or configures the UI; purely informational.
  */
-import { MeiliSearch } from 'meilisearch';
+import { Meilisearch } from 'meilisearch';
 
 const log = (...args) => console.debug('[MEILI sanity]', ...args);
 
@@ -18,7 +18,7 @@ export async function runMeiliSanity(cfg) {
     return { ok: false, error: 'Missing host or indexUid' };
   }
 
-  const client = new MeiliSearch({ host, apiKey: apiKey ?? undefined });
+  const client = new Meilisearch({ host, apiKey: apiKey ?? undefined });
   log('client created', { host, indexUid, hasKey: Boolean(apiKey) });
 
   try {
