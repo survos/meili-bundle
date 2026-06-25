@@ -12,11 +12,11 @@ use Psr\Log\LoggerInterface;
 final class EmbedCostEstimator
 {
     /**
-     * @param callable(string): int $tokenizerFn returns token count for a single text
+     * @param \Closure(string): int $tokenizerFn returns token count for a single text
      * @param float $pricePer1kTokens USD per 1K input tokens (embeddings usually charge on input tokens only)
      */
     public function __construct(
-        private readonly callable $tokenizerFn,
+        private readonly \Closure $tokenizerFn,
         private readonly float $pricePer1kTokens = 0.02, // sensible default; override via DI or CLI
         private readonly ?LoggerInterface $logger = null,
     ) {}
