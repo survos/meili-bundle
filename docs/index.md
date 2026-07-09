@@ -30,6 +30,7 @@ keep them in sync automatically, and expose your data to AI agents via MCP.
 | [Commands](commands.md) | All console commands with examples |
 | [Semantic search](semantic-search.md) | Embedders, Liquid templates, cost estimation |
 | [Doctrine sync](sync.md) | Auto-sync via postFlush, Messenger batching |
+| [Frontend InstantSearch UI](frontend-instant-search.md) | The `insta` Stimulus controller, hit templates, the CSS you will forget to link |
 | [MCP / AI agents](mcp.md) | Expose your indexes to Claude, ChatGPT, Cursor, etc. |
 | [Multilingual](multilingual-index-naming.md) | Multi-language index naming strategy |
 

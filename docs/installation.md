@@ -128,12 +128,17 @@ bin/console ux:icons:lock
 In `assets/app.js`:
 
 ```js
-import 'instantsearch.css/themes/algolia.min.css';
 import 'flag-icons/css/flag-icons.min.css';
 ```
 
+**Don't stop here** — this covers imports only. The Stimulus controller wiring,
+hit templates, and (critically) the second stylesheet everyone forgets to link
+are in [Frontend InstantSearch UI](frontend-instant-search.md). Read it before
+your search page's facets/pagination render as an unstyled bullet list.
+
 ## Next steps
 
+- [Frontend InstantSearch UI](frontend-instant-search.md) — the `insta` Stimulus controller, hit templates, required CSS links
 - [Configuration reference](configuration.md) — prefix, embedders, meili_settings tuning
 - [Indexing attributes](indexing.md) — full `#[MeiliIndex]` options, `Fields`, `#[Facet]`
 - [Semantic search](semantic-search.md) — add AI-powered vector search
