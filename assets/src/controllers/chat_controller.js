@@ -261,10 +261,21 @@ export default class extends Controller {
     const engine = await this._ensureTwigEngine()
     if (!engine) return null
     try {
-      const { loadTemplateFromUrl } = await import("@tacman1123/twig-browser")
-      const result = await loadTemplateFromUrl(engine, this.templateUrlValue)
-      this._twigBlock  = result.blockName
-      this._twigSource = result.source
+      // twig-browser has no loadTemplateFromUrl helper (only createEngine /
+      // compileTwigBlocks / twigRender are exported) — fetch + compile it here
+      // instead of relying on a convenience wrapper that was never published.
+      const { compileTwigBlocks } = await import("@tacman1123/twig-browser")
+      const response = await fetch(this.templateUrlValue, { headers: { "X-Requested-With": "XMLHttpRequest" } })
+      if (!response.ok) throw new Error(`HTTP ${response.status} loading template ${this.templateUrlValue}`)
+      const source = await response.text()
+
+      const registry = new Map()
+      compileTwigBlocks(engine, registry, source)
+      const blockName = registry.keys().next().value
+      if (!blockName) throw new Error(`Template at ${this.templateUrlValue} has no <twig:block> tags.`)
+
+      this._twigBlock  = blockName
+      this._twigSource = source
       this._assertUxIconsConfigured(this._twigSource)
     } catch (e) {
       console.error("[chat] template load failed:", e)

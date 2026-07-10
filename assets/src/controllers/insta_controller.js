@@ -27,6 +27,7 @@ import {
   configure
 } from 'instantsearch.js/es/widgets';
 
+import { compileTwigBlocks } from '@tacman1123/twig-browser';
 import { installTwigEngine, awaitTwigEngine } from './insta_twig.js';
 import { safeParse, stripProtocol, escapeHtml, normalizeConfig } from './insta_helpers.js';
 import { mountFacetFromNode } from './insta_facets.js';
@@ -223,12 +224,20 @@ export default class extends Controller {
 
   async _loadTemplate() {
     if (!this.templateUrlValue) return;
-    const { loadTemplateFromUrl } = await import('@tacman1123/twig-browser');
-    const { blockName, source } = await loadTemplateFromUrl(
-      engine,
-      this.templateUrlValue,
-      'hit'
-    );
+    // twig-browser has no loadTemplateFromUrl helper (only createEngine /
+    // compileTwigBlocks / twigRender are exported) — fetch + compile it here
+    // instead of relying on a convenience wrapper that was never published.
+    const response = await fetch(this.templateUrlValue, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    if (!response.ok) throw new Error(`HTTP ${response.status} loading template ${this.templateUrlValue}`);
+    const source = await response.text();
+
+    const registry = new Map();
+    compileTwigBlocks(engine, registry, source);
+    const blockName = 'hit';
+    if (!registry.has(blockName)) {
+      throw new Error(`Template at ${this.templateUrlValue} has no <twig:block name="${blockName}"> block.`);
+    }
+
     this._templateBlockName = blockName;
     this._templateSource = source;
   }
