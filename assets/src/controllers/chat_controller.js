@@ -262,17 +262,21 @@ export default class extends Controller {
     if (!engine) return null
     try {
       // twig-browser has no loadTemplateFromUrl helper (only createEngine /
-      // compileTwigBlocks / twigRender are exported) — fetch + compile it here
-      // instead of relying on a convenience wrapper that was never published.
-      const { compileTwigBlocks } = await import("@tacman1123/twig-browser")
+      // compileTwigBlocks / twigRender are exported) — fetch it here instead of
+      // relying on a convenience wrapper that was never published.
+      //
+      // compileTwigBlocks() expects literal <twig:block name="..."> wrapper
+      // tags (for the DOM-embedded multi-block case) — a template fetched from
+      // a dedicated URL is just plain Twig markup for one block's body, no
+      // wrapper. Compile it directly under 'hit' (matches insta_controller.js's
+      // convention, and this file's own ctx below uses `hit: doc`) via the
+      // engine's own compileBlock().
       const response = await fetch(this.templateUrlValue, { headers: { "X-Requested-With": "XMLHttpRequest" } })
       if (!response.ok) throw new Error(`HTTP ${response.status} loading template ${this.templateUrlValue}`)
       const source = await response.text()
 
-      const registry = new Map()
-      compileTwigBlocks(engine, registry, source)
-      const blockName = registry.keys().next().value
-      if (!blockName) throw new Error(`Template at ${this.templateUrlValue} has no <twig:block> tags.`)
+      const blockName = "hit"
+      engine.compileBlock(blockName, source)
 
       this._twigBlock  = blockName
       this._twigSource = source

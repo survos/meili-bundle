@@ -27,7 +27,6 @@ import {
   configure
 } from 'instantsearch.js/es/widgets';
 
-import { compileTwigBlocks } from '@tacman1123/twig-browser';
 import { installTwigEngine, awaitTwigEngine } from './insta_twig.js';
 import { safeParse, stripProtocol, escapeHtml, normalizeConfig } from './insta_helpers.js';
 import { mountFacetFromNode } from './insta_facets.js';
@@ -225,18 +224,22 @@ export default class extends Controller {
   async _loadTemplate() {
     if (!this.templateUrlValue) return;
     // twig-browser has no loadTemplateFromUrl helper (only createEngine /
-    // compileTwigBlocks / twigRender are exported) — fetch + compile it here
-    // instead of relying on a convenience wrapper that was never published.
+    // compileTwigBlocks / twigRender are exported) — fetch it here instead of
+    // relying on a convenience wrapper that was never published.
+    //
+    // compileTwigBlocks() is the wrong tool for this: it expects the source to
+    // contain literal <twig:block name="..."> wrapper tags (for the DOM-embedded
+    // multi-block case, e.g. several named sections inline in one page). A
+    // template fetched from a dedicated URL like /meili/template/{index} is
+    // just plain Twig markup for a single block's body, with no wrapper —
+    // compile it directly under the 'hit' name (the ctx var every template
+    // here renders against) via the engine's own compileBlock().
     const response = await fetch(this.templateUrlValue, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
     if (!response.ok) throw new Error(`HTTP ${response.status} loading template ${this.templateUrlValue}`);
     const source = await response.text();
 
-    const registry = new Map();
-    compileTwigBlocks(engine, registry, source);
     const blockName = 'hit';
-    if (!registry.has(blockName)) {
-      throw new Error(`Template at ${this.templateUrlValue} has no <twig:block name="${blockName}"> block.`);
-    }
+    engine.compileBlock(blockName, source);
 
     this._templateBlockName = blockName;
     this._templateSource = source;
