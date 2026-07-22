@@ -1,9 +1,13 @@
 // -----------------------------------------------------------------------------
 // File: assets/src/controllers/insta_controller.js
-// Version: MEILI-INSTA v4.7-sort-fix
+// Version: MEILI-INSTA v4.8-dropdown-fix
 //  - Custom multi-search client that injects `hybrid` (embedder + semanticRatio).
 //  - Fix: translate Algolia-style facetFilters / numericFilters -> Meilisearch `filter`.
 //  - Fix: translate Algolia replica-style indexName (for sortBy) -> Meili `indexUid` + `sort`.
+//  - Fix: removed redundant document.body dropdown click handler — it duplicated
+//    Bootstrap/Tabler's own native delegated dropdown handler (registered on
+//    import), causing every [data-bs-toggle="dropdown"] on the page to get
+//    toggled twice per click (open, then immediately re-closed).
 //  - Keep: facets array normalization + fallback from config/schema.
 //  - Keep: highlight conversion, hybrid/threshold handling, debug hooks.
 // -----------------------------------------------------------------------------
@@ -110,17 +114,6 @@ export default class extends Controller {
         showRankingScoreDetails: true
       }
     };
-
-    // Initialize Bootstrap Dropdown
-    document.body.addEventListener('click', function(event) {
-      const toggle = event.target.closest('[data-bs-toggle="dropdown"]');
-      if (!toggle) {
-          return;
-      }
-      event.preventDefault();
-      const instance = bootstrap.Dropdown.getOrCreateInstance(toggle);
-      instance.toggle();
-    });
   }
 
   async connect() {
