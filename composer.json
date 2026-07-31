@@ -25,7 +25,8 @@
         "survos/lingua-core": "^2.5",
         "survos/js-twig-bundle": "^2.5",
         "survos/data-contracts": "^2.5",
-        "survos/kit-bundle": "^2.5"
+        "survos/kit-bundle": "^2.5",
+        "survos/field-bundle": "^2.5"
     },
     "require-dev": {
         "devizzent/cebe-php-openapi": "^1.1",
