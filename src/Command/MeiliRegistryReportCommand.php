@@ -15,8 +15,6 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 use function count;
 use function implode;
 use function is_array;
-use function method_exists;
-use function property_exists;
 use function sprintf;
 use function str_contains;
 use function strtolower;
@@ -182,39 +180,13 @@ final class MeiliRegistryReportCommand
     {
         try {
             $index = $this->meili->getIndexEndpoint($uid);
+            $info = $index->fetchRawInfo();
 
-            $createdAt = null;
-            $updatedAt = null;
-
-            try {
-                if (method_exists($index, 'fetchInfo')) {
-                    $info = $index->fetchInfo();
-                } elseif (method_exists($index, 'getRawInfo')) {
-                    $info = $index->getRawInfo();
-                } elseif (method_exists($index, 'getInfo')) {
-                    $info = $index->getInfo();
-                } else {
-                    $info = null;
-                }
-
-                if (is_array($info)) {
-                    $createdAt = isset($info['createdAt']) ? (string)$info['createdAt'] : null;
-                    $updatedAt = isset($info['updatedAt']) ? (string)$info['updatedAt'] : null;
-                } elseif (is_object($info)) {
-                    $createdAt = property_exists($info, 'createdAt') ? (string)$info->createdAt : null;
-                    $updatedAt = property_exists($info, 'updatedAt') ? (string)$info->updatedAt : null;
-                }
-            } catch (\Throwable) {
-                // ignore
-            }
-
-            try {
-                $index->stats();
-            } catch (\Throwable) {
-                return [false, null, null];
-            }
-
-            return [true, $createdAt, $updatedAt];
+            return [
+                true,
+                isset($info['createdAt']) ? (string) $info['createdAt'] : null,
+                isset($info['updatedAt']) ? (string) $info['updatedAt'] : null,
+            ];
         } catch (\Throwable) {
             return [false, null, null];
         }

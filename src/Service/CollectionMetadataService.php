@@ -75,10 +75,7 @@ final class CollectionMetadataService
         $fieldsResponse = $this->safeRequestJson($this->buildMeiliUrl('/indexes/' . rawurlencode($indexUid) . '/fields'));
         $openApiDocument = $schemaUrl !== null ? $this->getSchemaDocument($schemaUrl) : null;
 
-        $fieldDistribution = $stats['fieldDistribution'] ?? [];
-        if (!is_array($fieldDistribution)) {
-            $fieldDistribution = [];
-        }
+        $fieldDistribution = $stats->getFieldDistribution();
         arsort($fieldDistribution);
 
         $searchable = $this->stringList($settings['searchableAttributes'] ?? []);
@@ -87,7 +84,7 @@ final class CollectionMetadataService
         $displayed = $this->stringList($settings['displayedAttributes'] ?? []);
         $overviewFacet = $this->buildOverviewFacet(
             $indexUid,
-            (int) ($stats['numberOfDocuments'] ?? 0),
+            $stats->getNumberOfDocuments(),
             $filterable,
             [
                 'primaryItemType',
@@ -107,7 +104,7 @@ final class CollectionMetadataService
         );
         $locationFacet = $this->buildOverviewFacet(
             $indexUid,
-            (int) ($stats['numberOfDocuments'] ?? 0),
+            $stats->getNumberOfDocuments(),
             $filterable,
             [
                 'physicalLocation',
@@ -169,7 +166,7 @@ final class CollectionMetadataService
         );
 
         $summaryBits = [
-            sprintf('The index contains %d documents.', (int) ($stats['numberOfDocuments'] ?? 0)),
+            sprintf('The index contains %d documents.', $stats->getNumberOfDocuments()),
         ];
 
         if ($topFields !== []) {
@@ -188,7 +185,7 @@ final class CollectionMetadataService
         return (string) json_encode([
             'index' => $indexUid,
             'summary' => implode(' ', $summaryBits),
-            'documents' => (int) ($stats['numberOfDocuments'] ?? 0),
+            'documents' => $stats->getNumberOfDocuments(),
             'primaryKey' => $settings['primaryKey'] ?? 'id',
             'searchableAttributes' => $searchable,
             'filterableAttributes' => $filterable,
@@ -200,7 +197,7 @@ final class CollectionMetadataService
             'describedFieldCount' => count($describedFields),
             'fields' => $fields,
             'indexStats' => [
-                'isIndexing' => (bool) ($stats['isIndexing'] ?? false),
+                'isIndexing' => $stats->isIndexing(),
                 'fieldDistributionCount' => count($fieldDistribution),
             ],
             'serverStats' => $globalStats,
@@ -355,7 +352,12 @@ final class CollectionMetadataService
         try {
             $stats = $this->meiliService->getMeiliClient()->stats();
 
-            return is_array($stats) ? $stats : [];
+            return [
+                'databaseSize' => $stats->getDatabaseSize(),
+                'usedDatabaseSize' => $stats->getUsedDatabaseSize(),
+                'lastUpdate' => $stats->getLastUpdate()?->format(DATE_ATOM),
+                'indexCount' => count($stats->getIndexes()),
+            ];
         } catch (\Throwable $exception) {
             $this->logger?->warning('Unable to fetch Meilisearch global stats.', ['exception' => $exception]);
 

@@ -6,7 +6,7 @@ namespace Survos\MeiliBundle\MessageHandler;
 use Survos\DataContracts\Util\Arrays;
 use Doctrine\ORM\EntityManagerInterface;
 use Meilisearch\Contracts\TaskStatus;
-use Meilisearch\Endpoints\Indexes;
+use Meilisearch\Endpoints\Index;
 use Psr\Log\LoggerInterface;
 use Survos\BabelBundle\Service\LocaleContext;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
@@ -275,7 +275,7 @@ final class BatchIndexEntitiesMessageHandler
         }
     }
 
-    private function getMeiliIndex(?string $indexName, string $entityClass, ?string $locale): Indexes
+    private function getMeiliIndex(?string $indexName, string $entityClass, ?string $locale): Index
     {
         if ($indexName) {
             $this->logger?->info('getMeiliIndex(): using explicit indexName', [
@@ -402,95 +402,6 @@ final class BatchIndexEntitiesMessageHandler
         }
 
         return false;
-    }
-
-    /**
-     * Wait for the task if sync is enabled and we have a task uid.
-     * Fail loudly when the task fails.
-     */
-    private function awaitIfSync(Indexes $index, Task $task, bool $sync, ?string $indexName, string $primaryKey): void
-    {
-        if (!$sync) {
-            return;
-        }
-
-        // Normalize task uid from whatever uploader returns.
-        $uid = null;
-
-        if (\is_int($taskUid)) {
-            $uid = $taskUid;
-        } elseif (\is_array($taskUid)) {
-            $uid = $taskUid['taskUid'] ?? $taskUid['uid'] ?? $taskUid['task_id'] ?? null;
-            $uid = \is_int($uid) ? $uid : null;
-        } elseif (\is_object($taskUid)) {
-            foreach (['getTaskUid', 'getUid'] as $m) {
-                if (\method_exists($taskUid, $m)) {
-                    $v = $taskUid->{$m}();
-                    if (\is_int($v)) {
-                        $uid = $v;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (!$uid) {
-            $this->logger?->warning('Sync requested but no task uid was returned from uploader; cannot wait', [
-                'indexName'  => $indexName,
-                'primaryKey' => $primaryKey,
-            ]);
-            return;
-        }
-
-        $this->logger?->info('Waiting for Meilisearch task completion (sync mode)', [
-            'taskUid'     => $uid,
-            'indexName'   => $indexName,
-            'primaryKey'  => $primaryKey,
-        ]);
-
-        $task = $this->waitForTask($index, $taskUid);
-
-        $status = \is_array($task) ? ($task['status'] ?? null) : null;
-        if ($status !== 'succeeded') {
-            $error = \is_array($task) ? ($task['error'] ?? null) : null;
-            $msg = sprintf(
-                'Meilisearch task %d did not succeed (status=%s) for index "%s" (primaryKey=%s).',
-                $uid,
-                (string) ($status ?? 'unknown'),
-                (string) ($indexName ?? $index->getUid()),
-                $primaryKey
-            );
-
-            $this->logger?->error($msg, [
-                'task' => $task,
-            ]);
-
-            throw new \RuntimeException($msg . ($error ? ' ' . json_encode($error) : ''));
-        }
-    }
-
-    /**
-     * Wait using whichever API is available in the current SDK / MeiliService wrapper.
-     *
-     * @return array<string,mixed>
-     */
-    private function waitForTask(Indexes $index, Task $task): array
-    {
-        // Newer SDKs support waitForTask directly on Indexes.
-        if (\method_exists($index, 'waitForTask')) {
-            /** @var array<string,mixed> $task */
-            $task = $index->waitForTask($taskUid);
-            return $task;
-        }
-
-        // If MeiliService provides a wait helper, prefer it.
-        if (\method_exists($this->meiliService, 'waitForTask')) {
-            /** @var array<string,mixed> $task */
-            $task = $this->meiliService->waitForTask($taskUid);
-            return $task;
-        }
-
-        throw new \RuntimeException('Sync mode requested, but no waitForTask() implementation is available.');
     }
 
     /**

@@ -139,17 +139,17 @@ final class MeiliSchemaValidateCommand
     private function pendingTasks(string $uid): int
     {
         $resp = $this->meili->getMeiliClient()->getTasks(
-            new TasksQuery()->setUids([$uid])->setStatuses( ['enqueued', 'processing'])->setLimit(1000)
+            new TasksQuery()->setUids([$uid])->setStatuses(['enqueued', 'processing'])->setLimit(1000)
         );
-        dd($resp);
-        return \count($resp['results'] ?? []);
+
+        return $resp->getTotal();
     }
 
     /** @return array<string,mixed> */
     private function fetchRemoteSettings(string $uid): array
     {
         try {
-            return $this->meili->index($uid)->getSettings();
+            return $this->meili->getIndexEndpoint($uid)->getSettings();
         } catch (\Meilisearch\Exceptions\ApiException $e) {
             if ($e->getCode() === 404) {
                 // Non-existent index => all settings "missing" remotely

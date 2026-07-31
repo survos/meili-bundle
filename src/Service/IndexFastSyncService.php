@@ -5,7 +5,7 @@ namespace Survos\MeiliBundle\Service;
 
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
-use Meilisearch\Endpoints\Indexes;
+use Meilisearch\Endpoints\Index;
 use Survos\MeiliBundle\Entity\IndexInfo;
 use Survos\MeiliBundle\Message\UpdateIndexInfoMessage;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
@@ -37,36 +37,34 @@ final class IndexFastSyncService
 
         /**
          * @var string $uid
-         * @var Indexes $serverInfo
+         * @var Index $serverInfo
          */
-        foreach ($rows as $uid=> $serverInfo) {
-            dd($serverInfo);
-//            $uid = (string)$serverInfo['uid'];
-//            if ($uid === '') { continue; }
-
-
-//            $serverCreatedAt = isset($serverInfo['createdAt']) && is_string($serverInfo['createdAt']) ? new DateTimeImmutable($serverInfo['createdAt']) : null;
-//            $serverUpdatedAt = isset($serverInfo['updatedAt']) && is_string($serverInfo['updatedAt']) ? new DateTimeImmutable($serverInfo['updatedAt']) : null;
+        foreach ($rows as $uid => $serverInfo) {
+            $before = null;
 
             /** @var IndexInfo|null $localInfo */
             if (!$localInfo = $this->repo->find($uid)) {
-                $localInfo = new IndexInfo($uid);
+                // primaryKey is a required constructor arg; overwritten from $serverInfo below.
+                $localInfo = new IndexInfo($uid, 'id');
                 $this->em->persist($localInfo);
                 $created++;
             } else {
                 // Change detection baseline
-                $lastUpdated = $localInfo->updatedAt; // before we persist
                 $before = [$localInfo->primaryKey, $localInfo->createdAt?->getTimestamp(), $localInfo->updatedAt?->getTimestamp()];
             }
 
-            // Minimal mapping
-            $localInfo->primaryKey = $serverInfo->getPrimaryKey();
-            $localInfo->createdAt  = $serverInfo->getCreatedAt();
-            $localInfo->updatedAt = $serverInfo->getUpdatedAt();
-//            $localInfo->updatedAt  = $serverUpdatedAt ?? $localInfo->updatedAt;
-//            $localInfo->lastSyncedAt = $now; // do this in the handler
+            $priorUpdatedAt = $localInfo->updatedAt;
+            $serverUpdatedAt = $serverInfo->getUpdatedAt();
 
-            if (isset($before)) {
+            // Minimal mapping. getPrimaryKey()/getCreatedAt()/getUpdatedAt() lazily fetch
+            // the index's raw info from the server on first access (fetchRawInfo() under the hood).
+            // IndexInfo's columns are DateTime, but the SDK now returns DateTimeImmutable.
+            $localInfo->primaryKey = $serverInfo->getPrimaryKey();
+            $createdAtRaw = $serverInfo->getCreatedAt();
+            $localInfo->createdAt = $createdAtRaw !== null ? \DateTime::createFromInterface($createdAtRaw) : null;
+            $localInfo->updatedAt = $serverUpdatedAt !== null ? \DateTime::createFromInterface($serverUpdatedAt) : null;
+
+            if ($before !== null) {
                 $after = [$localInfo->primaryKey, $localInfo->createdAt?->getTimestamp(), $localInfo->updatedAt?->getTimestamp()];
                 if ($before !== $after) {
                     $updated++;
@@ -75,27 +73,13 @@ final class IndexFastSyncService
                 }
             }
 
-            // Decide whether to enqueue a deeper hydration
-            if ($enqueue) {
-                $needs = false;
-                // if never updated or updated since our last update
-                if ( (!$localInfo->updatedAt || $serverInfo->getUpdatedAt() > $localInfo->updatedAt)) {
-                    $needs = true;
-                    $localInfo->needsUpdate = $needs;
-                }
-////                if ($localInfo->numDocuments === 0) {
-////                    $needs = true;
-////                }
-//                if ($needs) {
-//                    $this->bus->dispatch(new UpdateIndexInfoMessage($uid));
-//                    $enqueued++;
-//                }
-            }
+            // TODO: dispatch UpdateIndexInfoMessage here once we have a batched/throttled
+            // way to do it — per-row messenger dispatch inside a sync loop has previously
+            // flooded the queue (see mediary Meilisearch flood incident). IndexInfo also has
+            // no needsUpdate column yet to persist this flag across requests.
         }
 
         $this->em->flush();
-
-
 
         return compact('created','updated','unchanged','enqueued','total');
     }

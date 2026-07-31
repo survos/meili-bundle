@@ -12,7 +12,7 @@ use Meilisearch\Contracts\IndexesQuery;
 use Meilisearch\Contracts\Task;
 use Meilisearch\Contracts\TasksQuery;
 use Meilisearch\Contracts\TasksResults;
-use Meilisearch\Endpoints\Indexes;
+use Meilisearch\Endpoints\Index;
 use Meilisearch\Exceptions\ApiException;
 use Meilisearch\Exceptions\InvalidResponseBodyException;
 use Psr\Http\Client\ClientInterface;
@@ -306,20 +306,26 @@ final class MeiliService
         return $clients[$key];
     }
 
-    public function getIndexEndpoint(string $uid): Indexes
+    public function getIndexEndpoint(string $uid): Index
     {
         return $this->getMeiliClient()->index($uid);
     }
 
     /**
      * Get or create an index by UID (already prefixed).
+     *
+     * NOTE: as of meilisearch-php's Index/Indexes split, $client->index($uid) (and
+     * $client->getIndex($uid)) no longer hit the network — they just construct a lazy
+     * Index handle. Existence must be probed with a real call (fetchRawInfo()), which
+     * throws ApiException(404) when the index doesn't exist yet.
      */
-    public function getOrCreateIndex(string $uid, string $primaryKey = 'id', bool $autoCreate = true, bool $wait = false): Indexes
+    public function getOrCreateIndex(string $uid, string $primaryKey = 'id', bool $autoCreate = true, bool $wait = false): Index
     {
         $client = $this->getMeiliClient();
+        $index = $client->index($uid);
 
         try {
-            $client->getIndex($uid);
+            $index->fetchRawInfo();
         } catch (ApiException|InvalidResponseBodyException $exception) {
             if ($exception->httpStatus === 404) {
                 if ($autoCreate) {
@@ -333,14 +339,14 @@ final class MeiliService
             }
         }
 
-        return $client->index($uid);
+        return $index;
     }
 
     /**
      * Ensure base+locale index exists and apply indexLanguages when possible.
      * Pixie should call this (via its own wrapper) using baseName and locale.
      */
-    public function ensureBaseLocaleIndex(string $baseName, string $locale, string $primaryKey = 'id', bool $autoCreate = true): Indexes
+    public function ensureBaseLocaleIndex(string $baseName, string $locale, string $primaryKey = 'id', bool $autoCreate = true): Index
     {
         $uid = $this->uidForBase($baseName, $locale);
         $idx = $this->getOrCreateIndex($uid, $primaryKey, $autoCreate);
@@ -413,13 +419,13 @@ final class MeiliService
      * Fast list of server indexes (SDK objects), keyed by UID.
      * Useful for diagnostics.
      *
-     * @return array<string,Indexes>
+     * @return array<string,Index>
      */
     public function listIndexesFast(): array
     {
         $rows = [];
         foreach ($this->getMeiliClient()->getIndexes((new IndexesQuery())->setLimit(10000)) as $row) {
-            if ($row instanceof Indexes) {
+            if ($row instanceof Index) {
                 $rows[$row->getUid()] = $row;
             }
         }
@@ -440,13 +446,13 @@ final class MeiliService
         return $this->uidForBase($base, $locale);
     }
 
-    private function getMeiliIndexForEntity(string $class, ?string $locale = null): Indexes
+    private function getMeiliIndexForEntity(string $class, ?string $locale = null): Index
     {
         $uid = $this->resolveIndexUidForEntity($class, $locale);
         return $this->getIndexEndpoint($uid);
     }
 
-    private function flushToMeili(Indexes $meiliIndex, array $documents): void
+    private function flushToMeili(Index $meiliIndex, array $documents): void
     {
         $count = count($documents);
         try {
@@ -530,7 +536,7 @@ ORDER BY n.nspname, c.relname;"
         int $payloadSize,
         array $documents,
         int $payloadThreshold,
-        Indexes $meiliIndex
+        Index $meiliIndex
     ): void {
         $batchSize = 500;
 
@@ -624,21 +630,21 @@ ORDER BY n.nspname, c.relname;"
             ];
 
             try {
-                $info = $client->getIndex($uid); // array: uid, primaryKey, createdAt, updatedAt
+                // $client->index()/getIndex() no longer hit the network by themselves (lazy Index
+                // handle); getPrimaryKey()/getUpdatedAt() trigger the actual GET and throw 404 here
+                // when the index doesn't exist.
+                $index = $client->index($uid);
+                $row['primaryKey'] = $index->getPrimaryKey();
+
+                $updatedAt = $index->getUpdatedAt();
+                if ($updatedAt !== null) {
+                    $row['updatedAt'] = \DateTimeImmutable::createFromInterface($updatedAt);
+                }
+
                 $row['exists'] = true;
 
-                if (is_array($info)) {
-                    $row['primaryKey'] = $info['primaryKey'] ?? null;
-
-                    if (isset($info['updatedAt']) && is_string($info['updatedAt'])) {
-                        $row['updatedAt'] = new \DateTimeImmutable($info['updatedAt']);
-                    }
-                }
-
-                $stats = $client->index($uid)->stats();
-                if (is_array($stats) && array_key_exists('numberOfDocuments', $stats)) {
-                    $row['documentCount'] = (int) $stats['numberOfDocuments'];
-                }
+                $stats = $index->stats();
+                $row['documentCount'] = $stats->getNumberOfDocuments();
             } catch (\Meilisearch\Exceptions\ApiException $e) {
                 if (($e->httpStatus ?? null) !== 404) {
                     $row['error'] = $e->getMessage();

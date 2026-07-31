@@ -61,12 +61,12 @@ final class MeiliRegistrySyncCommand
                 break;
             }
 
-            $info = $this->meiliService->getIndexEndpoint($uid)->fetchRawInfo();
-            $settings = $this->meiliService->getIndexEndpoint($uid)->getSettings();
-            $stats = $this->meiliService->getIndexEndpoint($uid)->stats();
+            $indexEndpoint = $this->meiliService->getIndexEndpoint($uid);
+            $info = $indexEndpoint->fetchRawInfo();
+            $settings = $indexEndpoint->getSettings();
+            $docCount = $indexEndpoint->stats()->getNumberOfDocuments();
 
             $primaryKey = $info['primaryKey'] ?? $settings['primaryKey'] ?? 'id';
-            $docCount = (int) ($stats['numberOfDocuments'] ?? 0);
 
             $entity = $this->entityManager->getRepository(IndexInfo::class)->find($uid)
                 ?? new IndexInfo($uid, $primaryKey, null);

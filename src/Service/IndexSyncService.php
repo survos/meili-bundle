@@ -49,8 +49,7 @@ final class IndexSyncService implements LoggerAwareInterface
             $seenUids[] = $uid;
 
             try {
-                $stats        = $liveIndex->stats();
-                $numDocuments = (int)($stats['numberOfDocuments'] ?? 0);
+                $numDocuments = $liveIndex->stats()->getNumberOfDocuments();
             } catch (\Throwable) {
                 $numDocuments = 0;
             }
@@ -182,11 +181,13 @@ final class IndexSyncService implements LoggerAwareInterface
             // Fetch live stats from Meilisearch server (numberOfDocuments, isIndexing, etc.)
             $primaryKey = (string)($settings['primaryKey'] ?? 'id');
             try {
-                $liveIndex = $this->meili->getMeiliClient()->getIndex($uid);
-                $stats = $this->meili->getMeiliClient()->index($uid)->stats();
-                $numDocuments = (int)($stats['numberOfDocuments'] ?? 0);
-                $createdAt = isset($liveIndex->createdAt) ? new DateTimeImmutable($liveIndex->createdAt) : null;
-                $updatedAt = isset($liveIndex->updatedAt) ? new DateTimeImmutable($liveIndex->updatedAt) : null;
+                $liveIndex = $this->meili->getMeiliClient()->index($uid);
+                $numDocuments = $liveIndex->stats()->getNumberOfDocuments();
+                $createdAtRaw = $liveIndex->getCreatedAt();
+                $updatedAtRaw = $liveIndex->getUpdatedAt();
+                // IndexInfo::$createdAt/$updatedAt are DateTime columns; the SDK returns DateTimeImmutable.
+                $createdAt = $createdAtRaw !== null ? \DateTime::createFromInterface($createdAtRaw) : null;
+                $updatedAt = $updatedAtRaw !== null ? \DateTime::createFromInterface($updatedAtRaw) : null;
             } catch (\Throwable) {
                 // Index not yet created on server — still record it locally with zero docs.
                 $numDocuments = 0;

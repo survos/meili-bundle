@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Survos\MeiliBundle\Service;
 
 use Meilisearch\Contracts\Task;
-use Meilisearch\Endpoints\Indexes;
+use Meilisearch\Endpoints\Index;
 use Psr\Log\LoggerInterface;
 use Survos\JsonlBundle\IO\JsonlReader;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -26,7 +26,7 @@ final class MeiliNdjsonUploader
      *
      * @param iterable<array<string,mixed>> $docs
      */
-    public function uploadDocuments(Indexes $index, iterable $docs, string $primaryKey): int
+    public function uploadDocuments(Index $index, iterable $docs, string $primaryKey): int
     {
         $lines = [];
         $bytes = 0;
@@ -105,7 +105,7 @@ final class MeiliNdjsonUploader
     /**
      * Upload a JSONL/NDJSON file (streaming) and return the last taskUid.
      */
-    public function uploadJsonlFile(Indexes $index, string $path, ?string $primaryKey = null): ?int
+    public function uploadJsonlFile(Index $index, string $path, ?string $primaryKey = null): ?int
     {
         if (!\is_file($path) || \filesize($path) === 0) {
             return null;
@@ -179,7 +179,7 @@ final class MeiliNdjsonUploader
      * POST NDJSON to /documents with optional ?primaryKey=...
      * Returns taskUid when available.
      */
-    private function postNdjson(Indexes $index, string $body, ?string $primaryKey): ?int
+    private function postNdjson(Index $index, string $body, ?string $primaryKey): ?int
     {
         $base = rtrim($this->meiliService->getHost(), '/');
         $key  = $this->meiliService->getAdminKey();

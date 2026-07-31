@@ -115,9 +115,15 @@ class ExportCommand
             ]);
         }
 
+        // $client->getIndex() no longer hits the network by itself (lazy Index handle);
+        // the real existence check happens below when we fetch stats().
+        $client = $this->meiliService->getMeiliClient();
+        $index  = $client->getIndex($prefixedIndexName);
+
+        // Determine total docs (for progress bar); this doubles as the existence check.
+        $total = null;
         try {
-            $client = $this->meiliService->getMeiliClient();
-            $index  = $client->getIndex($prefixedIndexName);
+            $total = $index->stats()->getNumberOfDocuments();
         } catch (\Throwable $e) {
             $io->error(sprintf(
                 "Unable to get Meilisearch index '%s': %s",
@@ -125,23 +131,6 @@ class ExportCommand
                 $e->getMessage()
             ));
             return Command::FAILURE;
-        }
-
-        // Determine total docs (for progress bar)
-        $total = null;
-        try {
-            $stats = $index->stats();
-            // PHP client usually returns an array-like structure
-            if (is_array($stats)) {
-                $total = $stats['numberOfDocuments'] ?? $stats['number_of_documents'] ?? null;
-            } elseif (is_object($stats) && property_exists($stats, 'numberOfDocuments')) {
-                $total = $stats->numberOfDocuments;
-            }
-        } catch (\Throwable $e) {
-            $this->logger->warning('Failed to fetch index stats for export', [
-                'index'   => $prefixedIndexName,
-                'message' => $e->getMessage(),
-            ]);
         }
 
         if ($total === null) {

@@ -4,7 +4,9 @@ declare(strict_types=1);
 namespace Survos\MeiliBundle\Service;
 
 use Meilisearch\Client;
-use Meilisearch\Endpoints\Indexes;
+use Meilisearch\Endpoints\Index;
+use Meilisearch\Exceptions\ApiException;
+use Meilisearch\Exceptions\InvalidResponseBodyException;
 use Psr\Log\LoggerInterface;
 use ReflectionClass;
 use Survos\MeiliBundle\Metadata\MeiliIndex;
@@ -18,8 +20,6 @@ final class MeiliSettingsUpdater
         private readonly Client $client,
         private readonly ?LoggerInterface $logger = null,
     ) {
-        dd("is this called?  It looks like it might have been an experiment");
-
     }
 
     /**
@@ -32,7 +32,7 @@ final class MeiliSettingsUpdater
     {
         [$indexUid, $primaryKey, $settings] = $this->extractFromAttribute($entityClass);
 
-        $index = $this->ensureIndex($indexUid, $primaryKey, $dryRun);
+        [$index, $created] = $this->ensureIndex($indexUid, $primaryKey, $dryRun);
 
         if ($purge && !$dryRun) {
             $this->logger?->info(sprintf('Purging all documents from index "%s".', $indexUid));
@@ -51,7 +51,7 @@ final class MeiliSettingsUpdater
 
         return [
             'indexUid' => $indexUid,
-            'created'  => $index instanceof Indexes ? false : true, // only true on first creation path below; see ensureIndex()
+            'created'  => $created,
             'settings' => $settings,
             'taskUid'  => $taskUid,
         ];
@@ -88,25 +88,38 @@ final class MeiliSettingsUpdater
 
     /**
      * Creates the index if missing, using the provided primaryKey.
-     * Returns the Indexes endpoint (existing or newly created).
+     * Returns the Index endpoint (existing or newly created) plus whether it was just created.
+     *
+     * NOTE: $client->index($uid) never hits the network by itself (lazy Index handle) —
+     * existence must be probed with a real call. fetchRawInfo() throws ApiException(404)
+     * when the index doesn't exist yet.
+     *
+     * @return array{0:Index,1:bool}
      */
-    private function ensureIndex(string $indexUid, ?string $primaryKey, bool $dryRun): Indexes
+    private function ensureIndex(string $indexUid, ?string $primaryKey, bool $dryRun): array
     {
+        $index = $this->client->index($indexUid);
+
         try {
-            return $this->client->index($indexUid);
-        } catch (\Throwable) {
-            // If access fails because it doesn't exist, create it.
+            $index->fetchRawInfo();
+
+            return [$index, false];
+        } catch (ApiException|InvalidResponseBodyException $exception) {
+            if ($exception->httpStatus !== 404) {
+                throw $exception;
+            }
         }
 
         if ($dryRun) {
             $this->logger?->info(sprintf('DRY-RUN: would create index "%s" with primaryKey "%s".', $indexUid, $primaryKey ?? '(none)'));
-            // Return a lazy endpoint anyway so subsequent code paths don’t branch
-            return $this->client->index($indexUid);
+
+            return [$index, true];
         }
 
         $this->logger?->info(sprintf('Creating index "%s" (primaryKey=%s).', $indexUid, $primaryKey ?? '(none)'));
-        $task = $this->client->createIndex($indexUid, $primaryKey ? ['primaryKey' => $primaryKey] : []);
+        $this->client->createIndex($indexUid, $primaryKey ? ['primaryKey' => $primaryKey] : []);
         // We do NOT wait here; caller commands can choose to wait if desired.
-        return $this->client->index($indexUid);
+
+        return [$index, true];
     }
 }
