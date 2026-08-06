@@ -13,7 +13,7 @@
         "symfony/config": "^8.1",
         "symfony/dependency-injection": "^8.1",
         "symfony/http-kernel": "^8.1",
-        "twig/twig": "^3.4",
+        "twig/twig": "^3.4|^4.0",
         "symfony/property-access": "^8.1",
         "meilisearch/meilisearch-php": "dev-main",
         "adbario/php-dot-notation": "^3.3",
