@@ -26,7 +26,7 @@ final class MeiliNdjsonUploader
      *
      * @param iterable<array<string,mixed>> $docs
      */
-    public function uploadDocuments(Index $index, iterable $docs, string $primaryKey): int
+    public function uploadDocuments(Index $index, iterable $docs, string $primaryKey): ?int
     {
         $lines = [];
         $bytes = 0;
