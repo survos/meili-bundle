@@ -35,12 +35,12 @@
     "importmap": {
       "@tacman1123/twig-browser": "^1.0.0",
       "debug": "^4.4.3",
-      "instantsearch.js": "^4.101.1",
-      "instantsearch.js/es/widgets": "^4.101.1",
-      "instantsearch.css/themes/algolia.min.css": "^8.17.0",
-      "@meilisearch/instant-meilisearch": "^0.30.0",
+      "instantsearch.js": "^4.110.0",
+      "instantsearch.js/es/widgets": "^4.110.0",
+      "instantsearch.css/themes/algolia.min.css": "^8.19.0",
+      "@meilisearch/instant-meilisearch": "^0.31.3",
       "@stimulus-components/dialog": "*",
-      "meilisearch": "0.54.0",
+      "meilisearch": "0.60.0",
       "@andypf/json-viewer": "^2.8.0",
       "pretty-print-json": "^3.0.8"
     }
@@ -54,6 +54,6 @@
   "dependencies": {
     "@tacman1123/twig-browser": "^1.0.0",
     "@tabler/core": "^1.4.0",
-    "instantsearch.css": "^8.17.0"
+    "instantsearch.css": "^8.19.0"
   }
 }
