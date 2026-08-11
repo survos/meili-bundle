@@ -85,8 +85,8 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
         #[Option('Create and sync managed index keys (requires master key)')]
         bool $keys = false,
 
-        #[Option('Skip pushing embedders (useful when reindexing; semantic search is disabled until re-enabled)')]
-        bool $noEmbedders = false,
+        #[Option('Push embedders (opt-in: computing vector embeddings is slow and costs money; omit to skip and leave semantic search as-is)', name: 'embedders')]
+        bool $pushEmbedders = false,
     ): int {
         $this->init();
 
@@ -189,9 +189,9 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
                  // updateSettings merges embedders and cannot delete them.
                  $payload = $schema;
                  if ($locale === null && $embedders !== []) {
-                     if ($noEmbedders) {
+                     if (!$pushEmbedders) {
                          $io->warning(sprintf(
-                             'Skipping embedders for %s (--no-embedders): [%s]. Semantic search is disabled until you re-run without --no-embedders.',
+                             'Skipping embedders for %s (pass --embedders to push): [%s]. Semantic search is disabled until you re-run with --embedders.',
                              $uid,
                              implode(', ', array_keys($embedders))
                          ));

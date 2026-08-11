@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Survos\MeiliBundle\Service;
 
 use Meilisearch\Client;
+use Meilisearch\Contracts\TasksQuery;
 
 final class MeiliSettingsComparer
 {
@@ -37,12 +38,10 @@ final class MeiliSettingsComparer
 
     private function pendingTasks(string $uid): int
     {
-        $resp = $this->meili->getTasks([
-            'indexUids' => [$uid],
-            'statuses' => ['enqueued','processing'],
-            'limit' => 1000,
-        ]);
-        return \count($resp['results'] ?? []);
+        $resp = $this->meili->getTasks(
+            (new TasksQuery())->setIndexUids([$uid])->setStatuses(['enqueued', 'processing'])->setLimit(1000)
+        );
+        return $resp->getTotal();
     }
 
     /** @return array<string,mixed> */

@@ -5,6 +5,8 @@ namespace Survos\MeiliBundle\Service;
 
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
+use Meilisearch\Contracts\CreateKeyQuery;
+use Meilisearch\Contracts\KeyAction;
 use Meilisearch\Exceptions\ApiException;
 use Survos\MeiliBundle\Entity\IndexInfo;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
@@ -31,7 +33,7 @@ final class MeiliServerKeyService
      */
     public function ensureServerKeys(array $indexUids): array
     {
-        $searchKey = $this->ensureKey(self::SEARCH_KEY_ALIAS, ['search', 'documents.get', 'indexes.get']);
+        $searchKey = $this->ensureKey(self::SEARCH_KEY_ALIAS, [KeyAction::Search, KeyAction::DocumentsGet, KeyAction::IndexesGet]);
         $keys = [self::SEARCH_KEY_ALIAS => $searchKey];
 
         foreach ($indexUids as $indexUid) {
@@ -81,7 +83,7 @@ final class MeiliServerKeyService
     }
 
     /**
-     * @param list<string> $actions
+     * @param list<KeyAction> $actions
      * @return array{apiKey:string,keyUid:string,created:bool}
      */
     private function ensureKey(string $alias, array $actions): array
@@ -99,14 +101,14 @@ final class MeiliServerKeyService
         } catch (ApiException) {
         }
 
-        $key = $this->meiliService->getMeiliClient()->createKey([
-            'uid' => $keyUid,
-            'name' => sprintf('Managed %s key', $alias),
-            'description' => sprintf('Managed Meilisearch %s key', $alias),
-            'actions' => $actions,
-            'indexes' => ['*'],
-            'expiresAt' => new DateTimeImmutable('+5 years'),
-        ]);
+        $key = $this->meiliService->getMeiliClient()->createKey(new CreateKeyQuery(
+            actions: $actions,
+            indexes: ['*'],
+            name: sprintf('Managed %s key', $alias),
+            description: sprintf('Managed Meilisearch %s key', $alias),
+            uid: $keyUid,
+            expiresAt: new DateTimeImmutable('+5 years'),
+        ));
 
         return [
             'apiKey' => (string) $key->getKey(),
