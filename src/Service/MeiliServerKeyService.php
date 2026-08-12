@@ -6,6 +6,7 @@ namespace Survos\MeiliBundle\Service;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Meilisearch\Contracts\CreateKeyQuery;
+use Meilisearch\Contracts\IndexesQuery;
 use Meilisearch\Contracts\KeyAction;
 use Meilisearch\Exceptions\ApiException;
 use Survos\MeiliBundle\Entity\IndexInfo;
@@ -141,7 +142,7 @@ final class MeiliServerKeyService
         }
 
         try {
-            $this->meiliService->getMeiliClient(apiKey: $apiKey)->getIndexes(['limit' => 1]);
+            $this->meiliService->getMeiliClient(apiKey: $apiKey)->getIndexes((new IndexesQuery())->setLimit(1));
 
             return true;
         } catch (ApiException $e) {
