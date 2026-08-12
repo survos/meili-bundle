@@ -66,12 +66,12 @@ final class MeiliServerKeyService
 
         try {
             $key = $this->meiliService->getMeiliClient()->getKey($keyUid);
-        } catch (ApiException) {
-            return false;
-        }
+            $apiKey = $key->getKey();
 
-        $apiKey = $key->getKey();
-        if (!is_string($apiKey) || $apiKey === '') {
+            if (!is_string($apiKey) || !$this->keyIsUsable($apiKey)) {
+                return false;
+            }
+        } catch (ApiException) {
             return false;
         }
 
@@ -92,12 +92,23 @@ final class MeiliServerKeyService
 
         try {
             $key = $this->meiliService->getMeiliClient()->getKey($keyUid);
+            $apiKey = (string) $key->getKey();
 
-            return [
-                'apiKey' => (string) $key->getKey(),
-                'keyUid' => (string) ($key->getUid() ?? $keyUid),
-                'created' => false,
-            ];
+            if ($this->keyIsUsable($apiKey)) {
+                return [
+                    'apiKey' => $apiKey,
+                    'keyUid' => (string) ($key->getUid() ?? $keyUid),
+                    'created' => false,
+                ];
+            }
+
+            // The uid is registered but the key material no longer authenticates --
+            // typically a Meilisearch instance reset/reseed invalidated it while the
+            // uid stayed put. Delete it so createKey() below can reuse the uid.
+            try {
+                $this->meiliService->getMeiliClient()->deleteKey($keyUid);
+            } catch (ApiException) {
+            }
         } catch (ApiException) {
         }
 
@@ -115,6 +126,27 @@ final class MeiliServerKeyService
             'keyUid' => (string) ($key->getUid() ?? $keyUid),
             'created' => true,
         ];
+    }
+
+    /**
+     * getKey() only proves the uid is registered on the server, not that the key
+     * material still authenticates -- a Meilisearch reset/reseed (or, per this
+     * incident, a version bump) can invalidate it while the cached uid lookup keeps
+     * succeeding. Do one cheap authenticated call with the actual key material.
+     */
+    private function keyIsUsable(string $apiKey): bool
+    {
+        if ($apiKey === '') {
+            return false;
+        }
+
+        try {
+            $this->meiliService->getMeiliClient(apiKey: $apiKey)->getIndexes(['limit' => 1]);
+
+            return true;
+        } catch (ApiException $e) {
+            return !in_array($e->httpStatus, [401, 403], true);
+        }
     }
 
     private function buildKeyUid(string $alias): string
