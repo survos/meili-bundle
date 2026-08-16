@@ -105,6 +105,31 @@ class SearchController extends AbstractController
         // Resolve the actual Meilisearch UID using the new naming resolver logic
         $meiliIndexUid = $this->meiliService->uidForBase($baseIndexName, $locale);
 
+        // An unknown base name otherwise falls through to the synthetic config below and dies
+        // deep inside the Meilisearch client with a bare 'Index `prefix_name` not found', which
+        // says nothing about which names are valid or how to create one. Fail here instead, with
+        // the two things the reader actually needs: what exists, and what to run.
+        if ($this->meiliService->getIndexSetting($baseIndexName) === null) {
+            $known = array_keys($this->meiliService->getAllSettings());
+            sort($known);
+
+            throw $this->createNotFoundException(sprintf(
+                "No Meilisearch index is registered as \"%s\".\n\n"
+                . "Registered indexes: %s\n\n"
+                . "The registry is built from #[MeiliIndex] attributes at compile time, so a name "
+                . "only exists here if some entity declares it -- note the index name often differs "
+                . "from the entity (IndexInfo is registered as \"meili\", not \"index_info\").\n\n"
+                . "To build one from scratch:\n"
+                . "  bin/console meili:registry:sync      # record the indexes in Doctrine\n"
+                . "  bin/console meili:settings:update --force --keys   # push settings, mint a search key\n"
+                . "  bin/console meili:populate %s        # load the documents\n\n"
+                . "Then reload this page. bin/console meili:registry:report shows document counts.",
+                $baseIndexName,
+                $known === [] ? '(none -- no entity carries #[MeiliIndex])' : implode(', ', $known),
+                $known[0] ?? '<index>',
+            ));
+        }
+
         // Index configuration is base-keyed
         $indexConfig = $this->meiliService->getIndexSetting($baseIndexName)
             ?? [

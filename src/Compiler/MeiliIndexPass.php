@@ -28,6 +28,13 @@ final class MeiliIndexPass implements CompilerPassInterface
 
     public function process(ContainerBuilder $container): void
     {
+        // Chat workspaces actually configured for this app. An index declaring
+        // chats: ['meili_assistant'] means nothing if that workspace was never set up.
+        $chatConfig = $container->hasParameter('survos_meili.chat')
+            ? (array) $container->getParameter('survos_meili.chat')
+            : [];
+        $configuredWorkspaces = array_keys((array) ($chatConfig['workspaces'] ?? []));
+
         $scanDirs = (array) ($container->hasParameter('survos_meili.entity_dirs')
             ? $container->getParameter('survos_meili.entity_dirs')
             : []);
@@ -177,7 +184,33 @@ final class MeiliIndexPass implements CompilerPassInterface
                         }
                     }
 
-                    $chatDocumentTemplate = $this->buildChatDocumentTemplate($cfg->primaryKey, $chatInputMap);
+                    // Only emit a chat block when the index actually opts in via
+                    // #[MeiliIndex(chats: [...])]. Meilisearch rejects `chat` in index settings
+                    // unless the chatCompletions experimental feature is enabled on that server:
+                    //
+                    //   setting `chat` in the index settings requires enabling the
+                    //   `chat completions` experimental feature
+                    //
+                    // Emitting it unconditionally made meili:settings:update fail outright on any
+                    // instance without that runtime-only flag, for apps that never wanted chat --
+                    // and neither --no-chat nor removing survos_meili.chat.workspaces helped,
+                    // because the block came from the compiled schema rather than either of those.
+                    // Emit a chat block only when the index opts in AND at least one of the
+                    // workspaces it names is actually configured. Meilisearch rejects `chat` in
+                    // index settings unless the chatCompletions experimental feature is enabled:
+                    //
+                    //   setting `chat` in the index settings requires enabling the
+                    //   `chat completions` experimental feature
+                    //
+                    // This bundle's own IndexInfo entity declares chats: ['meili_assistant'], so
+                    // emitting unconditionally made meili:settings:update fail for EVERY consumer
+                    // that never asked for chat -- and neither --no-chat nor clearing
+                    // survos_meili.chat.workspaces helped, because the block came from the
+                    // compiled schema rather than from either of those.
+                    $activeChats = array_intersect($cfg->chats, $configuredWorkspaces);
+                    $chatDocumentTemplate = $activeChats === []
+                        ? null
+                        : $this->buildChatDocumentTemplate($cfg->primaryKey, $chatInputMap);
                     if ($chatDocumentTemplate !== null) {
                         $indexSchema['chat'] = [
                             'documentTemplate' => $chatDocumentTemplate,
