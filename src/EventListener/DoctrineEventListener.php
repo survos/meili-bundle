@@ -24,18 +24,23 @@ use Symfony\Component\Messenger\TraceableMessageBus;
 use Symfony\Component\PropertyAccess\PropertyAccessorInterface;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 use Zenstruck\Messenger\Monitor\Stamp\TagStamp;
+use Symfony\Contracts\Service\ResetInterface;
 
 #[AsDoctrineListener(Events::postUpdate)]
 #[AsDoctrineListener(Events::preRemove)]
 #[AsDoctrineListener(Events::prePersist)]
 #[AsDoctrineListener(Events::postFlush)]
 #[AsDoctrineListener(Events::postPersist)]
-class DoctrineEventListener
+class DoctrineEventListener implements ResetInterface
 {
     private array $pendingIndexOperations = [];
     private array $pendingRemoveOperations = [];
 
-    private static bool $dispatching = false;
+    // An instance property, not `private static`: there is exactly one of this listener, so
+    // the guard was never cross-instance, and a static survives services_resetter and the whole
+    // FrankenPHP worker process -- a flush killed mid-dispatch (OOM, execution-timeout: no
+    // `finally`) would wedge it at true and silently stop indexing for every later request.
+    private bool $dispatching = false;
 
     private bool $enabled = true;
 
@@ -48,6 +53,18 @@ class DoctrineEventListener
     }
 
     public function enable(): void  { $this->enabled = true; }
+
+    /**
+     * Under FrankenPHP worker mode this listener outlives the response. Anything still queued
+     * when a request dies before postFlush() would otherwise be indexed against the *next*
+     * request's entity manager, and a wedged $dispatching would disable indexing for good.
+     */
+    public function reset(): void
+    {
+        $this->pendingIndexOperations  = [];
+        $this->pendingRemoveOperations = [];
+        $this->dispatching = false;
+    }
 
     public function __construct(
         private readonly MeiliService              $meiliService,
@@ -67,7 +84,7 @@ class DoctrineEventListener
 
     public function postFlush(PostFlushEventArgs $args): void
     {
-        if (!$this->enabled || self::$dispatching || !$this->messageBus) {
+        if (!$this->enabled || $this->dispatching || !$this->messageBus) {
             return;
         }
 
@@ -75,11 +92,11 @@ class DoctrineEventListener
             return;
         }
 
-        self::$dispatching = true;
+        $this->dispatching = true;
         try {
             $this->dispatchPendingMessages();
         } finally {
-            self::$dispatching = false;
+            $this->dispatching = false;
         }
     }
 

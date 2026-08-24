@@ -25,9 +25,34 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Twig\Attribute\AsTwigFunction;
+use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
 
+// Not ResetInterface: reset() here already means "delete and recreate a Meili index".
+// Point the kernel.reset tag at a distinct method instead.
+#[Autoconfigure(tags: [['name' => 'kernel.reset', 'method' => 'resetRequestState']])]
 final class MeiliService
 {
+    /**
+     * Meilisearch clients, keyed by "host|apiKey". Was `static $clients` inside
+     * getMeiliClient(): bounded in practice (one or two distinct endpoints) but unreachable by
+     * services_resetter and immortal even across a kernel clone, and each entry pins a live
+     * PSR-18 HTTP client. As an instance property it shares the service's lifetime, which is
+     * what "cache the client" actually meant.
+     *
+     * @var array<string, Client>
+     */
+    private array $clients = [];
+
+    /**
+     * pg_class row estimates for every table, fetched once. Was `static $counts`, which under
+     * FrankenPHP worker mode would freeze the very first request's estimates for the life of
+     * the process — approximate_count() would report the same numbers forever. reset() drops
+     * it so it is re-fetched once per request, as it was per process before.
+     *
+     * @var array<string, int>|null
+     */
+    private ?array $counts = null;
+
     /**
      * Base-keyed settings, regardless of origin (pixie, doctrine, etc).
      * @var array<string,array<string,mixed>> baseName => settings
@@ -278,13 +303,11 @@ final class MeiliService
 
     public function getMeiliClient(?string $host = null, ?string $apiKey = null): Client
     {
-        static $clients = [];
-
         $host ??= $this->meiliHost;
         $apiKey ??= $this->adminKey;
 
         $key = (string)$host . '|' . (string)$apiKey;
-        if (!isset($clients[$key])) {
+        if (!isset($this->clients[$key])) {
             $symfonyWithGzip = $this->symfonyHttpClient
                 ? $this->symfonyHttpClient->withOptions([])
                 : null;
@@ -295,7 +318,7 @@ final class MeiliService
 
             $psr17Factory = new \Http\Discovery\Psr17Factory();
 
-            $clients[$key] = new Client(
+            $this->clients[$key] = new Client(
                 $host ?? 'http://localhost:7700',
                 $apiKey,
                 $psr18,
@@ -303,7 +326,7 @@ final class MeiliService
             );
         }
 
-        return $clients[$key];
+        return $this->clients[$key];
     }
 
     public function getIndexEndpoint(string $uid): Index
@@ -467,8 +490,6 @@ final class MeiliService
     #[AsTwigFunction('approximate_count')]
     public function getApproxCount(string $class): ?int
     {
-        static $counts = null;
-
         if (!class_exists($class)) {
             return -1;
         }
@@ -480,7 +501,7 @@ final class MeiliService
         }
 
         try {
-            if ($counts === null) {
+            if ($this->counts === null) {
                 $rows = $this->entityManager->getConnection()->fetchAllAssociative(
                     "SELECT n.nspname AS schema_name,
        c.relname AS table_name,
@@ -492,14 +513,14 @@ WHERE c.relkind = 'r'
 ORDER BY n.nspname, c.relname;"
                 );
 
-                $counts = array_combine(
+                $this->counts = array_combine(
                     array_map(static fn($r) => (string)$r['table_name'], $rows),
                     array_map(static fn($r) => (int)$r['estimated_rows'], $rows)
                 );
             }
 
             $table = $repo->getClassMetadata()->getTableName();
-            $count = $counts[$table] ?? -1;
+            $count = $this->counts[$table] ?? -1;
         } catch (\Throwable) {
             $count = -1;
         }
@@ -693,4 +714,13 @@ ORDER BY n.nspname, c.relname;"
         }
     }
 
+    /**
+     * Called by services_resetter at the start of each request. The HTTP clients are kept --
+     * reusing a warm connection pool is the whole point of worker mode -- but the row-estimate
+     * snapshot is not, since it would otherwise be frozen at whatever the first request saw.
+     */
+    public function resetRequestState(): void
+    {
+        $this->counts = null;
+    }
 }

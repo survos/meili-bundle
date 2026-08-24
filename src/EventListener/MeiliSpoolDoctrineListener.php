@@ -10,11 +10,12 @@ use Doctrine\ORM\Event\PostUpdateEventArgs;
 use Doctrine\ORM\Events;
 use Psr\Log\LoggerInterface;
 use Survos\MeiliBundle\Spool\JsonlSpooler;
+use Symfony\Contracts\Service\ResetInterface;
 
 #[AsDoctrineListener(Events::postPersist)]
 #[AsDoctrineListener(Events::postUpdate)]
 #[AsDoctrineListener(Events::postFlush)]
-final class MeiliSpoolDoctrineListener
+final class MeiliSpoolDoctrineListener implements ResetInterface
 {
     /** @var array<class-string,array<string,bool>> */
     private array $pendingIds = [];
@@ -56,5 +57,12 @@ final class MeiliSpoolDoctrineListener
         if ($id !== null) {
             $this->pendingIds[$obj::class][(string)$id] = true;
         }
+    }
+
+    /** Drop anything a died-before-postFlush request left queued; see the worker-mode note on
+     * DoctrineEventListener::reset(). */
+    public function reset(): void
+    {
+        $this->pendingIds = [];
     }
 }

@@ -22,6 +22,17 @@ use Survos\MeiliBundle\Metadata\Facet;
 
 class SettingsService
 {
+    /**
+     * Normalization groups per entity class, derived from #[ApiResource] attributes. Was
+     * `static $groupsByClass`: bounded by the number of mapped classes, so not a runaway, but a
+     * function-static is unreachable by services_resetter and immortal across a kernel clone.
+     * As an instance property it lives exactly as long as the service does -- and since the
+     * attributes it reads cannot change without a redeploy, it is never stale.
+     *
+     * @var array<class-string, array<string>|null>
+     */
+    private array $groupsByClass = [];
+
     public function __construct(
         private EntityManagerInterface $entityManager
     )
@@ -241,9 +252,8 @@ class SettingsService
 
     public function getNormalizationGroups(string $class): ?array
     {
-        static $groupsByClass = [];
-        if ($groupsByClass[$class] ?? null) {
-            return $groupsByClass[$class];
+        if ($this->groupsByClass[$class] ?? null) {
+            return $this->groupsByClass[$class];
         }
         $groups = null;
         $meta = $this->entityManager->getMetadataFactory()->getMetadataFor($class);
@@ -262,7 +272,7 @@ class SettingsService
                 }
             }
         }
-        $groupsByClass[$class]=$groups;
+        $this->groupsByClass[$class]=$groups;
 
         return $groups;
 
