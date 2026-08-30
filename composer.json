@@ -50,14 +50,14 @@
         "easycorp/easyadmin-bundle": "^4.26|^5.0",
         "twig/intl-extra": "^3.22",
         "twig/extra-bundle": "^3.22",
-        "symfony/mcp-bundle": "^0.9",
+        "symfony/mcp-bundle": "^0.13",
         "survos/tabler-bundle": "^2.5"
     },
     "suggest": {
         "api-platform/core": "Required for admin dashboard integration",
         "api-platform/doctrine-orm": "Leverage doctrine in api-platform",
         "symfony/ai-agent": "Required for exposing Meilisearch as Symfony AI agent tools and loading the bundle tool classes",
-        "symfony/mcp-bundle": "^0.9"
+        "symfony/mcp-bundle": "Expose Meilisearch tools over MCP."
     },
     "autoload": {
         "psr-4": {
