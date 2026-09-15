@@ -32,7 +32,7 @@ import {
 } from 'instantsearch.js/es/widgets';
 
 import { installTwigEngine, awaitTwigEngine } from './insta_twig.js';
-import { safeParse, stripProtocol, escapeHtml, normalizeConfig } from './insta_helpers.js';
+import { safeParse, escapeHtml, normalizeConfig } from './insta_helpers.js';
 import { mountFacetFromNode } from './insta_facets.js';
 
 // Create the shared engine once at module level (kicks off async path() wiring).
@@ -66,6 +66,7 @@ export default class extends Controller {
     templateUrl: String,
     userLocale: { type: String, default: 'en' },
     q: { type: String, default: '' },
+    searchPlaceholder: { type: String, default: 'Search…' },
     hitClass: { type: String, default: 'grid-3' },
     globalsJson: { type: String, default: '{}' },
     iconsJson: { type: String, default: '{}' },
@@ -696,7 +697,7 @@ export default class extends Controller {
       searchBox({
         container: this.searchBoxTarget,
         searchAsYouType,
-        placeholder: `${this.indexNameValue} on ${stripProtocol(this.serverUrlValue)} ${this.qValue}`,
+        placeholder: this.searchPlaceholderValue,
         autofocus: false
       }),
 
