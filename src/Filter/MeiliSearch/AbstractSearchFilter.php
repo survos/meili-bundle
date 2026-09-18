@@ -16,6 +16,12 @@ use ApiPlatform\Metadata\Property\Factory\PropertyNameCollectionFactoryInterface
 use Symfony\Component\TypeInfo\Type;
 use Symfony\Component\Serializer\NameConverter\NameConverterInterface;
 
+use function array_keys;
+use function count;
+use function explode;
+use function in_array;
+use function iterator_to_array;
+
 /**
  * Abstract class with helpers for easing the implementation of a filter.
  *
@@ -55,7 +61,7 @@ abstract class AbstractSearchFilter # implements FilterInterface
      */
     protected function hasProperty(string $resourceClass, string $property): bool
     {
-        return \in_array($property, iterator_to_array($this->getProperties($resourceClass)), true);
+        return in_array($property, iterator_to_array($this->getProperties($resourceClass)), true);
     }
 
     /**
@@ -76,7 +82,7 @@ abstract class AbstractSearchFilter # implements FilterInterface
         }
 
         $properties = explode('.', $property);
-        $totalProperties = \count($properties);
+        $totalProperties = count($properties);
         $currentResourceClass = $resourceClass;
         $hasAssociation = false;
         $currentProperty = null;
@@ -89,36 +95,21 @@ abstract class AbstractSearchFilter # implements FilterInterface
                 return $noop;
             }
 
-            $type = $propertyMetadata->getBuiltinTypes()[0] ?? null;
+            $type = $this->getPropertyType($propertyMetadata);
 
             if (null === $type) {
                 return $noop;
             }
 
             ++$index;
-            $builtinType = $type->getBuiltinType();
+            $valueType = $this->getCollectionType($type)?->getCollectionValueType() ?? $type;
+            $className = $this->getObjectClass($valueType);
 
-            if (Type::object() !== $builtinType && Type::array() !== $builtinType) {
+            if (null === $className) {
                 if ($totalProperties === $index) {
                     break;
                 }
 
-                return $noop;
-            }
-
-            if ($type->isCollection() && null === $type = $type->getCollectionValueTypes()[0] ?? null) {
-                return $noop;
-            }
-
-            if (Type::array() === $builtinType && Type::object() !== $type->getBuiltinType()) {
-                if ($totalProperties === $index) {
-                    break;
-                }
-
-                return $noop;
-            }
-
-            if (null === $className = $type->getClassName()) {
                 return $noop;
             }
 
