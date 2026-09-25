@@ -50,7 +50,7 @@
         "easycorp/easyadmin-bundle": "^4.26|^5.0",
         "twig/intl-extra": "^3.22",
         "twig/extra-bundle": "^3.22",
-        "symfony/mcp-bundle": "^0.13",
+        "symfony/mcp-bundle": "^0.14",
         "survos/tabler-bundle": "^2.5"
     },
     "suggest": {
