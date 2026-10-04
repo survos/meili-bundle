@@ -4,7 +4,7 @@
  * Creates the twig-browser engine and wires:
  *   - sais_encode()  — meili-specific URL-safe base64
  *   - path()         — from the SurvosJsTwigBundle-generated FOS routing module
- *                      (@survos/js-twig/generated/fos_routes.js). Silently skips
+ *                      (@survos/js-twig/routing). Silently skips
  *                      if the module isn't present (e.g. bundle not installed).
  *
  * ux_icon() and stimulus_* are built into createEngine() and need no wiring here.
@@ -30,8 +30,8 @@ export function installTwigEngine() {
     btoa(url).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
   );
 
-  // Wire Symfony Twig helpers (incl. path()) from generated FOS routes.
-  _engineReady = import('@survos/js-twig/generated/fos_routes.js')
+  // Wire Symfony Twig helpers (incl. path()) from the cache-warmed route JSON.
+  _engineReady = import('@survos/js-twig/routing')
     .then(({ path }) => {
       installSymfonyTwigAPI(_engine, { pathGenerator: path });
     })
@@ -40,7 +40,7 @@ export function installTwigEngine() {
         '[meili-bundle] path() is unavailable in twig-browser.',
         'Install and enable Survos JS Twig routing support:',
         '  composer require survos/js-twig-bundle',
-        'Then clear cache so @survos/js-twig/generated/fos_routes.js is generated.',
+        'Then run cache:warmup to generate var/js_twig_bundle/generated/routes.json.',
       ].join('\n');
       console.error(msg, error);
       throw new Error(msg);
