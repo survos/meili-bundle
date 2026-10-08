@@ -64,7 +64,7 @@ class SettingsCommand #
         private MeiliService                                  $meiliService,
         private SettingsService                               $settingsService,
         private NormalizerInterface                           $normalizer,
-        #[Autowire('%env(OPENAI_API_KEY)%')] private ?string $openAiApiKey=null,
+        #[Autowire('%env(default::OPENAI_API_KEY)%')] private ?string $openAiApiKey=null,
         #[Autowire('%kernel.enabled_locales%')] private array $enabledLocales=[],
     )
     {
