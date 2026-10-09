@@ -247,7 +247,7 @@ export default class extends Controller {
         btoa(url).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
       )
       // Wire path() from FOS routing if available (best-effort)
-      import("@survos/js-twig/routing")
+      import("@survos/js-twig-bundle/routing")
         .then(({ path }) => this._engine.registerFunction("path", path))
         .catch(() => {})
     } catch (e) {

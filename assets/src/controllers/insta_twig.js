@@ -4,7 +4,7 @@
  * Creates the twig-browser engine and wires:
  *   - sais_encode()  — meili-specific URL-safe base64
  *   - path()         — from the SurvosJsTwigBundle-generated FOS routing module
- *                      (@survos/js-twig/routing). Silently skips
+ *                      (@survos/js-twig-bundle/routing). Silently skips
  *                      if the module isn't present (e.g. bundle not installed).
  *
  * ux_icon() and stimulus_* are built into createEngine() and need no wiring here.
@@ -31,7 +31,7 @@ export function installTwigEngine() {
   );
 
   // Wire Symfony Twig helpers (incl. path()) from the cache-warmed route JSON.
-  _engineReady = import('@survos/js-twig/routing')
+  _engineReady = import('@survos/js-twig-bundle/routing')
     .then(({ path }) => {
       installSymfonyTwigAPI(_engine, { pathGenerator: path });
     })
