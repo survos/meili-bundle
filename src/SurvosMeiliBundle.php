@@ -70,8 +70,6 @@ class SurvosMeiliBundle extends AbstractUxBundle
 {
     use HasConfigurableRoutes;
 
-    public const ASSET_PACKAGE = 'meili';
-
     protected string $extensionAlias = 'survos_meili';
 
     public function loadExtension(array $config, ContainerConfigurator $container, ContainerBuilder $builder): void

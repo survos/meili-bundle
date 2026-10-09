@@ -1,5 +1,5 @@
 {
-  "name": "@survos/meili",
+  "name": "@survos/meili-bundle",
   "description": "integrate meili and instant search.  NOTE: flag-icons:^7.5 removed from importmap and flag-icons/css/flag-icons.min.css removed from autoimport",
   "license": "MIT",
   "version": "1.1.1",
@@ -28,7 +28,7 @@
         "fetch": "lazy",
         "enabled": true,
         "autoimport": {
-          "@survos/meili/styles/chat.css": true
+          "@survos/meili-bundle/styles/chat.css": true
         }
       }
     },

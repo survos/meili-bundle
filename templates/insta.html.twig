@@ -447,7 +447,7 @@
     serverApiKey: apiKey,
     indexName: indexName,
     baseIndexName: baseIndexName,
-    _sc_modal: '@survos/meili-bundle/json',
+    _sc_modal: survos_stimulus('meili-bundle', 'json'),
     imgproxyHost: imgproxyHost|default(false),
     debug: debug,
     chatBaseUrl:   path('meili_chat',  {indexName: 'INDEXNAME', workspace: 'meili_assistant'}),
@@ -469,9 +469,9 @@
     )
   %}
 
-  {% set _sc = '@survos/meili-bundle/insta' %}
-  {% set _sc_modal = '@survos/meili-bundle/json' %}
-  {% set _sc_imgproxy = '@survos/imgproxy-bundle/imgproxy' %}
+  {% set _sc = survos_stimulus('meili-bundle', 'insta') %}
+  {% set _sc_modal = survos_stimulus('meili-bundle', 'json') %}
+  {% set _sc_imgproxy = survos_stimulus_exists('imgproxy-bundle', 'imgproxy') ? survos_stimulus('imgproxy-bundle', 'imgproxy') : null %}
   {% set templateUrl = path('meili_template', { templateName: templateName }) %}
 
   {# set default to false during production or when this is completely debugged #}
@@ -480,7 +480,7 @@
 
   <div
     {# only if imgproxy-bundle is installed! #}
-    {% if imgproxyHost|default(false) %}
+    {% if _sc_imgproxy and imgproxyHost|default(false) %}
     {{ stimulus_controller(_sc_imgproxy, {
       host: imgproxyHost,
       endpoint: path('survos_imgproxy_url'),
@@ -490,7 +490,7 @@
     {% endif %}
     >
 
-  {% if debug %}
+  {% if debug and _sc_imgproxy %}
   <div class="small text-muted text-break mb-2">
     imgproxy controller:
     <code {{ stimulus_target(_sc_imgproxy, 'status') }}>waiting for imgproxy controller; host={{ imgproxyHost ?: '(missing)' }}</code>
