@@ -9,7 +9,7 @@ use Survos\MeiliBundle\Service\IndexNameResolver;
 use Survos\MeiliBundle\Service\MeiliNdjsonUploader;
 use Survos\MeiliBundle\Service\MeiliServerKeyService;
 use Survos\MeiliBundle\Service\MeiliService;
-use Survos\ImportBundle\Contract\DatasetPathsFactoryInterface;
+use Survos\DataContracts\Path\DataPaths;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
@@ -43,7 +43,7 @@ final class MeiliFlushFileCommand
         private readonly MeiliServerKeyService $serverKeyService,
         private readonly ChatWorkspaceAccessKeyService $chatWorkspaceAccessKeyService,
         private readonly ChatWorkspaceResolver $chatWorkspaceResolver,
-        private readonly ?DatasetPathsFactoryInterface $pathsFactory = null,
+        private readonly ?DataPaths $dataPaths = null,
     ) {
     }
 
@@ -77,18 +77,17 @@ final class MeiliFlushFileCommand
         }
 
         if (($path === null || $path === '') && $dataset !== null && $dataset !== '') {
-            if ($this->pathsFactory === null) {
+            if ($this->dataPaths === null) {
                 $io->error(sprintf(
-                    'Missing path. You passed --dataset=%s, but no DatasetPathsFactoryInterface is registered. ' .
-                    'Enable survos/data-bundle or pass an explicit file path.',
+                    'Missing path. You passed --dataset=%s, but no DataPaths is registered. ' .
+                    'Configure DataPaths or pass an explicit file path.',
                     $dataset
                 ));
                 return Command::FAILURE;
             }
 
-            $paths = $this->pathsFactory->for($dataset);
-            $enrichPath = str_replace('20_normalize', '60_enrich', $paths->normalizedObjectPath);
-            $path = is_file($enrichPath) ? $enrichPath : $paths->normalizedObjectPath;
+            $path = $this->dataPaths->firstReadableStageFile($dataset, 'enrich')
+                ?? $this->dataPaths->firstReadableStageFile($dataset, 'normalize');
         }
 
         if ($path === null || $path === '') {
@@ -204,7 +203,7 @@ final class MeiliFlushFileCommand
 
     private function resolveDatasetLocale(?string $dataset): ?string
     {
-        if ($dataset === null || $dataset === '' || $this->pathsFactory === null) {
+        if ($dataset === null || $dataset === '' || $this->dataPaths === null) {
             return null;
         }
 
@@ -212,8 +211,7 @@ final class MeiliFlushFileCommand
             return null;
         }
 
-        $paths = $this->pathsFactory->for($dataset);
-        $metaFile = $paths->datasetRoot . '/00_meta/dataset.yaml';
+        $metaFile = $this->dataPaths->stageDir($dataset, 'meta') . '/dataset.yaml';
         if (!is_file($metaFile)) {
             return null;
         }
@@ -235,7 +233,7 @@ final class MeiliFlushFileCommand
 
     private function resolveDatasetPrimaryKey(?string $dataset): ?string
     {
-        if ($dataset === null || $dataset === '' || $this->pathsFactory === null) {
+        if ($dataset === null || $dataset === '' || $this->dataPaths === null) {
             return null;
         }
 
@@ -243,8 +241,7 @@ final class MeiliFlushFileCommand
             return null;
         }
 
-        $paths = $this->pathsFactory->for($dataset);
-        $metaFile = $paths->datasetRoot . '/00_meta/dataset.yaml';
+        $metaFile = $this->dataPaths->stageDir($dataset, 'meta') . '/dataset.yaml';
         if (!is_file($metaFile)) {
             return null;
         }
@@ -279,12 +276,11 @@ final class MeiliFlushFileCommand
             throw new \RuntimeException('Profile settings require --dataset so canonical stage paths can be resolved.');
         }
 
-        if ($this->pathsFactory === null) {
-            throw new \RuntimeException('Profile settings require DatasetPathsFactoryInterface; pass --dataset in an app with import/data paths configured.');
+        if ($this->dataPaths === null) {
+            throw new \RuntimeException('Profile settings require DataPaths; pass --dataset in an app with import/data paths configured.');
         }
 
-        $paths = $this->pathsFactory->for($dataset);
-        $profilePath = $paths->profileObjectPath();
+        $profilePath = $this->dataPaths->stageDir($dataset, 'normalize') . '/obj.profile.json';
 
         return is_file($profilePath) ? $profilePath : null;
     }

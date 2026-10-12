@@ -24,7 +24,7 @@
         "survos/jsonl-bundle": "^2.5",
         "survos/lingua-core": "^2.5",
         "survos/js-twig-bundle": "^2.5",
-        "survos/data-contracts": "^2.5",
+        "survos/data-contracts": "^2.32",
         "survos/kit-bundle": "^2.5",
         "survos/field-bundle": "^2.5"
     },
