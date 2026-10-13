@@ -1,9 +1,9 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
 
-use Survos\DataContracts\Util\Arrays;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\EntityRepository;
 use Meilisearch\Client;
@@ -17,15 +17,16 @@ use Meilisearch\Exceptions\ApiException;
 use Meilisearch\Exceptions\InvalidResponseBodyException;
 use Psr\Http\Client\ClientInterface;
 use Psr\Log\LoggerInterface;
+use Survos\DataContracts\Util\Arrays;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
 use Survos\MeiliBundle\Message\BatchRemoveEntitiesMessage;
+use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\HttpClient\Psr18Client as SymfonyPsr18Client;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Twig\Attribute\AsTwigFunction;
-use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
 
 // Not ResetInterface: reset() here already means "delete and recreate a Meili index".
 // Point the kernel.reset tag at a distinct method instead.
@@ -55,6 +56,7 @@ final class MeiliService
 
     /**
      * Base-keyed settings, regardless of origin (pixie, doctrine, etc).
+     *
      * @var array<string,array<string,mixed>> baseName => settings
      */
     private array $baseSettings = [];
@@ -63,12 +65,13 @@ final class MeiliService
 
     /**
      * Back-compat: per-class settings as provided by compiler pass.
+     *
      * @var array<class-string, array<string,array<string,mixed>>> class => [baseName => settings]
      */
     private readonly array $indexSettings;
 
     public function __construct(
-        protected ParameterBagInterface $bag,
+        private ParameterBagInterface $bag,
         private readonly SettingsService $settingsService,
         private readonly EntityManagerInterface $entityManager,
         private readonly NormalizerInterface $normalizer,
@@ -82,9 +85,9 @@ final class MeiliService
         private array $groupsByClass = [],
         private ?LoggerInterface $logger = null,
         private ?HttpClientInterface $symfonyHttpClient = null,
-        protected ?ClientInterface $httpClient = null,
+        private ?ClientInterface $httpClient = null,
 
-        private(set) readonly array $indexedEntities = [],
+        public private(set) readonly array $indexedEntities = [],
 
         array $indexSettings = [],
     ) {
@@ -107,13 +110,11 @@ final class MeiliService
     // Core config / feature flags
     // ---------------------------------------------------------------------
 
-    public bool $isMultiLingual
-    {
+    public bool $isMultiLingual {
         get => $this->nameResolver->isMultiLingual();
     }
 
-    public bool $passLocale
-    {
+    public bool $passLocale {
         get => $this->nameResolver->passLocale();
     }
 
@@ -150,14 +151,15 @@ final class MeiliService
 
     /**
      * Strip the configured prefix from a full UID to get the base name.
-     * e.g. "md_indexinfo" -> "indexinfo" when prefix is "md_"
+     * e.g. "md_indexinfo" -> "indexinfo" when prefix is "md_".
      */
     public function baseNameFromUid(string $uid): string
     {
         $prefix = $this->getPrefix() ?? '';
-        if ($prefix !== '' && str_starts_with($uid, $prefix)) {
+        if ('' !== $prefix && str_starts_with($uid, $prefix)) {
             return substr($uid, strlen($prefix));
         }
+
         return $uid;
     }
 
@@ -177,13 +179,13 @@ final class MeiliService
     }
 
     /**
-     * base + locale => raw (unprefixed)
+     * base + locale => raw (unprefixed).
      */
     public function rawForBase(string $baseName, ?string $locale): string
     {
-        $fallback = ($locale !== null && $locale !== '')
+        $fallback = (null !== $locale && '' !== $locale)
             ? $locale
-            : (string)($this->bag->has('kernel.default_locale') ? $this->bag->get('kernel.default_locale') : 'en');
+            : (string) ($this->bag->has('kernel.default_locale') ? $this->bag->get('kernel.default_locale') : 'en');
 
         $isMlFor = $this->nameResolver->isMultiLingualFor($baseName, $fallback);
 
@@ -191,13 +193,13 @@ final class MeiliService
     }
 
     /**
-     * base + locale => uid (prefix applied)
+     * base + locale => uid (prefix applied).
      */
     public function uidForBase(string $baseName, ?string $locale): string
     {
-        $fallback = ($locale !== null && $locale !== '')
+        $fallback = (null !== $locale && '' !== $locale)
             ? $locale
-            : (string)($this->bag->has('kernel.default_locale') ? $this->bag->get('kernel.default_locale') : 'en');
+            : (string) ($this->bag->has('kernel.default_locale') ? $this->bag->get('kernel.default_locale') : 'en');
 
         $isMlFor = $this->nameResolver->isMultiLingualFor($baseName, $fallback);
 
@@ -231,7 +233,7 @@ final class MeiliService
     }
 
     /**
-     * raw => uid (prefix applied)
+     * raw => uid (prefix applied).
      */
     public function uidForRaw(string $rawName): string
     {
@@ -252,7 +254,7 @@ final class MeiliService
 
     /**
      * Legacy name retained: this now returns base-keyed settings.
-     * (Previously it was a prefixed-name lookup.)
+     * (Previously it was a prefixed-name lookup.).
      */
     public function getRawIndexSettings(): array
     {
@@ -272,13 +274,14 @@ final class MeiliService
     {
         $out = [];
         foreach ($this->baseSettings as $baseName => $settings) {
-            $class = (string)($settings['class'] ?? '');
-            if ($class === '') {
+            $class = (string) ($settings['class'] ?? '');
+            if ('' === $class) {
                 continue;
             }
             // Keep keyed by baseName; callers should compute uidForBase() when needed.
             $out[$class][$baseName] = $settings;
         }
+
         return $out;
     }
 
@@ -294,6 +297,7 @@ final class MeiliService
                 return true;
             }
         }
+
         return false;
     }
 
@@ -306,7 +310,7 @@ final class MeiliService
         $host ??= $this->meiliHost;
         $apiKey ??= $this->adminKey;
 
-        $key = (string)$host . '|' . (string)$apiKey;
+        $key = (string) $host.'|'.(string) $apiKey;
         if (!isset($this->clients[$key])) {
             $symfonyWithGzip = $this->symfonyHttpClient
                 ? $this->symfonyHttpClient->withOptions([])
@@ -350,7 +354,7 @@ final class MeiliService
         try {
             $index->fetchRawInfo();
         } catch (ApiException|InvalidResponseBodyException $exception) {
-            if ($exception->httpStatus === 404) {
+            if (404 === $exception->httpStatus) {
                 if ($autoCreate) {
                     $task = $client->createIndex($uid, ['primaryKey' => $primaryKey]);
                     if ($wait) {
@@ -391,7 +395,7 @@ final class MeiliService
     {
         $tasksQuery = new TasksQuery();
 
-        if ($indexUid !== null) {
+        if (null !== $indexUid) {
             $tasksQuery->setIndexUids([$indexUid]);
         }
         if ($types) {
@@ -415,7 +419,7 @@ final class MeiliService
             $task->wait();
             $this->logger?->warning(sprintf('Index %s deleted.', $uid));
         } catch (ApiException $exception) {
-            if (($exception->errorCode ?? null) === 'index_not_found' || $exception->httpStatus === 404) {
+            if (($exception->errorCode ?? null) === 'index_not_found' || 404 === $exception->httpStatus) {
                 return;
             }
             throw $exception;
@@ -431,7 +435,7 @@ final class MeiliService
             $client->deleteIndex($uid)->wait();
             $this->logger?->warning(sprintf('Index %s purged+deleted.', $uid));
         } catch (ApiException|InvalidResponseBodyException $exception) {
-            if (($exception->errorCode ?? null) === 'index_not_found' || $exception->httpStatus === 404) {
+            if (($exception->errorCode ?? null) === 'index_not_found' || 404 === $exception->httpStatus) {
                 return;
             }
             throw $exception;
@@ -452,6 +456,7 @@ final class MeiliService
                 $rows[$row->getUid()] = $row;
             }
         }
+
         return $rows;
     }
 
@@ -466,12 +471,14 @@ final class MeiliService
     public function resolveIndexUidForEntity(string $entityClass, ?string $locale = null, ?string $explicitBase = null): string
     {
         $base = $explicitBase ?: (new \ReflectionClass($entityClass))->getShortName();
+
         return $this->uidForBase($base, $locale);
     }
 
     private function getMeiliIndexForEntity(string $class, ?string $locale = null): Index
     {
         $uid = $this->resolveIndexUidForEntity($class, $locale);
+
         return $this->getIndexEndpoint($uid);
     }
 
@@ -501,7 +508,7 @@ final class MeiliService
         }
 
         try {
-            if ($this->counts === null) {
+            if (null === $this->counts) {
                 $rows = $this->entityManager->getConnection()->fetchAllAssociative(
                     "SELECT n.nspname AS schema_name,
        c.relname AS table_name,
@@ -514,8 +521,8 @@ ORDER BY n.nspname, c.relname;"
                 );
 
                 $this->counts = array_combine(
-                    array_map(static fn($r) => (string)$r['table_name'], $rows),
-                    array_map(static fn($r) => (int)$r['estimated_rows'], $rows)
+                    array_map(static fn ($r) => (string) $r['table_name'], $rows),
+                    array_map(static fn ($r) => (int) $r['estimated_rows'], $rows)
                 );
             }
 
@@ -557,7 +564,7 @@ ORDER BY n.nspname, c.relname;"
         int $payloadSize,
         array $documents,
         int $payloadThreshold,
-        Index $meiliIndex
+        Index $meiliIndex,
     ): void {
         $batchSize = 500;
 
@@ -622,8 +629,9 @@ ORDER BY n.nspname, c.relname;"
      *
      * If you pass $uidToLocale, each row will include 'locale' for the given uid.
      *
-     * @param list<string> $indexUids
-     * @param array<string,string> $uidToLocale  uid => locale
+     * @param list<string>         $indexUids
+     * @param array<string,string> $uidToLocale uid => locale
+     *
      * @return array<int,array{
      *   indexName:string,
      *   locale:?string,
@@ -641,13 +649,13 @@ ORDER BY n.nspname, c.relname;"
         $rows = [];
         foreach (array_values(array_unique($indexUids)) as $uid) {
             $row = [
-                'indexName'     => $uid,
-                'locale'        => $uidToLocale[$uid] ?? null,
-                'exists'        => false,
+                'indexName' => $uid,
+                'locale' => $uidToLocale[$uid] ?? null,
+                'exists' => false,
                 'documentCount' => null,
-                'updatedAt'     => null,
-                'primaryKey'    => null,
-                'error'         => null,
+                'updatedAt' => null,
+                'primaryKey' => null,
+                'error' => null,
             ];
 
             try {
@@ -658,7 +666,7 @@ ORDER BY n.nspname, c.relname;"
                 $row['primaryKey'] = $index->getPrimaryKey();
 
                 $updatedAt = $index->getUpdatedAt();
-                if ($updatedAt !== null) {
+                if (null !== $updatedAt) {
                     $row['updatedAt'] = \DateTimeImmutable::createFromInterface($updatedAt);
                 }
 
@@ -666,7 +674,7 @@ ORDER BY n.nspname, c.relname;"
 
                 $stats = $index->stats();
                 $row['documentCount'] = $stats->getNumberOfDocuments();
-            } catch (\Meilisearch\Exceptions\ApiException $e) {
+            } catch (ApiException $e) {
                 if (($e->httpStatus ?? null) !== 404) {
                     $row['error'] = $e->getMessage();
                 }
@@ -679,7 +687,6 @@ ORDER BY n.nspname, c.relname;"
 
         return $rows;
     }
-
 
     /**
      * Block until a Meilisearch task reaches a terminal state.
@@ -700,14 +707,14 @@ ORDER BY n.nspname, c.relname;"
                 return $taskArr;
             }
 
-            $elapsedMs = (int)\round((\microtime(true) - $start) * 1000);
+            $elapsedMs = (int) \round((\microtime(true) - $start) * 1000);
             if ($elapsedMs >= $timeoutMs) {
                 return $taskArr + [
-                        'status' => $status ?? 'unknown',
-                        'error' => $taskArr['error'] ?? [
-                                'message' => sprintf('Timed out waiting for task %d after %dms', $taskUid, $elapsedMs),
-                            ],
-                    ];
+                    'status' => $status ?? 'unknown',
+                    'error' => $taskArr['error'] ?? [
+                        'message' => sprintf('Timed out waiting for task %d after %dms', $taskUid, $elapsedMs),
+                    ],
+                ];
             }
 
             \usleep($pollMs * 1000);

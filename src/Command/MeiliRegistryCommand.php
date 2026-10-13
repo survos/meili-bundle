@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Command;
@@ -12,7 +13,9 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 #[AsCommand('meili:registry', 'Inspect the compiled Meili index registry (including Pixie-derived indexes)')]
 final class MeiliRegistryCommand
 {
-    public function __construct(private readonly MeiliRegistry $registry) {}
+    public function __construct(private readonly MeiliRegistry $registry)
+    {
+    }
 
     public function __invoke(
         SymfonyStyle $io,
@@ -28,9 +31,9 @@ final class MeiliRegistryCommand
                 $this->registry->uidFor($name),
                 $info['class'] ?? '',
                 $info['primaryKey'] ?? '',
-                isset($schema['filterableAttributes']) ? count((array)$schema['filterableAttributes']) : 0,
-                isset($schema['sortableAttributes']) ? count((array)$schema['sortableAttributes']) : 0,
-                isset($schema['searchableAttributes']) ? count((array)$schema['searchableAttributes']) : 0,
+                isset($schema['filterableAttributes']) ? count((array) $schema['filterableAttributes']) : 0,
+                isset($schema['sortableAttributes']) ? count((array) $schema['sortableAttributes']) : 0,
+                isset($schema['searchableAttributes']) ? count((array) $schema['searchableAttributes']) : 0,
                 is_array($info['facets'] ?? null) ? count($info['facets']) : 0,
             ];
 
@@ -41,8 +44,8 @@ final class MeiliRegistryCommand
         }
 
         $io->title('Meili registry (compiled)');
-        $io->table(['raw','uid','class','pk','filterable','sortable','searchable','facets'], $rows);
-        $io->writeln('Count: ' . count($rows));
+        $io->table(['raw', 'uid', 'class', 'pk', 'filterable', 'sortable', 'searchable', 'facets'], $rows);
+        $io->writeln('Count: '.count($rows));
 
         return Command::SUCCESS;
     }

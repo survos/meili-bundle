@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\EventListener;
@@ -25,23 +26,30 @@ final class MeiliSpoolDoctrineListener implements ResetInterface
         private readonly ?LoggerInterface $logger = null,
         private readonly ?string $locale = null,
         private readonly bool $enabled = true,
-    ) {}
+    ) {
+    }
 
     public function postPersist(PostPersistEventArgs $args): void
     {
-        if (!$this->enabled) { return; }
+        if (!$this->enabled) {
+            return;
+        }
         $this->collect($args->getObject(), $args);
     }
 
     public function postUpdate(PostUpdateEventArgs $args): void
     {
-        if (!$this->enabled) { return; }
+        if (!$this->enabled) {
+            return;
+        }
         $this->collect($args->getObject(), $args);
     }
 
     public function postFlush(PostFlushEventArgs $args): void
     {
-        if (!$this->enabled || !$this->pendingIds) { return; }
+        if (!$this->enabled || !$this->pendingIds) {
+            return;
+        }
         foreach ($this->pendingIds as $class => $map) {
             $ids = array_keys($map);
             $path = $this->spooler->appendIds($class, $ids, $this->locale);
@@ -54,8 +62,8 @@ final class MeiliSpoolDoctrineListener implements ResetInterface
     {
         $em = $args->getObjectManager();
         $id = $em->getClassMetadata($obj::class)->getIdentifierValues($obj)['id'] ?? null;
-        if ($id !== null) {
-            $this->pendingIds[$obj::class][(string)$id] = true;
+        if (null !== $id) {
+            $this->pendingIds[$obj::class][(string) $id] = true;
         }
     }
 

@@ -11,7 +11,7 @@ use Survos\MeiliBundle\Metadata\FacetWidget;
 use Survos\MeiliBundle\Metadata\MeiliIndex;
 
 #[ORM\Entity]
-#[MeiliIndex(filterable: ['genres','keywords','releaseYear'], sortable: ['releaseYear'])]
+#[MeiliIndex(filterable: ['genres', 'keywords', 'releaseYear'], sortable: ['releaseYear'])]
 final class MovieExample
 {
     #[ORM\Id]

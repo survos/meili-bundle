@@ -82,7 +82,7 @@ final class InstantSearchComponent
 
         if (empty($this->indexConfig['facets'])) {
             $liveFilterable = $this->settings['filterableAttributes'] ?? [];
-            if ($liveFilterable !== []) {
+            if ([] !== $liveFilterable) {
                 $facetDefaults = [
                     'collapsed' => false,
                     'widget' => 'RefinementList',
@@ -115,7 +115,7 @@ final class InstantSearchComponent
         $this->facets = $this->settings['filterableAttributes'] ?? [];
         $this->indexStats = $index->stats();
         $this->translationStyle = $this->meiliService->getConfig()['translationStyle'] ?? null;
-        $this->searchAsYouType = $embedder === null && $searchAsYouType;
+        $this->searchAsYouType = null === $embedder && $searchAsYouType;
         $this->chatWorkspace = $this->chatWorkspaceResolver->workspaceForIndex($meiliIndexUid);
     }
 }

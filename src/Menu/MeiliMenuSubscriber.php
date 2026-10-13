@@ -17,7 +17,8 @@ class MeiliMenuSubscriber
         private readonly ?MeiliService $meiliService = null,
         private readonly ?string $meiliHost = null,
         private readonly ?AuthorizationCheckerInterface $authorizationChecker = null,
-    ) {}
+    ) {
+    }
 
     #[AsEventListener(event: MenuEvent::ADMIN_NAVBAR_MENU)]
     public function onAdminNavbarMenu(MenuEvent $event): void

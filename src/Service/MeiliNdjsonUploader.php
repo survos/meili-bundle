@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
@@ -17,7 +18,8 @@ final class MeiliNdjsonUploader
         private readonly ?LoggerInterface $logger = null,
         private readonly int $maxPayloadBytes = 10_000_000, // ~10MB per request
         private readonly bool $assertPrimaryKey = true,     // dev guard; keep on by default
-    ) {}
+    ) {
+    }
 
     /**
      * Upload docs (arrays) as NDJSON, chunked by bytes.
@@ -30,7 +32,7 @@ final class MeiliNdjsonUploader
     {
         $lines = [];
         $bytes = 0;
-        $sent  = 0;
+        $sent = 0;
 
         $lastTaskUid = null;
 
@@ -46,9 +48,9 @@ final class MeiliNdjsonUploader
             $sent += \count($lines);
 
             $this->logger?->info('Meili NDJSON batch sent', [
-                'index'   => $index->getUid(),
-                'docs'    => \count($lines),
-                'bytes'   => $bytes,
+                'index' => $index->getUid(),
+                'docs' => \count($lines),
+                'bytes' => $bytes,
                 'taskUid' => $taskUid,
             ]);
 
@@ -68,18 +70,18 @@ final class MeiliNdjsonUploader
                 // Keep this guardrail: it turns “PK mismatch” into an immediate developer-visible error.
                 assert(
                     \array_key_exists($primaryKey, $doc),
-                    "Missing primaryKey '{$primaryKey}' in document keys: " . implode('|', array_keys($doc))
+                    "Missing primaryKey '{$primaryKey}' in document keys: ".implode('|', array_keys($doc))
                 );
             }
 
-            $line = \json_encode($doc, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) . "\n";
-            $len  = \strlen($line);
+            $line = \json_encode($doc, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES)."\n";
+            $len = \strlen($line);
 
             if ($len > $this->maxPayloadBytes) {
                 $flush();
                 $taskUid = $this->postNdjson($index, $line, $primaryKey);
                 $lastTaskUid = $taskUid ?? $lastTaskUid;
-                $sent++;
+                ++$sent;
                 continue;
             }
 
@@ -88,14 +90,14 @@ final class MeiliNdjsonUploader
             }
 
             $lines[] = $line;
-            $bytes  += $len;
+            $bytes += $len;
         }
 
         $flush();
 
         $this->logger?->info('Meili NDJSON upload complete', [
-            'index'       => $index->getUid(),
-            'sent'        => $sent,
+            'index' => $index->getUid(),
+            'sent' => $sent,
             'lastTaskUid' => $lastTaskUid,
         ]);
 
@@ -107,7 +109,7 @@ final class MeiliNdjsonUploader
      */
     public function uploadJsonlFile(Index $index, string $path, ?string $primaryKey = null): ?int
     {
-        if (!\is_file($path) || \filesize($path) === 0) {
+        if (!\is_file($path) || 0 === \filesize($path)) {
             return null;
         }
 
@@ -129,9 +131,9 @@ final class MeiliNdjsonUploader
             $lastTaskUid = $taskUid ?? $lastTaskUid;
 
             $this->logger?->info('Meili NDJSON batch sent', [
-                'index'   => $index->getUid(),
-                'docs'    => \count($lines),
-                'bytes'   => $bytes,
+                'index' => $index->getUid(),
+                'docs' => \count($lines),
+                'bytes' => $bytes,
                 'taskUid' => $taskUid,
             ]);
 
@@ -148,27 +150,27 @@ final class MeiliNdjsonUploader
             if ($primaryKey && $this->assertPrimaryKey) {
                 assert(
                     \array_key_exists($primaryKey, $row),
-                    "Missing primaryKey '{$primaryKey}' in JSONL row keys: " . implode('|', array_keys($row))
+                    "Missing primaryKey '{$primaryKey}' in JSONL row keys: ".implode('|', array_keys($row))
                 );
             }
 
-            $line = \json_encode($row, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) . "\n";
-            $len  = \strlen($line);
+            $line = \json_encode($row, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES)."\n";
+            $len = \strlen($line);
 
             if ($bytes + $len > $this->maxPayloadBytes && $bytes > 0) {
                 $flush();
             }
 
             $lines[] = $line;
-            $bytes  += $len;
+            $bytes += $len;
         }
 
         $flush();
 
         $this->logger?->info('Meili NDJSON file upload complete', [
-            'index'       => $index->getUid(),
-            'sent'        => $count,
-            'file'        => $path,
+            'index' => $index->getUid(),
+            'sent' => $count,
+            'file' => $path,
             'lastTaskUid' => $lastTaskUid,
         ]);
 
@@ -182,12 +184,12 @@ final class MeiliNdjsonUploader
     private function postNdjson(Index $index, string $body, ?string $primaryKey): ?int
     {
         $base = rtrim($this->meiliService->getHost(), '/');
-        $key  = $this->meiliService->getAdminKey();
+        $key = $this->meiliService->getAdminKey();
 
-        $url  = $base . '/indexes/' . rawurlencode($index->getUid()) . '/documents';
+        $url = $base.'/indexes/'.rawurlencode($index->getUid()).'/documents';
         if ($primaryKey) {
             // This is the critical fix: set PK at first ingestion.
-            $url .= '?primaryKey=' . rawurlencode($primaryKey);
+            $url .= '?primaryKey='.rawurlencode($primaryKey);
         }
 
         $headers = ['Content-Type' => 'application/x-ndjson'];
@@ -197,19 +199,14 @@ final class MeiliNdjsonUploader
 
         $resp = $this->http->request('POST', $url, [
             'headers' => $headers,
-            'body'    => $body,
+            'body' => $body,
         ]);
 
         $status = $resp->getStatusCode();
-        $raw    = $resp->getContent(false);
+        $raw = $resp->getContent(false);
 
         if ($status >= 300) {
-            throw new \RuntimeException(sprintf(
-                "Meili error %d POST %s: %s",
-                $status,
-                $url,
-                $raw
-            ));
+            throw new \RuntimeException(sprintf('Meili error %d POST %s: %s', $status, $url, $raw));
         }
 
         // Meilisearch typically returns JSON containing a task identifier.
@@ -226,7 +223,6 @@ final class MeiliNdjsonUploader
         if (\is_array($data)) {
             $taskUid = $data['taskUid'] ?? $data['uid'] ?? $data['task_id'] ?? null;
         }
-
 
         return \is_int($taskUid) ? $taskUid : null;
     }

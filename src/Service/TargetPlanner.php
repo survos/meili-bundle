@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
@@ -19,10 +20,12 @@ final class TargetPlanner
         private readonly ?TranslatableIndex $translatableIndex = null,
         private readonly array $enabledLocales = [],
         private readonly string $defaultLocale = 'en',
-    ) {}
+    ) {
+    }
 
     /**
      * @param list<string> $onlyLocales
+     *
      * @return list<IndexTarget>
      */
     public function targetsForBase(string $baseKey, bool $perLocale, array $onlyLocales = []): array
@@ -35,12 +38,12 @@ final class TargetPlanner
         $class = (string) $settings['class'];
 
         $fallbackEnabled = array_values(array_unique(array_filter(array_map(
-            static fn($l) => HashUtil::normalizeLocale((string) $l),
+            static fn ($l) => HashUtil::normalizeLocale((string) $l),
             $this->enabledLocales
         ))));
 
         $baseLocale = HashUtil::normalizeLocale($this->defaultLocale);
-        $targets    = $fallbackEnabled;
+        $targets = $fallbackEnabled;
 
         if ($this->translatableIndex && $this->translatableIndex->has($class)) {
             $src = $this->translatableIndex->sourceLocaleFor($class);
@@ -49,15 +52,15 @@ final class TargetPlanner
         }
 
         $targets = array_values(array_unique(array_filter(array_map(
-            static fn($l) => HashUtil::normalizeLocale((string) $l),
+            static fn ($l) => HashUtil::normalizeLocale((string) $l),
             $targets
         ))));
 
-        $targets = array_values(array_filter($targets, fn(string $l) => $l !== '' && $l !== $baseLocale));
+        $targets = array_values(array_filter($targets, fn (string $l) => '' !== $l && $l !== $baseLocale));
 
-        if ($onlyLocales !== []) {
+        if ([] !== $onlyLocales) {
             $only = array_flip($onlyLocales);
-            $targets = array_values(array_filter($targets, static fn(string $l) => isset($only[$l])));
+            $targets = array_values(array_filter($targets, static fn (string $l) => isset($only[$l])));
         }
 
         $fallbackSource = $baseLocale ?: HashUtil::normalizeLocale($this->defaultLocale);
@@ -94,6 +97,7 @@ final class TargetPlanner
     /**
      * @param list<string> $bases
      * @param list<string> $onlyLocales
+     *
      * @return list<IndexTarget>
      */
     public function targetsForBases(array $bases, bool $perLocale, array $onlyLocales = []): array
@@ -104,6 +108,7 @@ final class TargetPlanner
                 $all[] = $t;
             }
         }
+
         return $all;
     }
 }

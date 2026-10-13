@@ -11,11 +11,11 @@ use Survos\MeiliBundle\Bridge\EasyAdmin\MeiliEasyAdminDashboardHelper;
 use Survos\MeiliBundle\Bridge\EasyAdmin\MeiliEasyAdminMenuFactory;
 use Survos\MeiliBundle\Command\ExportCommand;
 use Survos\MeiliBundle\Command\IterateIndexesCommand;
-use Survos\MeiliBundle\Command\MeiliMcpTestCommand;
 use Survos\MeiliBundle\Command\MeilEstimatorCommand;
 use Survos\MeiliBundle\Command\MeiliFlushFileCommand;
-use Survos\MeiliBundle\Command\MeiliRegistrySyncCommand;
+use Survos\MeiliBundle\Command\MeiliMcpTestCommand;
 use Survos\MeiliBundle\Command\MeiliRegistryReportCommand;
+use Survos\MeiliBundle\Command\MeiliRegistrySyncCommand;
 use Survos\MeiliBundle\Command\MeiliSchemaUpdateCommand;
 use Survos\MeiliBundle\Command\MeiliSchemaValidateCommand;
 use Survos\MeiliBundle\Command\MeiliSuggestSettingsCommand;
@@ -34,13 +34,13 @@ use Survos\MeiliBundle\Menu\MeiliMenuSubscriber;
 use Survos\MeiliBundle\MessageHandler\BatchIndexEntitiesMessageHandler;
 use Survos\MeiliBundle\Registry\MeiliRegistry;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
+use Survos\MeiliBundle\Service\ChatWorkspaceAccessKeyService;
+use Survos\MeiliBundle\Service\ChatWorkspaceResolver;
+use Survos\MeiliBundle\Service\CollectionMetadataService;
 use Survos\MeiliBundle\Service\IndexFastSyncService;
 use Survos\MeiliBundle\Service\IndexNameResolver;
 use Survos\MeiliBundle\Service\IndexProducer;
 use Survos\MeiliBundle\Service\IndexSyncService;
-use Survos\MeiliBundle\Service\CollectionMetadataService;
-use Survos\MeiliBundle\Service\ChatWorkspaceAccessKeyService;
-use Survos\MeiliBundle\Service\ChatWorkspaceResolver;
 use Survos\MeiliBundle\Service\MeiliFieldHeuristic;
 use Survos\MeiliBundle\Service\MeiliNdjsonUploader;
 use Survos\MeiliBundle\Service\MeiliPayloadBuilder;
@@ -48,9 +48,9 @@ use Survos\MeiliBundle\Service\MeiliServerKeyService;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\MeiliServiceConfig;
 use Survos\MeiliBundle\Service\OpenApiFieldMetadataResolver;
+use Survos\MeiliBundle\Service\ResultNormalizer;
 use Survos\MeiliBundle\Service\SettingsService;
 use Survos\MeiliBundle\Service\TargetPlanner;
-use Survos\MeiliBundle\Service\ResultNormalizer;
 use Survos\MeiliBundle\Tool\DescribeCollectionTool;
 use Survos\MeiliBundle\Tool\GetDocumentTool;
 use Survos\MeiliBundle\Tool\SearchFacetsTool;
@@ -63,7 +63,6 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Reference;
-use Twig\Environment;
 
 // Symfony\Component\HttpKernel\Bundle\Bundle <-- Flex auto-registration marker (see Survos\Kit\AbstractSurvosBundle)
 class SurvosMeiliBundle extends AbstractUxBundle
@@ -187,7 +186,6 @@ class SurvosMeiliBundle extends AbstractUxBundle
                     LocaleContext::class,
                     ContainerInterface::IGNORE_ON_INVALID_REFERENCE
                 ));
-            ;
         }
 
         // Other services (NOTE: MeiliServiceConfig removed from this list)
@@ -240,7 +238,6 @@ class SurvosMeiliBundle extends AbstractUxBundle
                 ->setAutoconfigured(true)
                 ->setPublic(true);
         }
-
 
         $builder->autowire(SearchController::class)
             ->addTag('container.service_subscriber')
@@ -536,17 +533,15 @@ class SurvosMeiliBundle extends AbstractUxBundle
                     'mappings' => [
                         'SurvosMeiliBundle' => [
                             'is_bundle' => false,
-                            'type'      => 'attribute',
-                            'dir'       => \dirname(__DIR__) . '/src/Entity',
-                            'prefix'    => 'Survos\\MeiliBundle\\Entity',
-                            'alias'     => 'SurvosMeiliBundle',
+                            'type' => 'attribute',
+                            'dir' => \dirname(__DIR__).'/src/Entity',
+                            'prefix' => 'Survos\\MeiliBundle\\Entity',
+                            'alias' => 'SurvosMeiliBundle',
                         ],
                     ],
                 ],
             ]);
         }
-
-
 
         if ($builder->hasExtension('ux_icons')) {
             $builder->prependExtensionConfig('ux_icons', [
@@ -554,34 +549,34 @@ class SurvosMeiliBundle extends AbstractUxBundle
                 // Apps can override to 'throw' if they want strict mode.
                 'aliases' => [
                     // UI chrome
-                    'home'      => 'material-symbols:home-outline',
-                    'browse'    => 'mdi:list-box-outline',
-                    'search'    => 'tabler:search',
-                    'info'    => 'tabler:info-circle',
-                    'meili'     => 'tabler:search',
-                    'database'  => 'mdi:database',
+                    'home' => 'material-symbols:home-outline',
+                    'browse' => 'mdi:list-box-outline',
+                    'search' => 'tabler:search',
+                    'info' => 'tabler:info-circle',
+                    'meili' => 'tabler:search',
+                    'database' => 'mdi:database',
                     // actions / hits
-                    'json'      => 'si:json-duotone',
-                    'bug'       => 'tabler:bug',
-                    'external'  => 'tabler:external-link',
+                    'json' => 'si:json-duotone',
+                    'bug' => 'tabler:bug',
+                    'external' => 'tabler:external-link',
                     'open-in-new' => 'mdi:open-in-new',
                     // chat
-                    'chat'      => 'mdi:chat-outline',
-                    'robot'     => 'mdi:robot-outline',
-                    'brain'     => 'fluent:brain-circuit-20-filled',
+                    'chat' => 'mdi:chat-outline',
+                    'robot' => 'mdi:robot-outline',
+                    'brain' => 'fluent:brain-circuit-20-filled',
                     'chat-bubble' => 'heroicons:chat-bubble-left-right',
                     // instant search
-                    'instant_search'                 => 'mdi:tag-search-outline',
-                    'action.detail'                  => 'mdi:show-outline',
+                    'instant_search' => 'mdi:tag-search-outline',
+                    'action.detail' => 'mdi:show-outline',
                     'field.text_editor.view_content' => 'mdi:cogs',
-                    'filter'    => 'tabler:adjustments-alt',
-                    'overview'  => 'oui:nav-overview',
+                    'filter' => 'tabler:adjustments-alt',
+                    'overview' => 'oui:nav-overview',
                     'database-search' => 'mdi:database-search',
                     // semantic / linked data
                     'semantic-web' => 'mdi:semantic-web',
-                    'semantic'     => 'simple-icons:semanticscholar',
-                    'wikidata'     => 'openmoji:wikidata',
-                    'website'      => 'fluent-mdl2:website',
+                    'semantic' => 'simple-icons:semanticscholar',
+                    'wikidata' => 'openmoji:wikidata',
+                    'website' => 'fluent-mdl2:website',
                 ],
             ]);
         }

@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Command;
@@ -14,7 +15,8 @@ final class FastSyncIndexesCommand
 {
     public function __construct(
         private readonly IndexFastSyncService $sync,
-    ) {}
+    ) {
+    }
 
     public function __invoke(
         SymfonyStyle $io,

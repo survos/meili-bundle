@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
@@ -12,17 +13,19 @@ use Psr\Log\LoggerInterface;
 final class EmbedCostEstimator
 {
     /**
-     * @param \Closure(string): int $tokenizerFn returns token count for a single text
-     * @param float $pricePer1kTokens USD per 1K input tokens (embeddings usually charge on input tokens only)
+     * @param \Closure(string): int $tokenizerFn      returns token count for a single text
+     * @param float                 $pricePer1kTokens USD per 1K input tokens (embeddings usually charge on input tokens only)
      */
     public function __construct(
         private readonly \Closure $tokenizerFn,
         private readonly float $pricePer1kTokens = 0.02, // sensible default; override via DI or CLI
         private readonly ?LoggerInterface $logger = null,
-    ) {}
+    ) {
+    }
 
     /**
      * @param iterable<string> $samples
+     *
      * @return array{samples:int,totalTokens:int,avgTokens:float,estimatedCost:float}
      */
     public function estimate(iterable $samples): array
@@ -33,7 +36,7 @@ final class EmbedCostEstimator
         foreach ($samples as $s) {
             $tokens = (int) call_user_func($this->tokenizerFn, (string) $s);
             $total += $tokens;
-            $count++;
+            ++$count;
         }
 
         $avg = $count ? $total / $count : 0.0;
@@ -44,9 +47,9 @@ final class EmbedCostEstimator
         ));
 
         return [
-            'samples'       => $count,
-            'totalTokens'   => $total,
-            'avgTokens'     => $avg,
+            'samples' => $count,
+            'totalTokens' => $total,
+            'avgTokens' => $avg,
             'estimatedCost' => round($usd, 4),
         ];
     }

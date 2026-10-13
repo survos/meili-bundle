@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Command;
@@ -57,10 +58,8 @@ abstract class MeiliBaseCommand extends Command implements LoggerAwareInterface
     {
         // IMPORTANT: your MeiliService currently exposes isMultiLingual as a property hook,
         // but some projects may not have BabelBundle installed.
-        if ($this->meili->isMultiLingual && $this->localeContext === null) {
-            throw new \LogicException(
-                'LocaleContext is required when MultiLingual mode is enabled. Install survos/babel-bundle.'
-            );
+        if ($this->meili->isMultiLingual && null === $this->localeContext) {
+            throw new \LogicException('LocaleContext is required when MultiLingual mode is enabled. Install survos/babel-bundle.');
         }
     }
 
@@ -73,7 +72,7 @@ abstract class MeiliBaseCommand extends Command implements LoggerAwareInterface
 
         if ($class) {
             if (!class_exists($class)) {
-                $class = 'App\\Entity\\' . $class;
+                $class = 'App\\Entity\\'.$class;
             }
             if (!class_exists($class)) {
                 throw new \InvalidArgumentException(sprintf('Class "%s" does not exist', $class));
@@ -90,7 +89,7 @@ abstract class MeiliBaseCommand extends Command implements LoggerAwareInterface
             }
 
             // Prefer explicit baseName when present, else the raw name
-            $names[] = (string)($setting['baseName'] ?? $rawName);
+            $names[] = (string) ($setting['baseName'] ?? $rawName);
         }
 
         return $names;
@@ -99,6 +98,7 @@ abstract class MeiliBaseCommand extends Command implements LoggerAwareInterface
     public function pendingTasks(string $uid): int
     {
         $resp = $this->meili->getTasks($uid, MeiliTaskStatus::ACTIVE);
+
         return \count($resp['results'] ?? []);
     }
 

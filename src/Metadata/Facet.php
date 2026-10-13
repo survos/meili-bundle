@@ -1,30 +1,29 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Metadata;
 
-use Attribute;
-
-#[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_METHOD)]
+#[\Attribute(\Attribute::TARGET_PROPERTY | \Attribute::TARGET_METHOD)]
 final class Facet
 {
     /**
-     * @param string|null                 $label        Display label (defaults to field/method name)
-     * @param int                         $order        Lower first; affects facet ordering in UI
-     * @param int                         $showMoreThreshold If < threshold values, hide "Show more" affordance
-     * @param FacetWidget|string|null     $widget       Widget to render (enum preferred; string accepted)
-     * @param string|null                 $format       UI hint (e.g., 'price', 'monthIndex')
-     * @param bool|null                   $visible      Force show/hide (null = inherit/global)
-     * @param string[]                    $tagsAny      Visible only when runtime context contains any tag
-     * @param array<string,mixed>         $props        Arbitrary UI props forwarded to the widget
+     * @param string|null             $label             Display label (defaults to field/method name)
+     * @param int                     $order             Lower first; affects facet ordering in UI
+     * @param int                     $showMoreThreshold If < threshold values, hide "Show more" affordance
+     * @param FacetWidget|string|null $widget            Widget to render (enum preferred; string accepted)
+     * @param string|null             $format            UI hint (e.g., 'price', 'monthIndex')
+     * @param bool|null               $visible           Force show/hide (null = inherit/global)
+     * @param string[]                $tagsAny           Visible only when runtime context contains any tag
+     * @param array<string,mixed>     $props             Arbitrary UI props forwarded to the widget
      *
      * Common real-world options (mirrored into frontend config):
-     * @param 'count'|'alpha'|null        $sortMode     RefinementList/Menu sorting (by count or alphabetic)
-     * @param bool|null                   $collapsed    Start collapsed (panel); user toggles persist in UI
-     * @param int|null                    $limit        Initial number of facet values (RefinementList/Menu)
-     * @param int|null                    $showMoreLimit Max number when expanded
-     * @param bool|null                   $searchable   Enable facet search (RefinementList)
-     * @param array<string,string>        $lookup       Map raw value -> human label (transformItems)
+     * @param 'count'|'alpha'|null $sortMode      RefinementList/Menu sorting (by count or alphabetic)
+     * @param bool|null            $collapsed     Start collapsed (panel); user toggles persist in UI
+     * @param int|null             $limit         Initial number of facet values (RefinementList/Menu)
+     * @param int|null             $showMoreLimit Max number when expanded
+     * @param bool|null            $searchable    Enable facet search (RefinementList)
+     * @param array<string,string> $lookup        Map raw value -> human label (transformItems)
      */
     public function __construct(
         public ?string $label = null,
@@ -47,5 +46,6 @@ final class Facet
         // Whether this field should be described to the AI in chat workspace prompts.
         // Set to false to hide implementation-detail fields from the LLM.
         public bool $returnInChat = true,
-    ) {}
+    ) {
+    }
 }

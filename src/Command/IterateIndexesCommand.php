@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Command;
@@ -13,20 +14,20 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 #[AsCommand('meili:iterate', 'iterate indexes and dispatch IndexInfoEvent')]
 final class IterateIndexesCommand
 {
     public function __construct(
         private readonly IndexFastSyncService $sync,
-        private IndexInfoRepository           $indexInfoRepository,
-        private EntityManagerInterface        $entityManager,
-        private MeiliService                  $meiliService,
-        private MessageBusInterface           $bus, private readonly EventDispatcherInterface $eventDispatcher,
-
-    ) {}
+        private IndexInfoRepository $indexInfoRepository,
+        private EntityManagerInterface $entityManager,
+        private MeiliService $meiliService,
+        private MessageBusInterface $bus, private readonly EventDispatcherInterface $eventDispatcher,
+    ) {
+    }
 
     public function __invoke(
         SymfonyStyle $io,
@@ -47,7 +48,7 @@ final class IterateIndexesCommand
 
         foreach ($indexes as $uid => $indexStats) {
             // filter by prefix.
-            if ($prefix !== '' && $prefix !== null && !str_starts_with($uid, $prefix)) {
+            if ('' !== $prefix && null !== $prefix && !str_starts_with($uid, $prefix)) {
                 continue;
             }
 
@@ -76,7 +77,7 @@ final class IterateIndexesCommand
                 $io->writeln(sprintf('sortable=%s', implode(',', $liveSettings['sortableAttributes'] ?? [])));
             }
 
-            if ($rawInfo !== []) {
+            if ([] !== $rawInfo) {
                 $message = new UpdateIndexInfoMessage(...$rawInfo);
                 $this->eventDispatcher->dispatch($message);
             }
@@ -91,34 +92,32 @@ final class IterateIndexesCommand
                 $this->entityManager->persist($localInfo);
             }
             // parse dataset, locale, inverse in indexNamer
-//            $localInfo->locale = $rawInfo['locale'];
-//
-//                // create-or-load by PK (uid)
-//            $indexInfo = $this->indexInfoRepository->find($uid) ?? new IndexInfo($uid);
-//            if ($indexInfo->lastSyncedAt === null) {
-//                $this->entityManager->persist($indexInfo);
-//            }
+            //            $localInfo->locale = $rawInfo['locale'];
+            //
+            //                // create-or-load by PK (uid)
+            //            $indexInfo = $this->indexInfoRepository->find($uid) ?? new IndexInfo($uid);
+            //            if ($indexInfo->lastSyncedAt === null) {
+            //                $this->entityManager->persist($indexInfo);
+            //            }
         }
         $this->entityManager->flush();
         dd($info);
-
 
         $stats = $this->sync->fastSync($enqueue);
         // now dispatch messages that have been updated
         $count = 0;
         foreach ($this->indexInfoRepository->findBy(['needsUpdate' => true]) as $indexInfo) {
             $this->bus->dispatch(new UpdateIndexInfoMessage($indexInfo->uid));
-            $count++;
+            ++$count;
         }
-        $io->success("Messages dispatched " . $count);
-//        $qb = $indexInfoRepository->createQueryBuilder('indexInfo');
-//        $qb->where($qb->expr()->eq('indexInfo.createdAt', ':createdAt'));
+        $io->success('Messages dispatched '.$count);
+        //        $qb = $indexInfoRepository->createQueryBuilder('indexInfo');
+        //        $qb->where($qb->expr()->eq('indexInfo.createdAt', ':createdAt'));
 
-
-//        $io->success(sprintf(
-//            'Total=%d, created=%d, updated=%d, unchanged=%d, enqueued=%d',
-//            $stats['total'], $stats['created'], $stats['updated'], $stats['unchanged'], $stats['enqueued']
-//        ));
+        //        $io->success(sprintf(
+        //            'Total=%d, created=%d, updated=%d, unchanged=%d, enqueued=%d',
+        //            $stats['total'], $stats['created'], $stats['updated'], $stats['unchanged'], $stats['enqueued']
+        //        ));
         return Command::SUCCESS;
     }
 }

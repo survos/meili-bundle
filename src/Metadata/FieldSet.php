@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Metadata;
@@ -12,7 +13,8 @@ final class FieldSet
     public function __construct(
         public readonly array $columns = [],
         public readonly ?array $groups = null,
-    ) {}
+    ) {
+    }
 
     /** Accepts FieldSet|array(list)|array{columns?:list,groups?:list} and normalizes to FieldSet. */
     public static function from(FieldSet|array $value): self
@@ -22,9 +24,10 @@ final class FieldSet
         }
 
         // associative form: ['columns'=>[...], 'groups'=>[...]]
-        if ($value !== [] && array_keys($value) !== range(0, count($value) - 1)) {
-            $cols = array_values((array)($value['columns'] ?? []));
-            $grps = isset($value['groups']) ? array_values((array)$value['groups']) : null;
+        if ([] !== $value && array_keys($value) !== range(0, count($value) - 1)) {
+            $cols = array_values((array) ($value['columns'] ?? []));
+            $grps = isset($value['groups']) ? array_values((array) $value['groups']) : null;
+
             return new self($cols, $grps);
         }
 

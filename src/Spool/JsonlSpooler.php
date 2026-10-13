@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Spool;
@@ -20,9 +21,10 @@ final class JsonlSpooler
     public function pathFor(string $entityClass, ?string $locale = null, bool $docs = false): string
     {
         $safe = str_replace('\\', '.', $entityClass);
-        $loc  = $locale ? ".$locale" : '';
-        $sfx  = $docs ? '.docs.jsonl' : '.ids.jsonl';
-        return rtrim($this->spoolDir, '/') . "/$safe$loc$sfx";
+        $loc = $locale ? ".$locale" : '';
+        $sfx = $docs ? '.docs.jsonl' : '.ids.jsonl';
+
+        return rtrim($this->spoolDir, '/')."/$safe$loc$sfx";
     }
 
     /** @param list<int|string> $ids */
@@ -32,10 +34,11 @@ final class JsonlSpooler
         $w = JsonlWriter::open($path);
         foreach ($ids as $id) {
             // Use tokenCode=$id for de-dup across process runs
-            $w->write(['id' => $id], (string)$id);
+            $w->write(['id' => $id], (string) $id);
         }
         $w->close();
         $this->logger?->info('Spool IDs', ['file' => $path, 'count' => count($ids)]);
+
         return $path;
     }
 
@@ -46,12 +49,13 @@ final class JsonlSpooler
         $w = JsonlWriter::open($path);
         $c = 0;
         foreach ($docs as $doc) {
-            $token = isset($doc[$pk]) ? (string)$doc[$pk] : null; // optional de-dup
+            $token = isset($doc[$pk]) ? (string) $doc[$pk] : null; // optional de-dup
             $w->write($doc, $token);
-            $c++;
+            ++$c;
         }
         $w->close();
         $this->logger?->info('Spool DOCS', ['file' => $path, 'count' => $c]);
+
         return $path;
     }
 }

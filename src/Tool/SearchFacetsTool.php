@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Tool;
@@ -8,15 +9,6 @@ use Meilisearch\Exceptions\ApiException;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\ResultNormalizer;
 use Symfony\AI\Agent\Toolbox\Attribute\AsTool;
-
-use function array_filter;
-use function array_map;
-use function array_values;
-use function count;
-use function explode;
-use function preg_match_all;
-use function sort;
-use function trim;
 
 /**
  * Symfony AI tool: return facet counts for a query on a Meilisearch index.
@@ -41,12 +33,12 @@ final class SearchFacetsTool
     }
 
     /**
-     * @param string      $index            The Meilisearch index UID (e.g. "meili_product").
-     * @param string      $query            The full-text search query.
-     * @param string      $facetAttributes  Comma-separated filterable attributes to aggregate (e.g. "category,brand").
-     *                                      Only attributes configured as filterable on the index are valid.
-     *                                      Always returned in availableFilterable so the agent can pick correctly.
-     * @param string|null $filters          Optional Meilisearch filter expression.
+     * @param string      $index           The Meilisearch index UID (e.g. "meili_product").
+     * @param string      $query           the full-text search query
+     * @param string      $facetAttributes Comma-separated filterable attributes to aggregate (e.g. "category,brand").
+     *                                     Only attributes configured as filterable on the index are valid.
+     *                                     Always returned in availableFilterable so the agent can pick correctly.
+     * @param string|null $filters         optional Meilisearch filter expression
      */
     public function __invoke(
         string $index,
@@ -59,18 +51,18 @@ final class SearchFacetsTool
         // Fetch the index's filterable attributes once so every response tells the
         // agent what is valid — no wasted round-trip when the agent guesses wrong.
         $filterableAttributes = $idx->getFilterableAttributes();
-        sort($filterableAttributes);
+        \sort($filterableAttributes);
 
-        $attributes = array_values(array_filter(
-            array_map(trim(...), explode(',', $facetAttributes)),
-            static fn(string $a) => $a !== '',
+        $attributes = \array_values(\array_filter(
+            \array_map(\trim(...), \explode(',', $facetAttributes)),
+            static fn (string $a) => '' !== $a,
         ));
 
         $searchParams = [
-            'limit'  => 0, // we only want facets, not hits
+            'limit' => 0, // we only want facets, not hits
             'facets' => $attributes,
         ];
-        if ($filters !== null && $filters !== '') {
+        if (null !== $filters && '' !== $filters) {
             $searchParams['filter'] = $filters;
         }
 
@@ -82,29 +74,30 @@ final class SearchFacetsTool
             // e.g. "…Available filterable attributes patterns are: `brand, category, rating`"
             $message = $e->getMessage();
             $parsedAvailable = [];
-            if (preg_match_all('/`([^`]+)`/', $message, $m) && count($m[1]) > 0) {
-                $lastToken = $m[1][count($m[1]) - 1];
-                foreach (explode(',', $lastToken) as $part) {
-                    $part = trim($part);
-                    if ($part !== '') {
+            if (\preg_match_all('/`([^`]+)`/', $message, $m) && \count($m[1]) > 0) {
+                $lastToken = $m[1][\count($m[1]) - 1];
+                foreach (\explode(',', $lastToken) as $part) {
+                    $part = \trim($part);
+                    if ('' !== $part) {
                         $parsedAvailable[] = $part;
                     }
                 }
             }
+
             return $this->normalizer->toJson([
-                'error'               => 'invalid_facet_attribute',
-                'message'             => $message,
-                'requested'           => $attributes,
+                'error' => 'invalid_facet_attribute',
+                'message' => $message,
+                'requested' => $attributes,
                 'availableFilterable' => $filterableAttributes ?: $parsedAvailable,
-                'hint'                => 'Retry with one or more of the availableFilterable attributes.',
+                'hint' => 'Retry with one or more of the availableFilterable attributes.',
             ]);
         }
 
         return $this->normalizer->toJson([
-            'index'              => $index,
-            'query'              => $query,
-            'facetDistribution'  => $results->getFacetDistribution() ?? [],
-            'facetStats'         => $results->getFacetStats() ?? [],
+            'index' => $index,
+            'query' => $query,
+            'facetDistribution' => $results->getFacetDistribution() ?? [],
+            'facetStats' => $results->getFacetStats() ?? [],
             'availableFilterable' => $filterableAttributes,
         ]);
     }

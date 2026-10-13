@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Tool;
@@ -13,14 +14,6 @@ use Symfony\AI\Agent\Toolbox\Attribute\AsTool;
 use Symfony\AI\Agent\Toolbox\Source\HasSourcesInterface;
 use Symfony\AI\Agent\Toolbox\Source\HasSourcesTrait;
 use Symfony\AI\Agent\Toolbox\Source\Source;
-
-use function max;
-use function min;
-use function sprintf;
-use function array_key_exists;
-use function count;
-use function is_array;
-use function is_string;
 
 /**
  * Symfony AI tool: find documents similar to a given document using Meilisearch's
@@ -47,9 +40,9 @@ final class SimilarDocumentsTool implements HasSourcesInterface
 
     /**
      * @param string $index      The Meilisearch index UID (e.g. "product").
-     * @param string $documentId The primary-key value of the reference document.
+     * @param string $documentId the primary-key value of the reference document
      * @param string $embedder   Name of the embedder configured on this index (e.g. "product").
-     * @param int    $limit      Maximum number of similar documents to return (1–50).
+     * @param int    $limit      maximum number of similar documents to return (1–50)
      */
     public function __invoke(
         string $index,
@@ -58,7 +51,7 @@ final class SimilarDocumentsTool implements HasSourcesInterface
         int $limit = 8,
     ): string {
         $query = (new SimilarDocumentsQuery($documentId, $embedder))
-            ->setLimit(max(1, min(50, $limit)));
+            ->setLimit(\max(1, \min(50, $limit)));
 
         try {
             $results = $this->meiliService
@@ -67,8 +60,8 @@ final class SimilarDocumentsTool implements HasSourcesInterface
         } catch (ApiException $e) {
             // The /similar endpoint returns 400 when no embedder is configured.
             return $this->normalizer->toJson([
-                'error'      => $e->getMessage(),
-                'index'      => $index,
+                'error' => $e->getMessage(),
+                'index' => $index,
                 'documentId' => $documentId,
             ]);
         }
@@ -77,7 +70,7 @@ final class SimilarDocumentsTool implements HasSourcesInterface
         $primaryKey = $this->primaryKeyForIndex($index);
         $missingPrimaryKeyCount = 0;
         foreach ($hits as $hit) {
-            if (!is_array($hit) || !array_key_exists($primaryKey, $hit)) {
+            if (!\is_array($hit) || !\array_key_exists($primaryKey, $hit)) {
                 ++$missingPrimaryKeyCount;
             }
         }
@@ -87,7 +80,7 @@ final class SimilarDocumentsTool implements HasSourcesInterface
             'primaryKey' => $primaryKey,
             'documentId' => $documentId,
             'embedder' => $embedder,
-            'hitCount' => count($hits),
+            'hitCount' => \count($hits),
             'missingPrimaryKeyCount' => $missingPrimaryKeyCount,
         ]);
 
@@ -95,17 +88,17 @@ final class SimilarDocumentsTool implements HasSourcesInterface
             $label = $this->normalizer->labelFor($hit);
             $this->addSource(new Source(
                 $label,
-                sprintf('meili://%s/%s', $index, $hit[$primaryKey] ?? '?'),
+                \sprintf('meili://%s/%s', $index, $hit[$primaryKey] ?? '?'),
                 $this->normalizer->toJson($hit),
             ));
         }
 
         return $this->normalizer->toJson([
-            'index'      => $index,
+            'index' => $index,
             'documentId' => $documentId,
             'primaryKey' => $primaryKey,
             'missingPrimaryKeyCount' => $missingPrimaryKeyCount,
-            'hits'       => $hits,
+            'hits' => $hits,
         ]);
     }
 
@@ -114,7 +107,7 @@ final class SimilarDocumentsTool implements HasSourcesInterface
         $baseName = $this->meiliService->baseNameFromUid($index);
         $settings = $this->meiliService->getIndexSetting($baseName);
 
-        return is_array($settings) && isset($settings['primaryKey']) && is_string($settings['primaryKey']) && $settings['primaryKey'] !== ''
+        return \is_array($settings) && isset($settings['primaryKey']) && \is_string($settings['primaryKey']) && '' !== $settings['primaryKey']
             ? $settings['primaryKey']
             : 'id';
     }

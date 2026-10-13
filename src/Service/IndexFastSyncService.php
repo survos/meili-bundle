@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
@@ -18,7 +19,8 @@ final class IndexFastSyncService
         private readonly EntityManagerInterface $em,
         private readonly IndexInfoRepository $repo,
         private readonly MessageBusInterface $bus,
-    ) {}
+    ) {
+    }
 
     /**
      * Fetch /indexes, upsert minimal fields, flush.
@@ -29,7 +31,7 @@ final class IndexFastSyncService
      */
     public function fastSync(bool $enqueue = true): array
     {
-        $now = new DateTimeImmutable();
+        $now = new \DateTimeImmutable();
         $rows = $this->meili->listIndexesFast(); // very fast, minimal fields
         $total = \count($rows);
 
@@ -37,7 +39,7 @@ final class IndexFastSyncService
 
         /**
          * @var string $uid
-         * @var Index $serverInfo
+         * @var Index  $serverInfo
          */
         foreach ($rows as $uid => $serverInfo) {
             $before = null;
@@ -47,7 +49,7 @@ final class IndexFastSyncService
                 // primaryKey is a required constructor arg; overwritten from $serverInfo below.
                 $localInfo = new IndexInfo($uid, 'id');
                 $this->em->persist($localInfo);
-                $created++;
+                ++$created;
             } else {
                 // Change detection baseline
                 $before = [$localInfo->primaryKey, $localInfo->createdAt?->getTimestamp(), $localInfo->updatedAt?->getTimestamp()];
@@ -61,15 +63,15 @@ final class IndexFastSyncService
             // IndexInfo's columns are DateTime, but the SDK now returns DateTimeImmutable.
             $localInfo->primaryKey = $serverInfo->getPrimaryKey();
             $createdAtRaw = $serverInfo->getCreatedAt();
-            $localInfo->createdAt = $createdAtRaw !== null ? \DateTime::createFromInterface($createdAtRaw) : null;
-            $localInfo->updatedAt = $serverUpdatedAt !== null ? \DateTime::createFromInterface($serverUpdatedAt) : null;
+            $localInfo->createdAt = null !== $createdAtRaw ? \DateTime::createFromInterface($createdAtRaw) : null;
+            $localInfo->updatedAt = null !== $serverUpdatedAt ? \DateTime::createFromInterface($serverUpdatedAt) : null;
 
-            if ($before !== null) {
+            if (null !== $before) {
                 $after = [$localInfo->primaryKey, $localInfo->createdAt?->getTimestamp(), $localInfo->updatedAt?->getTimestamp()];
                 if ($before !== $after) {
-                    $updated++;
+                    ++$updated;
                 } else {
-                    $unchanged++;
+                    ++$unchanged;
                 }
             }
 
@@ -81,6 +83,6 @@ final class IndexFastSyncService
 
         $this->em->flush();
 
-        return compact('created','updated','unchanged','enqueued','total');
+        return compact('created', 'updated', 'unchanged', 'enqueued', 'total');
     }
 }

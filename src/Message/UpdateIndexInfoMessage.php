@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Message;
@@ -14,6 +15,7 @@ final class UpdateIndexInfoMessage
         public int $numberOfEmbeddings,
         public bool $isIndexing,
         public int $numberOfEmbeddedDocuments,
-        public array $fieldDistribution
-    ) {}
+        public array $fieldDistribution,
+    ) {
+    }
 }

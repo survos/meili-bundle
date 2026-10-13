@@ -1,15 +1,18 @@
 <?php
+
+declare(strict_types=1);
+
 // src/Controller/MeiliProxyController.php
+
 namespace Survos\MeiliBundle\Controller;
 
 use Psr\Log\LoggerInterface;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
-use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
@@ -33,13 +36,13 @@ final class MeiliProxyController extends AbstractController
         '/proxy/{path}',
         name: 'meili_proxy',
         requirements: ['path' => '.+'],
-        methods: ['GET','POST','PUT','DELETE','PATCH']
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']
     )]
     public function proxy(Request $request, string $path = '/'): Response
     {
-        $method  = $request->getMethod();
-        $debug   = (string) $request->query->get('debug', '');
-        $uri     = "{$this->meiliBaseUri}/{$path}";
+        $method = $request->getMethod();
+        $debug = (string) $request->query->get('debug', '');
+        $uri = "{$this->meiliBaseUri}/{$path}";
 
         // Always ensure Authorization to Meili
         $headers = $request->headers->all();
@@ -47,17 +50,17 @@ final class MeiliProxyController extends AbstractController
         unset($headers['host']); // hop-by-hop
 
         // Threshold: header override wins, else env/default
-        $headerThreshold   = $request->headers->get('X-Meili-Ranking-Threshold');
-        $semanticThreshold = is_numeric($headerThreshold) ? (float)$headerThreshold : $this->defaultSemanticThreshold;
+        $headerThreshold = $request->headers->get('X-Meili-Ranking-Threshold');
+        $semanticThreshold = is_numeric($headerThreshold) ? (float) $headerThreshold : $this->defaultSemanticThreshold;
 
         $rawBody = $request->getContent() ?: '';
-        $json    = $rawBody ? json_decode($rawBody, true) : null;
+        $json = $rawBody ? json_decode($rawBody, true) : null;
 
         $this->logger->info(self::VERSION.' start', [
             'method' => $method, 'path' => $path, 'debug' => $debug,
         ]);
 
-        if ($method === 'POST') {
+        if ('POST' === $method) {
             // ---------- MULTI-SEARCH ----------
             if (preg_match('#/multi-search$#', $path)) {
                 $payload = is_array($json) ? $json : ['queries' => []];
@@ -70,28 +73,28 @@ final class MeiliProxyController extends AbstractController
                         $q['rankingScoreThreshold'] = $semanticThreshold;
                     }
                     // Standard cosmetics
-                    $q['highlightPreTag']   = $q['highlightPreTag']   ?? '__ais-highlight__';
-                    $q['highlightPostTag']  = $q['highlightPostTag']  ?? '__ais-highlight__';
+                    $q['highlightPreTag'] = $q['highlightPreTag'] ?? '__ais-highlight__';
+                    $q['highlightPostTag'] = $q['highlightPostTag'] ?? '__ais-highlight__';
                     $q['attributesToHighlight'] = $q['attributesToHighlight'] ?? ['*'];
-                    $q['showRankingScore']  = true;
+                    $q['showRankingScore'] = true;
                 }
                 unset($q);
 
                 // DRY-RUN view (for quick verification)
-                if ($debug === 'dryRun') {
+                if ('dryRun' === $debug) {
                     return $this->json([
-                        'proxy'   => self::VERSION,
-                        'rewrite' => (count($queries) === 1),
+                        'proxy' => self::VERSION,
+                        'rewrite' => (1 === count($queries)),
                         'queries' => $queries,
                     ]);
                 }
 
                 // If exactly one query → rewrite to single-search for true totals
-                if (count($queries) === 1) {
+                if (1 === count($queries)) {
                     $q = $queries[0];
                     $index = $q['indexUid'] ?? $q['indexName'] ?? $q['uid'] ?? null;
                     if ($index) {
-                        $singleUrl  = "{$this->meiliBaseUri}/indexes/".rawurlencode($index)."/search";
+                        $singleUrl = "{$this->meiliBaseUri}/indexes/".rawurlencode($index).'/search';
                         $singleBody = $this->singleBodyFromMulti($q);
 
                         $this->logger->debug(self::VERSION.' rewrite multi→single', [
@@ -100,7 +103,7 @@ final class MeiliProxyController extends AbstractController
 
                         $resp = $this->client->request('POST', $singleUrl, [
                             'headers' => $headers,
-                            'json'    => $singleBody,
+                            'json' => $singleBody,
                         ]);
                         $data = $resp->toArray(false);
 
@@ -112,8 +115,9 @@ final class MeiliProxyController extends AbstractController
                 // Otherwise forward fixed multi body
                 $resp = $this->client->request('POST', $uri, [
                     'headers' => $headers,
-                    'json'    => ['queries' => $queries],
+                    'json' => ['queries' => $queries],
                 ]);
+
                 return $this->streamLike($resp);
             }
 
@@ -125,23 +129,24 @@ final class MeiliProxyController extends AbstractController
                 if ($hasHybrid && !array_key_exists('rankingScoreThreshold', $body)) {
                     $body['rankingScoreThreshold'] = $semanticThreshold;
                 }
-                $body['showRankingScore']        = true;
+                $body['showRankingScore'] = true;
                 $body['showRankingScoreDetails'] = true;
-                $body['highlightPreTag']         = $body['highlightPreTag']  ?? '__ais-highlight__';
-                $body['highlightPostTag']        = $body['highlightPostTag'] ?? '__ais-highlight__';
-                $body['attributesToHighlight']   = $body['attributesToHighlight'] ?? ['*'];
+                $body['highlightPreTag'] = $body['highlightPreTag'] ?? '__ais-highlight__';
+                $body['highlightPostTag'] = $body['highlightPostTag'] ?? '__ais-highlight__';
+                $body['attributesToHighlight'] = $body['attributesToHighlight'] ?? ['*'];
 
-                if ($debug === 'dryRun') {
+                if ('dryRun' === $debug) {
                     return $this->json([
                         'proxy' => self::VERSION,
-                        'body'  => $body,
+                        'body' => $body,
                     ]);
                 }
 
                 $resp = $this->client->request('POST', $uri, [
                     'headers' => $headers,
-                    'json'    => $body,
+                    'json' => $body,
                 ]);
+
                 return $this->streamLike($resp);
             }
         }
@@ -149,64 +154,72 @@ final class MeiliProxyController extends AbstractController
         // ---------- DEFAULT PASS-THROUGH ----------
         $options = [
             'headers' => $headers,
-            'query'   => $request->query->all(),
+            'query' => $request->query->all(),
         ];
-        if (in_array($method, ['POST','PUT','PATCH','DELETE'], true)) {
+        if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
             $options['body'] = $rawBody;
         }
 
         $resp = $this->client->request($method, $uri, $options);
+
         return $this->streamLike($resp);
     }
 
     /**
-     * Convert a multi-search query into a single-search body (normalize pagination to hitsPerPage/page)
+     * Convert a multi-search query into a single-search body (normalize pagination to hitsPerPage/page).
+     *
      * @param array<string,mixed> $q
      */
     private function singleBodyFromMulti(array $q): array
     {
-        $hitsPerPage = (int)($q['limit'] ?? 20);
-        $offset      = (int)($q['offset'] ?? 0);
-        $page        = ($hitsPerPage > 0) ? intdiv($offset, $hitsPerPage) : 0;
+        $hitsPerPage = (int) ($q['limit'] ?? 20);
+        $offset = (int) ($q['offset'] ?? 0);
+        $page = ($hitsPerPage > 0) ? intdiv($offset, $hitsPerPage) : 0;
 
         return array_filter([
-            'q'                      => $q['q'] ?? $q['query'] ?? '',
-            'hybrid'                 => $q['hybrid'] ?? null,
-            'rankingScoreThreshold'  => $q['rankingScoreThreshold'] ?? null,
-            'filter'                 => $q['filter'] ?? null,
-            'sort'                   => $q['sort'] ?? null,
-            'distinct'               => $q['distinct'] ?? null,
-            'attributesToSearchOn'   => $q['attributesToSearchOn'] ?? null,
-            'matchingStrategy'       => $q['matchingStrategy'] ?? null,
-            'facets'                 => $q['facets'] ?? null,
-            'attributesToHighlight'  => $q['attributesToHighlight'] ?? ['*'],
-            'highlightPreTag'        => $q['highlightPreTag'] ?? '__ais-highlight__',
-            'highlightPostTag'       => $q['highlightPostTag'] ?? '__ais-highlight__',
-            'hitsPerPage'            => $hitsPerPage,
-            'page'                   => $page,
-            'showRankingScore'       => true,
-            'showRankingScoreDetails'=> true,
-        ], static fn($v) => $v !== null);
+            'q' => $q['q'] ?? $q['query'] ?? '',
+            'hybrid' => $q['hybrid'] ?? null,
+            'rankingScoreThreshold' => $q['rankingScoreThreshold'] ?? null,
+            'filter' => $q['filter'] ?? null,
+            'sort' => $q['sort'] ?? null,
+            'distinct' => $q['distinct'] ?? null,
+            'attributesToSearchOn' => $q['attributesToSearchOn'] ?? null,
+            'matchingStrategy' => $q['matchingStrategy'] ?? null,
+            'facets' => $q['facets'] ?? null,
+            'attributesToHighlight' => $q['attributesToHighlight'] ?? ['*'],
+            'highlightPreTag' => $q['highlightPreTag'] ?? '__ais-highlight__',
+            'highlightPostTag' => $q['highlightPostTag'] ?? '__ais-highlight__',
+            'hitsPerPage' => $hitsPerPage,
+            'page' => $page,
+            'showRankingScore' => true,
+            'showRankingScoreDetails' => true,
+        ], static fn ($v) => null !== $v);
     }
 
     private function streamLike(\Symfony\Contracts\HttpClient\ResponseInterface $resp): Response
     {
         $headers = $this->passThruHeaders($resp);
-        $status  = $resp->getStatusCode();
+        $status = $resp->getStatusCode();
 
         try {
             $contentType = $resp->getHeaders(false)['content-type'][0] ?? 'application/json';
             if (str_contains($contentType, 'application/json')) {
                 $data = $resp->getContent(false);
+
                 return new Response($data, $status, ['Content-Type' => $contentType] + $headers);
             }
-        } catch (\Throwable) { /* fall through */ }
+        } catch (\Throwable) { /* fall through */
+        }
 
         $client = $this->client;
+
         return new StreamedResponse(function () use ($client, $resp) {
             foreach ($client->stream($resp) as $chunk) {
-                if ($chunk->isTimeout()) { continue; }
-                echo $chunk->getContent(); flush();
+                if ($chunk->isTimeout()) {
+                    continue;
+                }
+                echo $chunk->getContent();
+                flush();
             }
         }, $status, $headers);
     }
@@ -216,9 +229,12 @@ final class MeiliProxyController extends AbstractController
     {
         $h = $resp->getHeaders(false);
         $out = [];
-        foreach (['x-meilisearch-request-id','content-encoding','content-type'] as $k) {
-            if (!empty($h[$k][0])) { $out[ucwords($k, '-')]= $h[$k][0]; }
+        foreach (['x-meilisearch-request-id', 'content-encoding', 'content-type'] as $k) {
+            if (!empty($h[$k][0])) {
+                $out[ucwords($k, '-')] = $h[$k][0];
+            }
         }
+
         return $out;
     }
 }

@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
@@ -8,7 +9,6 @@ use Meilisearch\Endpoints\Index;
 use Meilisearch\Exceptions\ApiException;
 use Meilisearch\Exceptions\InvalidResponseBodyException;
 use Psr\Log\LoggerInterface;
-use ReflectionClass;
 use Survos\MeiliBundle\Metadata\MeiliIndex;
 
 /**
@@ -26,6 +26,7 @@ final class MeiliSettingsUpdater
      * Update index settings from an entity class' #[MeiliIndex] attribute.
      *
      * @param class-string $entityClass
+     *
      * @return array{indexUid:string, created:bool, settings:mixed, taskUid:int|null}
      */
     public function updateFromAttribute(string $entityClass, bool $purge = false, bool $dryRun = false): array
@@ -51,9 +52,9 @@ final class MeiliSettingsUpdater
 
         return [
             'indexUid' => $indexUid,
-            'created'  => $created,
+            'created' => $created,
             'settings' => $settings,
-            'taskUid'  => $taskUid,
+            'taskUid' => $taskUid,
         ];
     }
 
@@ -62,7 +63,7 @@ final class MeiliSettingsUpdater
      */
     private function extractFromAttribute(string $entityClass): array
     {
-        $rc = new ReflectionClass($entityClass);
+        $rc = new \ReflectionClass($entityClass);
         $attrs = $rc->getAttributes(MeiliIndex::class);
         if (!$attrs) {
             throw new \RuntimeException(sprintf('Entity "%s" is missing #[MeiliIndex] attribute.', $entityClass));
@@ -73,15 +74,15 @@ final class MeiliSettingsUpdater
         // Build settings payload from attribute
         $settings = array_filter([
             'filterableAttributes' => $ai->filterable ?: null,
-            'sortableAttributes'   => $ai->sortable   ?: null,
+            'sortableAttributes' => $ai->sortable ?: null,
             'searchableAttributes' => $ai->searchable ?: null,
-            'displayedAttributes'  => $ai->displayed  ?: null,
-            'stopWords'            => $ai->stopWords  ?: null,
-            'synonyms'             => $ai->synonyms   ?: null,
-            'rankingRules'         => $ai->rankingRules ?: null,
+            'displayedAttributes' => $ai->displayed ?: null,
+            'stopWords' => $ai->stopWords ?: null,
+            'synonyms' => $ai->synonyms ?: null,
+            'rankingRules' => $ai->rankingRules ?: null,
             // NEW: embedders included directly in settings
-            'embedders'            => $ai->embedders  ?: null,
-        ], static fn($v) => $v !== null);
+            'embedders' => $ai->embedders ?: null,
+        ], static fn ($v) => null !== $v);
 
         return [$ai->indexUid, $ai->primaryKey, $settings];
     }
@@ -105,7 +106,7 @@ final class MeiliSettingsUpdater
 
             return [$index, false];
         } catch (ApiException|InvalidResponseBodyException $exception) {
-            if ($exception->httpStatus !== 404) {
+            if (404 !== $exception->httpStatus) {
                 throw $exception;
             }
         }

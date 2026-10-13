@@ -1,9 +1,9 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Command;
 
-use Survos\MeiliBundle\Service\DoctrinePrimaryKeyStreamer;
 use Survos\MeiliBundle\Service\IndexProducer;
 use Survos\MeiliBundle\Service\TargetPlanner;
 use Symfony\Component\Console\Attribute\Argument;
@@ -107,15 +107,17 @@ final class PopulateCommand extends MeiliBaseCommand
 
         // Resolve base keys (UNPREFIXED registry keys)
         $bases = $this->resolveTargets($indexName, $class);
-        if ($bases === []) {
+        if ([] === $bases) {
             $io->warning('No matching base targets.');
+
             return Command::SUCCESS;
         }
 
         // Plan concrete targets (UIDs resolved via IndexNameResolver)
         $targets = $this->planner->targetsForBases($bases, $perLocale, $onlyLocalesList);
-        if ($targets === []) {
+        if ([] === $targets) {
             $io->warning('No expanded targets after locale planning.');
+
             return Command::SUCCESS;
         }
 
@@ -133,7 +135,7 @@ final class PopulateCommand extends MeiliBaseCommand
             }
         }
 
-        if ($dump && ($this->entityManager === null || $this->payloadBuilder === null)) {
+        if ($dump && (null === $this->entityManager || null === $this->payloadBuilder)) {
             throw new \LogicException('Dump mode requires Doctrine EntityManager and MeiliPayloadBuilder services.');
         }
 
@@ -145,9 +147,9 @@ final class PopulateCommand extends MeiliBaseCommand
         $actionLabel = $dump ? 'Dumped' : 'Dispatched';
 
         foreach ($targets as $t) {
-            $uid    = $t->uid;
-            $base   = $t->base;
-            $cls    = $t->class;
+            $uid = $t->uid;
+            $base = $t->base;
+            $cls = $t->class;
             $locale = $t->locale;
 
             $io->section(sprintf(
@@ -172,7 +174,7 @@ final class PopulateCommand extends MeiliBaseCommand
                 $this->meili->getIndexEndpoint($uid)->deleteAllDocuments();
             }
 
-            $runner = fn() => $this->producer->dispatchTarget(
+            $runner = fn () => $this->producer->dispatchTarget(
                 $t,
                 batchSize: $batchSize,
                 limit: $limit,
@@ -202,18 +204,20 @@ final class PopulateCommand extends MeiliBaseCommand
         $table->render();
 
         $io->success('meili:populate complete.');
+
         return Command::SUCCESS;
     }
 
     /** @return list<string> */
     private function parseLocalesCsv(?string $csv): array
     {
-        if ($csv === null || trim($csv) === '') {
+        if (null === $csv || '' === trim($csv)) {
             return [];
         }
 
         $parts = array_values(array_filter(array_map('trim', explode(',', $csv))));
         $parts = array_values(array_unique(array_map('strtolower', $parts)));
-        return array_values(array_filter($parts, static fn(string $l) => $l !== ''));
+
+        return array_values(array_filter($parts, static fn (string $l) => '' !== $l));
     }
 }

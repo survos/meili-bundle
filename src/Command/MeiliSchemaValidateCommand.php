@@ -1,9 +1,9 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Command;
 
-use Meilisearch\Client;
 use Meilisearch\Contracts\TasksQuery;
 use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -14,14 +14,11 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 #[AsCommand('meili:schema:validate', 'Compare compiled schema with Meilisearch remote settings')]
 final class MeiliSchemaValidateCommand
 {
-    /** @param array<string,array<string,mixed>> $indexSettings (indexName => settings)
-     *  @param array<string,string>               $indexEntities (indexName => FQCN)
-     */
     public function __construct(
         private readonly MeiliService $meili,
-//        private readonly array $indexSettings,
-//        private readonly array $indexEntities,
-//        private readonly ?string $prefix = null, // e.g. '%survos_meili.prefix%'
+        //        private readonly array $indexSettings,
+        //        private readonly array $indexEntities,
+        //        private readonly ?string $prefix = null, // e.g. '%survos_meili.prefix%'
     ) {
     }
 
@@ -41,8 +38,9 @@ final class MeiliSchemaValidateCommand
         ?string $class = null,
     ): int {
         $targets = $this->resolveTargets($index, $class);
-        if ($targets === []) {
+        if ([] === $targets) {
             $io->warning('No matching indexes. Use --index or --class to filter.');
+
             return Command::SUCCESS;
         }
 
@@ -58,22 +56,22 @@ final class MeiliSchemaValidateCommand
             if ($pending > 0) {
                 $msg = sprintf('%d pending tasks detected on "%s".', $pending, $uid);
                 if ($allowPending) {
-                    $io->warning($msg . ' (allowed by --allow-pending)');
+                    $io->warning($msg.' (allowed by --allow-pending)');
                 } else {
-                    $io->error($msg . ' Use meili:schema:update --reset or re-run with --allow-pending.');
+                    $io->error($msg.' Use meili:schema:update --reset or re-run with --allow-pending.');
                     $hadError = true;
                     // still continue to show diffs
                 }
             }
 
             $desired = $this->buildMeiliSettings($name);
-            $remote  = $this->fetchRemoteSettings($uid);
+            $remote = $this->fetchRemoteSettings($uid);
 
             $diff = $this->diffSettings($desired, $remote);
             $results[$name] = $diff;
 
             if ($json) {
-                $io->writeln(json_encode(['index' => $name, 'uid' => $uid, 'diff' => $diff], JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES));
+                $io->writeln(json_encode(['index' => $name, 'uid' => $uid, 'diff' => $diff], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
                 continue;
             }
 
@@ -119,21 +117,23 @@ final class MeiliSchemaValidateCommand
         $names = array_keys($this->meili->indexSettings);
 
         if ($index) {
-            $names = array_values(array_filter($names, static fn($n) => $n === $index));
+            $names = array_values(array_filter($names, static fn ($n) => $n === $index));
         }
         if ($class) {
             $names = array_values(array_filter($names, function ($n) use ($class) {
                 return ($this->indexEntities[$n] ?? null) === $class
-                    || str_ends_with($this->indexEntities[$n] ?? '', '\\' . ltrim($class, '\\'));
+                    || str_ends_with($this->indexEntities[$n] ?? '', '\\'.ltrim($class, '\\'));
             }));
         }
+
         return $names;
     }
 
     private function prefixed(string $indexName): string
     {
         $p = trim((string) ($this->prefix ?? ''), '._-');
-        return $p !== '' ? $p . '_' . $indexName : $indexName;
+
+        return '' !== $p ? $p.'_'.$indexName : $indexName;
     }
 
     private function pendingTasks(string $uid): int
@@ -151,7 +151,7 @@ final class MeiliSchemaValidateCommand
         try {
             return $this->meili->getIndexEndpoint($uid)->getSettings();
         } catch (\Meilisearch\Exceptions\ApiException $e) {
-            if ($e->getCode() === 404) {
+            if (404 === $e->getCode()) {
                 // Non-existent index => all settings "missing" remotely
                 return [];
             }
@@ -173,14 +173,15 @@ final class MeiliSchemaValidateCommand
 
             // normalize ordering for array-valued keys (filterable/sortable typically order-agnostic)
             if (is_array($e)) {
-                $norm = static fn($x) => is_array($x) ? array_values(array_unique($x)) : $x;
+                $norm = static fn ($x) => is_array($x) ? array_values(array_unique($x)) : $x;
                 $eN = $norm($e);
                 $rN = $norm($r);
             } else {
-                $eN = $e; $rN = $r;
+                $eN = $e;
+                $rN = $r;
             }
 
-            if ($r === null) {
+            if (null === $r) {
                 $missing[$k] = $e;
             } elseif ($eN !== $rN) {
                 $changed[$k] = ['expected' => $e, 'remote' => $r];
@@ -191,14 +192,15 @@ final class MeiliSchemaValidateCommand
         $extra = [];
         foreach ($remote as $k => $v) {
             if (!\array_key_exists($k, $expected) && \in_array($k, [
-                'displayedAttributes','filterableAttributes','sortableAttributes','searchableAttributes'
+                'displayedAttributes', 'filterableAttributes', 'sortableAttributes', 'searchableAttributes',
             ], true)) {
                 $extra[$k] = $v;
             }
         }
 
-        $equals = ($missing === [] && $changed === [] && $extra === []);
-        return compact('equals','missing','extra','changed');
+        $equals = ([] === $missing && [] === $changed && [] === $extra);
+
+        return compact('equals', 'missing', 'extra', 'changed');
     }
 
     /** Translate compiled settings → Meilisearch payload. */
@@ -206,16 +208,16 @@ final class MeiliSchemaValidateCommand
     {
         $cfg = $this->indexSettings[$indexName] ?? [];
 
-        $display    = $cfg['display']    ?? ['*'];
+        $display = $cfg['display'] ?? ['*'];
         $filterable = $cfg['filterable'] ?? [];
-        $sortable   = $cfg['sortable']   ?? [];
+        $sortable = $cfg['sortable'] ?? [];
         $searchable = $cfg['searchable'] ?? [];
 
         return array_filter([
-            'displayedAttributes'  => $display ?: ['*'],
+            'displayedAttributes' => $display ?: ['*'],
             'filterableAttributes' => array_values(array_unique($filterable)),
-            'sortableAttributes'   => array_values(array_unique($sortable)),
+            'sortableAttributes' => array_values(array_unique($sortable)),
             'searchableAttributes' => $searchable ?: ['*'],
-        ], static fn($v) => $v !== null);
+        ], static fn ($v) => null !== $v);
     }
 }

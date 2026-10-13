@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Util;
@@ -36,6 +37,7 @@ final class GroupFieldResolver
      * @param class-string|null $class
      * @param string[]|null     $fields
      * @param string[]|null     $groups
+     *
      * @return string[]
      */
     public function expandUnion(?string $class, ?array $fields, ?array $groups): array
@@ -57,6 +59,7 @@ final class GroupFieldResolver
                 }
             }
         }
+
         return $union;
     }
 
@@ -65,6 +68,7 @@ final class GroupFieldResolver
      *
      * @param class-string|null $class
      * @param string[]|null     $groups
+     *
      * @return string[]
      */
     public function fieldsFor(?string $class, ?array $groups = null): array
@@ -74,18 +78,18 @@ final class GroupFieldResolver
         }
 
         $groups = array_values(array_unique(array_filter($groups ?? [], 'is_string')));
-        if ($groups === []) {
+        if ([] === $groups) {
             // No groups: return empty (caller decides whether to use explicit fields only)
             return [];
         }
 
-        $key = $class . '::' . implode('|', $groups);
+        $key = $class.'::'.implode('|', $groups);
         if (isset($this->cache[$key])) {
             return $this->cache[$key];
         }
 
         $meta = $this->factory->getMetadataFor($class);
-        $out  = [];
+        $out = [];
 
         foreach ($meta->getAttributesMetadata() as $propName => $attrMeta) {
             // Include attribute if it belongs to ANY of the requested groups
@@ -103,6 +107,7 @@ final class GroupFieldResolver
 
         // Stabilize + de-dup
         $out = array_values(array_unique($out));
+
         return $this->cache[$key] = $out;
     }
 }

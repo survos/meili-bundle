@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
@@ -8,17 +9,6 @@ use Symfony\Component\PropertyAccess\PropertyAccessorInterface;
 use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 use Symfony\Component\Serializer\Normalizer\AbstractObjectNormalizer;
 use Symfony\Component\Serializer\SerializerInterface;
-
-use function array_keys;
-use function array_unique;
-use function array_values;
-use function array_filter;
-use function array_map;
-use function array_key_exists;
-use function count;
-use function explode;
-use function is_array;
-use function str_contains;
 
 final class MeiliPayloadBuilder
 {
@@ -52,14 +42,14 @@ final class MeiliPayloadBuilder
     public function build(object $entity, array $persisted): array
     {
         $groups = $persisted['groups'] ?? null;
-        $restrictGroups = (bool)($persisted['restrict_groups'] ?? $groups);
+        $restrictGroups = (bool) ($persisted['restrict_groups'] ?? $groups);
 
         // BC: accept either 'force_fields' or legacy 'fields'
         $forceList = $persisted['force_fields'] ?? ($persisted['fields'] ?? []);
-        if (!is_array($forceList)) {
+        if (!\is_array($forceList)) {
             $forceList = [];
         }
-        $force = array_values(array_unique(array_map('strval', $forceList)));
+        $force = \array_values(\array_unique(\array_map('strval', $forceList)));
 
         // Pass 1: baseline normalization
         //
@@ -73,7 +63,7 @@ final class MeiliPayloadBuilder
         /** @var array<string,mixed> $doc */
         $doc = $this->serializer->normalize($entity, context: $ctx1);
 
-        if ($force === []) {
+        if ([] === $force) {
             return $doc;
         }
 
@@ -85,13 +75,13 @@ final class MeiliPayloadBuilder
         //
         // Dot-notation paths (e.g. "author.name") fall back to the serializer's
         // ATTRIBUTES context with an unrestricted group list.
-        $missing = array_values(array_filter(
+        $missing = \array_values(\array_filter(
             $force,
-            static fn(string $p) => !self::pathExists($doc, $p)
+            static fn (string $p) => !self::pathExists($doc, $p)
         ));
 
         foreach ($missing as $path) {
-            if (!str_contains($path, '.')) {
+            if (!\str_contains($path, '.')) {
                 // Simple top-level field: read directly from the object.
                 try {
                     $value = $this->propertyAccessor->getValue($entity, $path);
@@ -101,14 +91,14 @@ final class MeiliPayloadBuilder
                 $doc[$path] = $value;
             } else {
                 // Nested path: use serializer with ATTRIBUTES + all groups unrestricted.
-                $tree  = self::toAttributesTree([$path]);
-                $ctx2  = [
+                $tree = self::toAttributesTree([$path]);
+                $ctx2 = [
                     AbstractObjectNormalizer::ATTRIBUTES => $tree,
                     // Empty groups array = "include all groups" in Symfony serializer.
-                    AbstractNormalizer::GROUPS           => [],
+                    AbstractNormalizer::GROUPS => [],
                 ];
                 $extra = $this->serializer->normalize($entity, context: $ctx2);
-                if (is_array($extra)) {
+                if (\is_array($extra)) {
                     $doc = self::deepMerge($doc, $extra);
                 }
             }
@@ -118,23 +108,24 @@ final class MeiliPayloadBuilder
     }
 
     /**
-     * Turn ['a','b.c','b.d.e'] into ['a'=>true,'b'=>['c'=>true,'d'=>['e'=>true]]]
+     * Turn ['a','b.c','b.d.e'] into ['a'=>true,'b'=>['c'=>true,'d'=>['e'=>true]]].
      *
      * @param string[] $paths
+     *
      * @return array<string,mixed>
      */
     private static function toAttributesTree(array $paths): array
     {
         $tree = [];
         foreach ($paths as $path) {
-            $parts = explode('.', $path);
+            $parts = \explode('.', $path);
             $cur = &$tree;
 
             foreach ($parts as $i => $p) {
                 $cur[$p] ??= true;
 
-                if ($i < count($parts) - 1) {
-                    if ($cur[$p] === true) {
+                if ($i < \count($parts) - 1) {
+                    if (true === $cur[$p]) {
                         $cur[$p] = [];
                     }
                     $cur = &$cur[$p];
@@ -151,12 +142,13 @@ final class MeiliPayloadBuilder
     private static function pathExists(array $doc, string $path): bool
     {
         $cur = $doc;
-        foreach (explode('.', $path) as $p) {
-            if (!is_array($cur) || !array_key_exists($p, $cur)) {
+        foreach (\explode('.', $path) as $p) {
+            if (!\is_array($cur) || !\array_key_exists($p, $cur)) {
                 return false;
             }
             $cur = $cur[$p];
         }
+
         return true;
     }
 
@@ -164,12 +156,13 @@ final class MeiliPayloadBuilder
     private static function deepMerge(array $a, array $b): array
     {
         foreach ($b as $k => $v) {
-            if (is_array($v) && isset($a[$k]) && is_array($a[$k])) {
+            if (\is_array($v) && isset($a[$k]) && \is_array($a[$k])) {
                 $a[$k] = self::deepMerge($a[$k], $v);
             } else {
                 $a[$k] = $v;
             }
         }
+
         return $a;
     }
 }

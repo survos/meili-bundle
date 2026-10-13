@@ -1,12 +1,10 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Metadata;
 
 use Attribute;
-use function strrpos;
-use function substr;
-use function strtolower;
 
 /**
  * Declarative Meilisearch index configuration + UI hints used by SurvosMeiliBundle.
@@ -51,7 +49,7 @@ use function strtolower;
  *       'showJsonButton' => true                                // bool: show JSON modal button on cards
  *     ]
  */
-#[Attribute(Attribute::TARGET_CLASS | Attribute::IS_REPEATABLE)]
+#[\Attribute(\Attribute::TARGET_CLASS | \Attribute::IS_REPEATABLE)]
 final class MeiliIndex
 {
     /** @var array{fields?: list<string>, groups?: list<string>|null}|list<string> */
@@ -86,10 +84,10 @@ final class MeiliIndex
          */
         public bool $autoIndex = true,
 
-        /** Fields persisted/normalized for the index payload (serializer source) */
+        /* Fields persisted/normalized for the index payload (serializer source) */
         Fields|array $persisted = [],
 
-        /** Meili settings selections */
+        /* Meili settings selections */
         Fields|array $displayed = ['*'],
         Fields|array $filterable = [],
         Fields|array $sortable = [],
@@ -105,13 +103,15 @@ final class MeiliIndex
          * Chat workspace names this index participates in.
          * Example: chats: ['meili_assistant']
          * No indexing cost — chat queries are billed at runtime only.
+         *
          * @var array<string>
          */
         public array $chats = [],
 
         /**
          * Optional chat prompt overrides keyed by prompt slot.
-         * Example: prompts: ['system' => 'Always include [id:{value}] using field {{ primaryKey }}.']
+         * Example: prompts: ['system' => 'Always include [id:{value}] using field {{ primaryKey }}.'].
+         *
          * @var array<string,string>
          */
         public array $prompts = [],
@@ -119,23 +119,23 @@ final class MeiliIndex
         /**
          * UI hints consumed by the bundle's frontend (insta controller & templates).
          * Example:
-         *   ['columns'=>4,'template'=>'@App/hits/card.html.twig','cardClass'=>'meili-card','layout'=>'bootstrap']
+         *   ['columns'=>4,'template'=>'@App/hits/card.html.twig','cardClass'=>'meili-card','layout'=>'bootstrap'].
          */
-        public array $ui = []
+        public array $ui = [],
     ) {
         // Normalize Fields|array → array on the public properties so the
         // attribute is container-serializable. See big TODO above.
-        $this->persisted   = self::asArray($persisted);
-        $this->displayed   = self::asArray($displayed);
-        $this->filterable  = self::asArray($filterable);
-        $this->sortable    = self::asArray($sortable);
-        $this->searchable  = self::asArray($searchable);
+        $this->persisted = self::asArray($persisted);
+        $this->displayed = self::asArray($displayed);
+        $this->filterable = self::asArray($filterable);
+        $this->sortable = self::asArray($sortable);
+        $this->searchable = self::asArray($searchable);
 
-        $this->displaySel    = Fields::from($this->displayed);
+        $this->displaySel = Fields::from($this->displayed);
         $this->filterableSel = Fields::from($this->filterable);
-        $this->sortableSel   = Fields::from($this->sortable);
+        $this->sortableSel = Fields::from($this->sortable);
         $this->searchableSel = Fields::from($this->searchable);
-        $this->persistedSel  = Fields::from($this->persisted);
+        $this->persistedSel = Fields::from($this->persisted);
         $this->enabled ??= true;
     }
 
@@ -143,7 +143,8 @@ final class MeiliIndex
      * Coerce Fields|array into the array-with-keys shape Fields::from() can re-parse.
      * Internal helper for the constructor; remove with the Fields class itself.
      *
-     * @param  Fields|array<int|string,mixed> $v
+     * @param Fields|array<int|string,mixed> $v
+     *
      * @return array<int|string,mixed>
      */
     private static function asArray(Fields|array $v): array
@@ -151,44 +152,76 @@ final class MeiliIndex
         if ($v instanceof Fields) {
             return ['fields' => $v->fields, 'groups' => $v->groups];
         }
+
         return $v;
     }
 
     // --- Accessors used by the compiler pass (keeps the pass dumb & stable)
 
     /** @return string[] */
-    public function displayFields(): array { return $this->displaySel->fields; }
+    public function displayFields(): array
+    {
+        return $this->displaySel->fields;
+    }
 
     /** @return string[] */
-    public function filterableFields(): array { return $this->filterableSel->fields; }
+    public function filterableFields(): array
+    {
+        return $this->filterableSel->fields;
+    }
 
     /** @return string[] */
-    public function sortableFields(): array { return $this->sortableSel->fields; }
+    public function sortableFields(): array
+    {
+        return $this->sortableSel->fields;
+    }
 
     /** @return string[] */
-    public function searchableFields(): array { return $this->searchableSel->fields; }
+    public function searchableFields(): array
+    {
+        return $this->searchableSel->fields;
+    }
 
     /** @return string[] */
-    public function persistedFields(): array { return $this->persistedSel->fields; }
+    public function persistedFields(): array
+    {
+        return $this->persistedSel->fields;
+    }
 
     /** @return string[]|null */
-    public function displayGroups(): ?array { return $this->displaySel->groups; }
+    public function displayGroups(): ?array
+    {
+        return $this->displaySel->groups;
+    }
 
     /** @return string[]|null */
-    public function filterableGroups(): ?array { return $this->filterableSel->groups; }
+    public function filterableGroups(): ?array
+    {
+        return $this->filterableSel->groups;
+    }
 
     /** @return string[]|null */
-    public function sortableGroups(): ?array { return $this->sortableSel->groups; }
+    public function sortableGroups(): ?array
+    {
+        return $this->sortableSel->groups;
+    }
 
     /** @return string[]|null */
-    public function searchableGroups(): ?array { return $this->searchableSel->groups; }
+    public function searchableGroups(): ?array
+    {
+        return $this->searchableSel->groups;
+    }
 
     /** @return string[]|null */
-    public function persistedGroups(): ?array { return $this->persistedSel->groups; }
+    public function persistedGroups(): ?array
+    {
+        return $this->persistedSel->groups;
+    }
 
     /**
      * UI map (raw). Keys are free-form but the bundle recognizes:
      * columns, template, cardClass, layout, showScore, showJsonButton.
+     *
      * @return array<string,mixed>
      */
     public function ui(): array
@@ -200,25 +233,29 @@ final class MeiliIndex
     public function columns(): ?int
     {
         $v = $this->ui['columns'] ?? null;
+
         return is_numeric($v) ? max(1, (int) $v) : null;
     }
 
     public function template(): ?string
     {
         $tpl = $this->ui['template'] ?? null;
-        return is_string($tpl) && $tpl !== '' ? $tpl : null;
+
+        return is_string($tpl) && '' !== $tpl ? $tpl : null;
     }
 
     public function cardClass(): ?string
     {
         $cls = $this->ui['cardClass'] ?? null;
-        return is_string($cls) && $cls !== '' ? $cls : null;
+
+        return is_string($cls) && '' !== $cls ? $cls : null;
     }
 
     public function layout(): ?string
     {
         $layout = $this->ui['layout'] ?? null;
-        return is_string($layout) && $layout !== '' ? $layout : null;
+
+        return is_string($layout) && '' !== $layout ? $layout : null;
     }
 
     public function showScore(): ?bool
@@ -233,7 +270,8 @@ final class MeiliIndex
 
     public function defaultName(string $fqcn): string
     {
-        $short = substr($fqcn, (int) (strrpos($fqcn, '\\') ?: -1) + 1);
-        return strtolower($short);
+        $short = \substr($fqcn, (int) (\strrpos($fqcn, '\\') ?: -1) + 1);
+
+        return \strtolower($short);
     }
 }

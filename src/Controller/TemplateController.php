@@ -35,7 +35,7 @@ final class TemplateController extends AbstractController
 
         // Strip configured prefix
         $prefix = $this->meiliService->getPrefix() ?? '';
-        $unprefixed = ($prefix !== '' && str_starts_with($templateName, $prefix))
+        $unprefixed = ('' !== $prefix && str_starts_with($templateName, $prefix))
             ? substr($templateName, strlen($prefix))
             : $templateName;
 
@@ -43,14 +43,14 @@ final class TemplateController extends AbstractController
         $candidates = array_unique(array_filter([$unprefixed, $templateName]));
         if (str_contains($unprefixed, '_')) {
             $agg = explode('_', $unprefixed, 2)[0] ?? null;
-            if (is_string($agg) && $agg !== '') {
+            if (is_string($agg) && '' !== $agg) {
                 $candidates[] = $agg;
             }
         }
         $candidates[] = 'default';
 
         foreach ($candidates as $candidate) {
-            $path = $this->jsTemplateDir . $candidate . '.html.twig';
+            $path = $this->jsTemplateDir.$candidate.'.html.twig';
             if (file_exists($path)) {
                 return file_get_contents($path) ?: '';
             }
@@ -69,7 +69,7 @@ final class TemplateController extends AbstractController
         // Strip configured prefix so templates don't need to know about it.
         // e.g. "m_victoria" with prefix "m_" → "victoria"
         $prefix = $this->meiliService->getPrefix() ?? '';
-        $unprefixed = ($prefix !== '' && str_starts_with($templateName, $prefix))
+        $unprefixed = ('' !== $prefix && str_starts_with($templateName, $prefix))
             ? substr($templateName, strlen($prefix))
             : $templateName;
 
@@ -78,24 +78,24 @@ final class TemplateController extends AbstractController
         $candidates = array_unique(array_filter([$unprefixed, $templateName]));
         if (str_contains($unprefixed, '_')) {
             $agg = explode('_', $unprefixed, 2)[0] ?? null;
-            if (is_string($agg) && $agg !== '') {
+            if (is_string($agg) && '' !== $agg) {
                 $candidates[] = $agg;
             }
         }
         $candidates[] = 'default';
 
         foreach ($candidates as $candidate) {
-            $path = $this->jsTemplateDir . $candidate . '.html.twig';
+            $path = $this->jsTemplateDir.$candidate.'.html.twig';
             if (file_exists($path)) {
                 return new Response(file_get_contents($path) ?: '');
             }
         }
 
-        $profilePath = $this->projectDir . '/data/' . $templateName . '.profile.json';
-        $profile     = null;
+        $profilePath = $this->projectDir.'/data/'.$templateName.'.profile.json';
+        $profile = null;
 
         if (is_file($profilePath)) {
-            $json    = file_get_contents($profilePath) ?: '[]';
+            $json = file_get_contents($profilePath) ?: '[]';
             $profile = json_decode($json, true) ?? [];
         }
 
@@ -106,7 +106,7 @@ final class TemplateController extends AbstractController
             // Fallback: no profile.json → synthesize config from Meilisearch index settings
             [$config, $settings] = $this->buildConfigFromSettings($templateName, $request->getLocale());
         }
-//        dd(config: $config, settings: $settings);
+        //        dd(config: $config, settings: $settings);
 
         $twig = $this->generateJsTwigFromConfig($config, $settings);
 
@@ -126,28 +126,28 @@ final class TemplateController extends AbstractController
 
         // If the index is missing entirely, still render *something* instead of throwing.
         try {
-            $index    = $this->meiliService->getIndexEndpoint($uid);
+            $index = $this->meiliService->getIndexEndpoint($uid);
             $settings = $index->getSettings();
             $primaryKey = $index->getPrimaryKey() ?? 'id';
         } catch (\Throwable $e) {
             $settings = [
                 'searchableAttributes' => ['id'],
                 'filterableAttributes' => [],
-                'sortableAttributes'   => [],
-                'displayedAttributes'  => ['id'],
+                'sortableAttributes' => [],
+                'displayedAttributes' => ['id'],
             ];
         }
 
-        $searchable   = $settings['searchableAttributes'] ?? [];
-        $displayed    = $settings['displayedAttributes'] ?? $searchable ?: ['id'];
-        $filterable   = $settings['filterableAttributes'] ?? [];
-        $sortable     = $settings['sortableAttributes'] ?? [];
+        $searchable = $settings['searchableAttributes'] ?? [];
+        $displayed = $settings['displayedAttributes'] ?? $searchable ?: ['id'];
+        $filterable = $settings['filterableAttributes'] ?? [];
+        $sortable = $settings['sortableAttributes'] ?? [];
 
         // Heuristics for “nice enough” defaults
-        $titleField       = $this->guessFirstMatchingField($displayed, ['title', 'name', 'label']);
-        $subtitleField    = $this->guessFirstMatchingField($displayed, ['year', 'date', 'author', 'creator']);
+        $titleField = $this->guessFirstMatchingField($displayed, ['title', 'name', 'label']);
+        $subtitleField = $this->guessFirstMatchingField($displayed, ['year', 'date', 'author', 'creator']);
         $descriptionField = $this->guessFirstMatchingField($displayed, ['description', 'summary', 'abstract']);
-        $imageField       = $this->guessFirstMatchingField($displayed, ['image', 'thumbnail', 'poster', 'cover']);
+        $imageField = $this->guessFirstMatchingField($displayed, ['image', 'thumbnail', 'poster', 'cover']);
 
         $config = [
             'indexName' => $indexName,
@@ -155,24 +155,24 @@ final class TemplateController extends AbstractController
 
             // Used by the JS/Twig template to render a card
             'ui' => [
-                'titleField'       => $titleField ?? $displayed[0] ?? 'id',
-                'subtitleField'    => $subtitleField,
+                'titleField' => $titleField ?? $displayed[0] ?? 'id',
+                'subtitleField' => $subtitleField,
                 'descriptionField' => $descriptionField,
-                'imageField'       => $imageField,
-                'showScore'        => true,
-                'columns'          => 3,
-                'layout'           => 'neutral',
+                'imageField' => $imageField,
+                'showScore' => true,
+                'columns' => 3,
+                'layout' => 'neutral',
             ],
 
             // Search configuration
             'search' => [
-                'primary'   => $searchable ?: $displayed,
+                'primary' => $searchable ?: $displayed,
                 'secondary' => array_values(array_diff($displayed, $searchable)),
             ],
 
             // Facets and sorting controls
             'facets' => $filterable,
-            'sort'   => $sortable,
+            'sort' => $sortable,
         ];
 
         return [$config, $settings];
@@ -193,7 +193,6 @@ final class TemplateController extends AbstractController
 
         return null;
     }
-
 
     /**
      * Heuristic helper: treat *_id / *Id etc. as ID-like. We don't want
@@ -230,7 +229,7 @@ final class TemplateController extends AbstractController
         $camel = $first;
 
         foreach ($parts as $part) {
-            if ($part === '') {
+            if ('' === $part) {
                 continue;
             }
             $camel .= ucfirst($part);
@@ -259,34 +258,33 @@ final class TemplateController extends AbstractController
      */
     private function buildConfigFromProfile(string $indexName, array $profile): array
     {
-        $fields        = $profile['fields'] ?? [];
+        $fields = $profile['fields'] ?? [];
         $pkFromProfile = $profile['pk'] ?? null;
 
         $client = $this->meiliService->getMeiliClient();
-//        $index  = $client->getIndex($this->meiliService->getPrefixedIndexName($indexName));
+        //        $index  = $client->getIndex($this->meiliService->getPrefixedIndexName($indexName));
 
         // Resolve UID using the new resolver (raw + prefix applied centrally).
         $fallbackSource = $locale ?? 'en';
-        $policy         = $this->indexNameResolver->localesFor($indexName, $fallbackSource);
-        $isMlForBase    = $this->indexNameResolver->isMultiLingualFor($indexName, $policy['source']);
+        $policy = $this->indexNameResolver->localesFor($indexName, $fallbackSource);
+        $isMlForBase = $this->indexNameResolver->isMultiLingualFor($indexName, $policy['source']);
 
-// CLI locale wins; otherwise use the resolver-selected source locale.
+        // CLI locale wins; otherwise use the resolver-selected source locale.
         $effectiveLocale = $locale ?? $policy['source'];
 
-        $uid    = $this->indexNameResolver->uidFor($indexName, $effectiveLocale, $isMlForBase);
+        $uid = $this->indexNameResolver->uidFor($indexName, $effectiveLocale, $isMlForBase);
         $client = $this->meiliService->getMeiliClient();
-        $index  = $client->getIndex($uid);
+        $index = $client->getIndex($uid);
 
-// Use Meili's primary key API (e.g. "code" for Marvel), fallback to profile, then "id".
+        // Use Meili's primary key API (e.g. "code" for Marvel), fallback to profile, then "id".
         $primaryKey = $index->getPrimaryKey() ?? $pkFromProfile ?? 'id';
-        $settings   = $index->getSettings();
-
+        $settings = $index->getSettings();
 
         // Use Meili's primary key API (e.g. "code" for Marvel), fallback to profile, then "id".
         $primaryKey = $index->getPrimaryKey() ?? $pkFromProfile ?? 'id';
 
-        $settings      = $index->getSettings();
-        $searchable    = $settings['searchableAttributes'] ?? [];
+        $settings = $index->getSettings();
+        $searchable = $settings['searchableAttributes'] ?? [];
         $rawFilterable = $settings['filterableAttributes'] ?? [];
 
         // Build a mapping between profile field names and Meili field names
@@ -294,9 +292,9 @@ final class TemplateController extends AbstractController
         $profileToMeili = [];
         $meiliToProfile = [];
         foreach ($fields as $profileField => $_meta) {
-            $meiliField                     = $this->profileFieldToMeiliField($profileField);
-            $profileToMeili[$profileField]  = $meiliField;
-            $meiliToProfile[$meiliField]    = $profileField;
+            $meiliField = $this->profileFieldToMeiliField($profileField);
+            $profileToMeili[$profileField] = $meiliField;
+            $meiliToProfile[$meiliField] = $profileField;
         }
 
         // Strip ID-like fields from our UI facet/view config (still allowed in Meili).
@@ -361,7 +359,7 @@ final class TemplateController extends AbstractController
         // mapped back to Meili field name.
         $descriptionField = null;
 
-// 1) Explicitly prefer "description", "overview", "summary", "abstract", "notes"
+        // 1) Explicitly prefer "description", "overview", "summary", "abstract", "notes"
         $descriptionCandidates = ['description', 'overview', 'summary', 'abstract', 'notes'];
         foreach ($descriptionCandidates as $cand) {
             if (isset($fields[$cand]) && $cand !== $profileTitleField) {
@@ -370,7 +368,7 @@ final class TemplateController extends AbstractController
             }
         }
 
-// 2) Fallback: longest-ish string field (what we had before)
+        // 2) Fallback: longest-ish string field (what we had before)
         if (!$descriptionField) {
             foreach ($allProfileFieldNames as $pf) {
                 if ($pf === $profileTitleField) {
@@ -415,7 +413,7 @@ final class TemplateController extends AbstractController
         }
 
         // 4) Tag-like / array-ish fields: genres, tags, authors, powers, etc. (skip *_id)
-        $tagFields    = [];
+        $tagFields = [];
         $tagNameHints = [
             'genres', 'genre',
             'tags', 'tag',
@@ -433,7 +431,7 @@ final class TemplateController extends AbstractController
                 continue;
             }
 
-            $meta  = $fields[$profileField] ?? null;
+            $meta = $fields[$profileField] ?? null;
             if (!$meta) {
                 continue;
             }
@@ -441,16 +439,16 @@ final class TemplateController extends AbstractController
             $facet = $meta['facetCandidate'] ?? false;
             $lname = strtolower($meiliField);
 
-            $isArrayish    = in_array('array', $types, true);
+            $isArrayish = in_array('array', $types, true);
             $isStringFacet = in_array('string', $types, true) && $facet;
-            $isNameHint    = in_array($lname, $tagNameHints, true);
+            $isNameHint = in_array($lname, $tagNameHints, true);
 
             // Also drop "degenerate" facets: single value used everywhere.
             $distribution = $meta['distribution']['values'] ?? null;
-            $total        = $meta['total'] ?? null;
-            $degenerate   = false;
+            $total = $meta['total'] ?? null;
+            $degenerate = false;
             if (is_array($distribution) && $total) {
-                if (count($distribution) === 1 && reset($distribution) === $total) {
+                if (1 === count($distribution) && reset($distribution) === $total) {
                     $degenerate = true;
                 }
             }
@@ -473,11 +471,11 @@ final class TemplateController extends AbstractController
         foreach ($fields as $profileField => $meta) {
             $key = strtolower($profileField);
             if (
-                (str_contains($key, 'image') ||
-                 str_contains($key, 'thumb') ||
-                 str_contains($key, 'poster') ||
-                 str_contains($key, 'cover')) &&
-                (($meta['storageHint'] ?? '') === 'string')
+                (str_contains($key, 'image')
+                 || str_contains($key, 'thumb')
+                 || str_contains($key, 'poster')
+                 || str_contains($key, 'cover'))
+                && (($meta['storageHint'] ?? '') === 'string')
             ) {
                 $imageField = $profileToMeili[$profileField] ?? $profileField;
                 break;
@@ -487,27 +485,27 @@ final class TemplateController extends AbstractController
         // Human labels for Meili field names (camel/snake → Title Case)
         $labels = [];
         foreach ($fields as $profileField => $_meta) {
-            $meiliField        = $profileToMeili[$profileField] ?? $profileField;
+            $meiliField = $profileToMeili[$profileField] ?? $profileField;
             $labels[$meiliField] = $this->humanizeField($meiliField);
         }
 
         // We'll rely on CSS line clamp instead of character slicing,
         // but keep these knobs for arrays / max list.
-        $maxLen  = 100; // not actually used for clamping now, but kept as a hint
+        $maxLen = 100; // not actually used for clamping now, but kept as a hint
         $maxList = 3;   // how many items from array-like fields
 
         return [
             [
-                'primaryKey'       => $primaryKey,
-                'titleField'       => $titleField,
+                'primaryKey' => $primaryKey,
+                'titleField' => $titleField,
                 'descriptionField' => $descriptionField,
-                'imageField'       => $imageField,
-                'scalarFields'     => $scalarFields,
-                'tagFields'        => $tagFields,
+                'imageField' => $imageField,
+                'scalarFields' => $scalarFields,
+                'tagFields' => $tagFields,
                 'filterableFields' => $filterable, // already stripped of *_id
-                'labels'           => $labels,
-                'maxLen'           => $maxLen,
-                'maxList'          => $maxList,
+                'labels' => $labels,
+                'maxLen' => $maxLen,
+                'maxList' => $maxList,
             ],
             $settings,
         ];
@@ -519,36 +517,36 @@ final class TemplateController extends AbstractController
      * - Arrays (facets) BELOW the image+text row
      * - CSS line clamp on description
      * - Skip 0/blank scalar values
-     * - Show ranking score as 0–100 badge when in [0,1]
+     * - Show ranking score as 0–100 badge when in [0,1].
      */
-// inside your TemplateController (or wherever this lives)
+    // inside your TemplateController (or wherever this lives)
 
     public function generateJsTwigFromConfig(array $config, array $settings): string
     {
         // 1) Defaults for the flat Twig config
         $defaults = [
-            'indexName'   => 'default',
-            'primaryKey'  => 'id',
+            'indexName' => 'default',
+            'primaryKey' => 'id',
 
-            'titleField'       => 'title',
-            'subtitleField'    => null,
+            'titleField' => 'title',
+            'subtitleField' => null,
             'descriptionField' => null,
-            'imageField'       => null,
+            'imageField' => null,
 
-            'maxLen'    => 100,
-            'maxList'   => 3,
+            'maxLen' => 100,
+            'maxList' => 3,
             'showScore' => true,
-            'columns'   => 3,
-            'layout'    => 'neutral',
+            'columns' => 3,
+            'layout' => 'neutral',
 
-            'primarySearchFields'   => [],
+            'primarySearchFields' => [],
             'secondarySearchFields' => [],
-            'filterableFields'      => [],
-            'sortFields'            => [],
+            'filterableFields' => [],
+            'sortFields' => [],
 
             'scalarFields' => [],
-            'tagFields'    => [],
-            'labels'       => [],
+            'tagFields' => [],
+            'labels' => [],
         ];
 
         // 2) Detect if $config is already "flat" (e.g. profile generator returns final shape)
@@ -559,46 +557,46 @@ final class TemplateController extends AbstractController
             $twigConfig = array_replace($defaults, $config);
         } else {
             // 3) Nested shape (fallback + current profile builder)
-            $ui      = $config['ui']      ?? [];
-            $search  = $config['search']  ?? [];
-            $facets  = $config['facets']  ?? [];
-            $sort    = $config['sort']    ?? [];
-            $labels  = $config['labels']  ?? [];
-            $tags    = $config['tagFields'] ?? [];
+            $ui = $config['ui'] ?? [];
+            $search = $config['search'] ?? [];
+            $facets = $config['facets'] ?? [];
+            $sort = $config['sort'] ?? [];
+            $labels = $config['labels'] ?? [];
+            $tags = $config['tagFields'] ?? [];
             $scalars = $config['scalarFields'] ?? [];
 
             $nested = [
-                'indexName'  => $config['indexName']  ?? 'default',
+                'indexName' => $config['indexName'] ?? 'default',
                 'primaryKey' => $config['primaryKey'] ?? 'id',
 
-                'titleField'       => $ui['titleField']       ?? null,
-                'subtitleField'    => $ui['subtitleField']    ?? null,
+                'titleField' => $ui['titleField'] ?? null,
+                'subtitleField' => $ui['subtitleField'] ?? null,
                 'descriptionField' => $ui['descriptionField'] ?? null,
-                'imageField'       => $ui['imageField']       ?? null,
+                'imageField' => $ui['imageField'] ?? null,
 
-                'maxLen'    => $ui['maxLen']    ?? null,
-                'maxList'   => $ui['maxList']   ?? null,
+                'maxLen' => $ui['maxLen'] ?? null,
+                'maxList' => $ui['maxList'] ?? null,
                 'showScore' => $ui['showScore'] ?? null,
-                'columns'   => $ui['columns']   ?? null,
-                'layout'    => $ui['layout']    ?? null,
+                'columns' => $ui['columns'] ?? null,
+                'layout' => $ui['layout'] ?? null,
 
-                'primarySearchFields'   => $search['primary']   ?? [],
+                'primarySearchFields' => $search['primary'] ?? [],
                 'secondarySearchFields' => $search['secondary'] ?? [],
-                'filterableFields'      => $facets,
-                'sortFields'            => $sort,
+                'filterableFields' => $facets,
+                'sortFields' => $sort,
 
                 'scalarFields' => $scalars,
-                'tagFields'    => $tags,
-                'labels'       => $labels,
+                'tagFields' => $tags,
+                'labels' => $labels,
             ];
 
             $twigConfig = array_replace(
                 $defaults,
-                array_filter($nested, static fn ($v) => $v !== null)
+                array_filter($nested, static fn ($v) => null !== $v)
             );
         }
 
-        $configJson   = json_encode($twigConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $configJson = json_encode($twigConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $settingsJson = json_encode($settings, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         return $this->renderDefaultJsTwigTemplate($configJson, $settingsJson);
@@ -931,5 +929,4 @@ $settingsJson
 </div>
 TWIG;
     }
-
 }

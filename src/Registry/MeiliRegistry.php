@@ -1,13 +1,13 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Registry;
 
-
 final class MeiliRegistry
 {
     /**
-     * @param array<string,string> $indexEntities map: rawIndexName => class
+     * @param array<string,string>                                   $indexEntities map: rawIndexName => class
      * @param array<class-string, array<string,array<string,mixed>>> $indexSettings map: class => [rawIndexName => settings]
      */
     public function __construct(
@@ -22,6 +22,7 @@ final class MeiliRegistry
     {
         $names = array_keys($this->indexEntities);
         sort($names);
+
         return $names;
     }
 
@@ -42,6 +43,7 @@ final class MeiliRegistry
         if (!$class) {
             return null;
         }
+
         return $this->indexSettings[$class][$rawIndexName] ?? null;
     }
 
@@ -49,8 +51,9 @@ final class MeiliRegistry
     public function uidFor(string $rawIndexName): string
     {
         if ($this->prefix && !str_starts_with($rawIndexName, $this->prefix)) {
-            return $this->prefix . $rawIndexName;
+            return $this->prefix.$rawIndexName;
         }
+
         return $rawIndexName;
     }
 
@@ -67,12 +70,13 @@ final class MeiliRegistry
 
             $out[$name] = [
                 'class' => $class,
-                'primaryKey' => (string)($cfg['primaryKey'] ?? ''),
-                'schema' => (array)($cfg['schema'] ?? []),
-                'facets' => (array)($cfg['facets'] ?? []),
-                'ui' => (array)($cfg['ui'] ?? []),
+                'primaryKey' => (string) ($cfg['primaryKey'] ?? ''),
+                'schema' => (array) ($cfg['schema'] ?? []),
+                'facets' => (array) ($cfg['facets'] ?? []),
+                'ui' => (array) ($cfg['ui'] ?? []),
             ];
         }
+
         return $out;
     }
 }

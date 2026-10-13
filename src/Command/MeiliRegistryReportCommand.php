@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Command;
@@ -7,20 +8,11 @@ use Survos\MeiliBundle\Registry\MeiliRegistry;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
 use Survos\MeiliBundle\Service\IndexNameResolver;
 use Survos\MeiliBundle\Service\MeiliService;
-use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Argument;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use function count;
-use function implode;
-use function is_array;
-use function sprintf;
-use function str_contains;
-use function strtolower;
-use function strrpos;
-use function substr;
-use function trim;
 
 #[AsCommand(
     name: 'meili:registry:report',
@@ -43,40 +35,40 @@ final class MeiliRegistryReportCommand
         #[Option('Locale to report against when registry does not declare a source locale.', shortcut: 'l')]
         string $locale = 'en',
     ): int {
-        $base = $base !== null ? trim($base) : null;
-        if ($base === '') {
+        $base = null !== $base ? \trim($base) : null;
+        if ('' === $base) {
             $base = null;
         }
-        $locale = strtolower(trim($locale)) ?: 'en';
+        $locale = \strtolower(\trim($locale)) ?: 'en';
 
         $io->title('Meili registry report');
-        $io->writeln(sprintf('Locale: <info>%s</info>', $locale));
-        $io->writeln(sprintf('Multilingual: <info>%s</info>', $this->resolver->isMultiLingual() ? 'yes' : 'no'));
+        $io->writeln(\sprintf('Locale: <info>%s</info>', $locale));
+        $io->writeln(\sprintf('Multilingual: <info>%s</info>', $this->resolver->isMultiLingual() ? 'yes' : 'no'));
         $io->newLine();
 
         $rows = [];
         foreach ($this->registry->names() as $baseName) {
-            if ($base && !str_contains($baseName, $base)) {
+            if ($base && !\str_contains($baseName, $base)) {
                 continue;
             }
 
             $cfg = $this->registry->settingsFor($baseName) ?? [];
-            $ui  = (array)($cfg['ui'] ?? []);
-            $label = (string)($ui['label'] ?? '');
-            if ($label === '') {
-                $class = (string)($cfg['class'] ?? $this->registry->classFor($baseName) ?? '');
+            $ui = (array) ($cfg['ui'] ?? []);
+            $label = (string) ($ui['label'] ?? '');
+            if ('' === $label) {
+                $class = (string) ($cfg['class'] ?? $this->registry->classFor($baseName) ?? '');
                 $label = $class ? $this->shortClass($class) : '';
             }
 
             $loc = $this->resolver->localesFor($baseName, $locale);
             $isMlFor = $this->resolver->isMultiLingualFor($baseName, $locale);
 
-            $persisted = is_array($cfg['persisted'] ?? null) ? $cfg['persisted'] : [];
-            $persistedGroups = isset($persisted['groups']) && is_array($persisted['groups'])
-                ? implode(',', $persisted['groups'])
+            $persisted = \is_array($cfg['persisted'] ?? null) ? $cfg['persisted'] : [];
+            $persistedGroups = isset($persisted['groups']) && \is_array($persisted['groups'])
+                ? \implode(',', $persisted['groups'])
                 : '';
-            $persistedFieldsCount = isset($persisted['fields']) && is_array($persisted['fields'])
-                ? count($persisted['fields'])
+            $persistedFieldsCount = isset($persisted['fields']) && \is_array($persisted['fields'])
+                ? \count($persisted['fields'])
                 : 0;
 
             $rows[] = [
@@ -84,10 +76,10 @@ final class MeiliRegistryReportCommand
                 $label,
                 $isMlFor ? 'yes' : 'no',
                 $loc['source'],
-                $loc['targets'] ? implode(',', $loc['targets']) : '',
-                (string)($cfg['primaryKey'] ?? ''),
+                $loc['targets'] ? \implode(',', $loc['targets']) : '',
+                (string) ($cfg['primaryKey'] ?? ''),
                 $persistedGroups,
-                (string)$persistedFieldsCount,
+                (string) $persistedFieldsCount,
             ];
         }
 
@@ -102,7 +94,7 @@ final class MeiliRegistryReportCommand
             $dbRows[] = [
                 $info->indexName,
                 $info->primaryKey,
-                (string)$info->documentCount,
+                (string) $info->documentCount,
                 $info->updatedAt?->format('Y-m-d H:i:s') ?? '',
                 $info->status ?? '',
                 $info->hasSearchApiKey() ? 'yes' : 'no',
@@ -111,7 +103,7 @@ final class MeiliRegistryReportCommand
         }
 
         $io->section('Database registry (synced)');
-        if ($dbRows === []) {
+        if ([] === $dbRows) {
             $io->writeln('No database registry entries found. Run: bin/console meili:registry:sync');
         } else {
             $io->table(['Index UID', 'Primary key', 'Documents', 'Updated', 'Status', 'Search key', 'Chat keys'], $dbRows);
@@ -121,7 +113,7 @@ final class MeiliRegistryReportCommand
             $io->section('Resolved raw index names (verbose)');
 
             foreach ($this->registry->names() as $baseName) {
-                if ($base && !str_contains($baseName, $base)) {
+                if ($base && !\str_contains($baseName, $base)) {
                     continue;
                 }
 
@@ -133,7 +125,7 @@ final class MeiliRegistryReportCommand
                     $rawNames[] = $this->resolver->rawFor($baseName, $l, $isMlFor);
                 }
 
-                $io->writeln(sprintf('<info>%s</info>: %s', $baseName, implode(', ', $rawNames)));
+                $io->writeln(\sprintf('<info>%s</info>: %s', $baseName, \implode(', ', $rawNames)));
             }
         }
 
@@ -142,7 +134,7 @@ final class MeiliRegistryReportCommand
 
             $serverRows = [];
             foreach ($this->registry->names() as $baseName) {
-                if ($base && !str_contains($baseName, $base)) {
+                if ($base && !\str_contains($baseName, $base)) {
                     continue;
                 }
 
@@ -194,7 +186,8 @@ final class MeiliRegistryReportCommand
 
     private function shortClass(string $fqcn): string
     {
-        $p = strrpos($fqcn, '\\');
-        return $p === false ? $fqcn : substr($fqcn, $p + 1);
+        $p = \strrpos($fqcn, '\\');
+
+        return false === $p ? $fqcn : \substr($fqcn, $p + 1);
     }
 }

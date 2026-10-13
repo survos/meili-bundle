@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Model;
@@ -14,5 +15,6 @@ final class IndexTarget
         public readonly string $class,  // entity FQCN
         public readonly ?string $locale,
         public readonly string $kind,   // base|source|target
-    ) {}
+    ) {
+    }
 }

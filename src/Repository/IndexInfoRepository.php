@@ -1,11 +1,12 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Repository;
 
-use Survos\MeiliBundle\Entity\IndexInfo;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
+use Survos\MeiliBundle\Entity\IndexInfo;
 
 /**
  * @extends ServiceEntityRepository<IndexInfo>
@@ -29,7 +30,7 @@ class IndexInfoRepository extends ServiceEntityRepository
     {
         return $this->findOneBy([
             'pixieCode' => $pixieCode,
-            'locale' => $locale
+            'locale' => $locale,
         ]);
     }
 

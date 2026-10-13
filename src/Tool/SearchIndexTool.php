@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Tool;
@@ -10,12 +11,6 @@ use Symfony\AI\Agent\Toolbox\Attribute\AsTool;
 use Symfony\AI\Agent\Toolbox\Source\HasSourcesInterface;
 use Symfony\AI\Agent\Toolbox\Source\HasSourcesTrait;
 use Symfony\AI\Agent\Toolbox\Source\Source;
-
-use function array_key_exists;
-use function count;
-use function max;
-use function min;
-use function sprintf;
 
 /**
  * Symfony AI tool: search a single Meilisearch index.
@@ -43,8 +38,8 @@ final class SearchIndexTool implements HasSourcesInterface
 
     /**
      * @param string      $index         The Meilisearch index UID to search (e.g. "meili_product").
-     * @param string      $query         The full-text search query.
-     * @param int         $limit         Maximum number of results to return (1–50).
+     * @param string      $query         the full-text search query
+     * @param int         $limit         maximum number of results to return (1–50)
      * @param string|null $filters       Optional Meilisearch filter expression (e.g. "brand = Nike AND price < 100").
      * @param string|null $embedder      Embedder name for hybrid search (e.g. "product"). When supplied, semantic search is blended in.
      * @param float       $semanticRatio Blend ratio 0.0 (pure keyword) – 1.0 (pure vector). Only used when $embedder is set.
@@ -57,14 +52,14 @@ final class SearchIndexTool implements HasSourcesInterface
         ?string $embedder = null,
         float $semanticRatio = 0.5,
     ): string {
-        $searchParams = ['limit' => max(1, min(50, $limit))];
-        if ($filters !== null && $filters !== '') {
+        $searchParams = ['limit' => \max(1, \min(50, $limit))];
+        if (null !== $filters && '' !== $filters) {
             $searchParams['filter'] = $filters;
         }
-        if ($embedder !== null && $embedder !== '') {
-            $semanticRatio = max(0.0, min(1.0, $semanticRatio));
+        if (null !== $embedder && '' !== $embedder) {
+            $semanticRatio = \max(0.0, \min(1.0, $semanticRatio));
             $searchParams['hybrid'] = [
-                'embedder'      => $embedder,
+                'embedder' => $embedder,
                 'semanticRatio' => $semanticRatio,
             ];
         }
@@ -79,17 +74,17 @@ final class SearchIndexTool implements HasSourcesInterface
             $label = $this->normalizer->labelFor($hit);
             $this->addSource(new Source(
                 $label,
-                sprintf('meili://%s/%s', $index, $hit['id'] ?? $hit[array_key_first($hit)] ?? '?'),
+                \sprintf('meili://%s/%s', $index, $hit['id'] ?? $hit[array_key_first($hit)] ?? '?'),
                 $this->normalizer->toJson($hit),
             ));
         }
 
         return $this->normalizer->toJson([
-            'index'      => $index,
-            'query'      => $query,
+            'index' => $index,
+            'query' => $query,
             // getTotalHits() is null for hybrid/offset-limit pagination; fall back to estimatedTotalHits.
-            'totalHits'  => $results->getTotalHits() ?? $results->getEstimatedTotalHits() ?? count($hits),
-            'hits'       => $hits,
+            'totalHits' => $results->getTotalHits() ?? $results->getEstimatedTotalHits() ?? \count($hits),
+            'hits' => $hits,
         ]);
     }
 }

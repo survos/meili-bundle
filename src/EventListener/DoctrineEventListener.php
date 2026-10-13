@@ -1,10 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 // Optimized event listener that batches operations by entity class
 
 namespace Survos\MeiliBundle\EventListener;
 
-use Survos\DataContracts\Util\Arrays;
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
 use Doctrine\ORM\Event\PostFlushEventArgs;
 use Doctrine\ORM\Event\PostPersistEventArgs;
@@ -13,6 +14,7 @@ use Doctrine\ORM\Event\PrePersistEventArgs;
 use Doctrine\ORM\Event\PreRemoveEventArgs;
 use Doctrine\ORM\Events;
 use Psr\Log\LoggerInterface;
+use Survos\DataContracts\Util\Arrays;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
 use Survos\MeiliBundle\Message\BatchRemoveEntitiesMessage;
 use Survos\MeiliBundle\Service\MeiliPayloadBuilder;
@@ -20,11 +22,10 @@ use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\SettingsService;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\TransportNamesStamp;
-use Symfony\Component\Messenger\TraceableMessageBus;
 use Symfony\Component\PropertyAccess\PropertyAccessorInterface;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
-use Zenstruck\Messenger\Monitor\Stamp\TagStamp;
 use Symfony\Contracts\Service\ResetInterface;
+use Zenstruck\Messenger\Monitor\Stamp\TagStamp;
 
 #[AsDoctrineListener(Events::postUpdate)]
 #[AsDoctrineListener(Events::preRemove)]
@@ -48,11 +49,14 @@ class DoctrineEventListener implements ResetInterface
     {
         $this->enabled = false;
         // Clear any operations queued before disable() was called
-        $this->pendingIndexOperations  = [];
+        $this->pendingIndexOperations = [];
         $this->pendingRemoveOperations = [];
     }
 
-    public function enable(): void  { $this->enabled = true; }
+    public function enable(): void
+    {
+        $this->enabled = true;
+    }
 
     /**
      * Under FrankenPHP worker mode this listener outlives the response. Anything still queued
@@ -61,19 +65,19 @@ class DoctrineEventListener implements ResetInterface
      */
     public function reset(): void
     {
-        $this->pendingIndexOperations  = [];
+        $this->pendingIndexOperations = [];
         $this->pendingRemoveOperations = [];
         $this->dispatching = false;
     }
 
     public function __construct(
-        private readonly MeiliService              $meiliService,
-        private readonly SettingsService           $settingsService,
+        private readonly MeiliService $meiliService,
+        private readonly SettingsService $settingsService,
         private readonly PropertyAccessorInterface $propertyAccessor,
-        private readonly NormalizerInterface       $normalizer,
+        private readonly NormalizerInterface $normalizer,
         private readonly MeiliPayloadBuilder $meiliPayloadBuilder,
-        private readonly ?MessageBusInterface      $messageBus=null,
-        private readonly ?LoggerInterface          $logger = null,
+        private readonly ?MessageBusInterface $messageBus = null,
+        private readonly ?LoggerInterface $logger = null,
     ) {
     }
 
@@ -106,12 +110,12 @@ class DoctrineEventListener implements ResetInterface
         foreach ($indexes as $index) {
             return $index['primaryKey'];
         }
-//        if ($index = $this->meiliService->indexedByClass()[$class][0]??null) {
-//            return $index['primaryKey'];
-//        }
+        //        if ($index = $this->meiliService->indexedByClass()[$class][0]??null) {
+        //            return $index['primaryKey'];
+        //        }
         assert(false, "Missing pk/index in $class");
-        return null;
 
+        return null;
     }
 
     private function dispatchPendingMessages(): void
@@ -123,9 +127,7 @@ class DoctrineEventListener implements ResetInterface
                 continue;
             }
             // @AI: The problem is here!  pixieBundle\\Row is in this list, and shouldn't be.
-//            dd($entityClass, $this->meiliService->indexedEntities);
-
-
+            //            dd($entityClass, $this->meiliService->indexedEntities);
 
             // Get the index configuration for this entity class
             $indexesByClass = $this->meiliService->indexedByClass();
@@ -141,7 +143,7 @@ class DoctrineEventListener implements ResetInterface
                 $groups = $this->settingsService->getNormalizationGroups($entityClass);
                 $persistedConfig = [
                     'groups' => $groups,
-                    'restrict_groups' => !empty($groups)
+                    'restrict_groups' => !empty($groups),
                 ];
             }
 
@@ -153,7 +155,7 @@ class DoctrineEventListener implements ResetInterface
             Arrays::sparse($normalized);
 
             $this->logger?->info(sprintf(
-                "Dispatching batch index message for %d %s entities",
+                'Dispatching batch index message for %d %s entities',
                 count($objects),
                 $entityClass
             ));
@@ -176,7 +178,7 @@ class DoctrineEventListener implements ResetInterface
                 $this->messageBus->dispatch($message, $stamps);
             } catch (\Exception $e) {
                 $this->logger?->error(sprintf(
-                    "Failed to dispatch index message for %s: %s",
+                    'Failed to dispatch index message for %s: %s',
                     $entityClass,
                     $e->getMessage()
                 ));
@@ -189,7 +191,7 @@ class DoctrineEventListener implements ResetInterface
             $entityIds = array_column($operations, $primaryKey);
 
             $this->logger?->info(sprintf(
-                "Dispatching batch remove message for %d %s entities",
+                'Dispatching batch remove message for %d %s entities',
                 count($entityIds),
                 $entityClass
             ));
@@ -229,9 +231,10 @@ class DoctrineEventListener implements ResetInterface
 
         if (!$id) {
             $this->logger?->warning(sprintf(
-                "Cannot schedule entity %s for indexing: no ID found",
+                'Cannot schedule entity %s for indexing: no ID found',
                 $object::class
             ));
+
             return;
         }
 
@@ -250,9 +253,10 @@ class DoctrineEventListener implements ResetInterface
 
         if (!$id) {
             $this->logger?->warning(sprintf(
-                "Cannot schedule entity %s for removal: no ID found",
+                'Cannot schedule entity %s for removal: no ID found',
                 $object::class
             ));
+
             return;
         }
 
@@ -260,5 +264,4 @@ class DoctrineEventListener implements ResetInterface
             'id' => $id,
         ];
     }
-
 }

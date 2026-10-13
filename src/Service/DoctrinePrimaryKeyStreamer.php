@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Survos\MeiliBundle\Service;
 
 use Doctrine\DBAL\Connection;
@@ -18,19 +20,15 @@ class DoctrinePrimaryKeyStreamer
 
     public function __construct(
         private readonly EntityManagerInterface $em,
-        private readonly string $entityClass
+        private readonly string $entityClass,
     ) {
         $this->connection = $em->getConnection();
         $this->metadata = $em->getClassMetadata($entityClass);
 
         // Only supports single primary key
         $idFields = $this->metadata->getIdentifierColumnNames();
-        if (count($idFields) !== 1) {
-            throw new \RuntimeException(sprintf(
-                'Entity %s has a composite primary key, which is not supported by %s.',
-                $entityClass,
-                self::class
-            ));
+        if (1 !== count($idFields)) {
+            throw new \RuntimeException(sprintf('Entity %s has a composite primary key, which is not supported by %s.', $entityClass, self::class));
         }
 
         $this->tableName = $this->metadata->getTableName();
@@ -67,7 +65,6 @@ class DoctrinePrimaryKeyStreamer
     /**
      * Stream IDs one by one (instead of in batches).
      *
-     * @param int $batchSize
      * @return \Generator<int>
      */
     public function streamOneByOne(int $batchSize = 10000): \Generator

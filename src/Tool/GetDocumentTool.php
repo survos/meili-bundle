@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Tool;
@@ -12,11 +13,6 @@ use Symfony\AI\Agent\Toolbox\Attribute\AsTool;
 use Symfony\AI\Agent\Toolbox\Source\HasSourcesInterface;
 use Symfony\AI\Agent\Toolbox\Source\HasSourcesTrait;
 use Symfony\AI\Agent\Toolbox\Source\Source;
-
-use function array_key_exists;
-use function is_array;
-use function is_string;
-use function sprintf;
 
 /**
  * Symfony AI tool: fetch a single document by its primary-key value.
@@ -42,7 +38,7 @@ final class GetDocumentTool implements HasSourcesInterface
 
     /**
      * @param string $index      The Meilisearch index UID (e.g. "product").
-     * @param string $documentId The primary-key value of the document to fetch.
+     * @param string $documentId the primary-key value of the document to fetch
      */
     public function __invoke(
         string $index,
@@ -53,10 +49,10 @@ final class GetDocumentTool implements HasSourcesInterface
                 ->getIndexEndpoint($index)
                 ->getDocument($documentId);
         } catch (ApiException $e) {
-            if ($e->httpStatus === 404) {
+            if (404 === $e->httpStatus) {
                 return $this->normalizer->toJson([
-                    'error'      => 'not_found',
-                    'index'      => $index,
+                    'error' => 'not_found',
+                    'index' => $index,
                     'documentId' => $documentId,
                 ]);
             }
@@ -65,7 +61,7 @@ final class GetDocumentTool implements HasSourcesInterface
 
         $hit = $this->normalizer->normalizeHit((array) $raw);
         $primaryKey = $this->primaryKeyForIndex($index);
-        $hasPrimaryKey = array_key_exists($primaryKey, $hit);
+        $hasPrimaryKey = \array_key_exists($primaryKey, $hit);
 
         $this->logger?->info('Meili MCP get_document', [
             'index' => $index,
@@ -78,7 +74,7 @@ final class GetDocumentTool implements HasSourcesInterface
 
         $this->addSource(new Source(
             $label,
-            sprintf('meili://%s/%s', $index, $documentId),
+            \sprintf('meili://%s/%s', $index, $documentId),
             $this->normalizer->toJson($hit),
         ));
 
@@ -95,7 +91,7 @@ final class GetDocumentTool implements HasSourcesInterface
         $baseName = $this->meiliService->baseNameFromUid($index);
         $settings = $this->meiliService->getIndexSetting($baseName);
 
-        return is_array($settings) && isset($settings['primaryKey']) && is_string($settings['primaryKey']) && $settings['primaryKey'] !== ''
+        return \is_array($settings) && isset($settings['primaryKey']) && \is_string($settings['primaryKey']) && '' !== $settings['primaryKey']
             ? $settings['primaryKey']
             : 'id';
     }

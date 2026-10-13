@@ -1,9 +1,9 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
 
-use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Meilisearch\Contracts\CreateKeyQuery;
 use Meilisearch\Contracts\IndexesQuery;
@@ -11,11 +11,6 @@ use Meilisearch\Contracts\KeyAction;
 use Meilisearch\Exceptions\ApiException;
 use Survos\MeiliBundle\Entity\IndexInfo;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
-
-use function is_string;
-use function sha1;
-use function sprintf;
-use function substr;
 
 final class MeiliServerKeyService
 {
@@ -30,6 +25,7 @@ final class MeiliServerKeyService
 
     /**
      * @param list<string> $indexUids
+     *
      * @return array<string,array{apiKey:string,keyUid:string,created:bool}>
      */
     public function ensureServerKeys(array $indexUids): array
@@ -59,7 +55,7 @@ final class MeiliServerKeyService
      */
     public function syncRegistryKey(string $indexUid): bool
     {
-        if ($this->entityManager === null || $this->indexInfoRepository === null) {
+        if (null === $this->entityManager || null === $this->indexInfoRepository) {
             return false;
         }
 
@@ -69,7 +65,7 @@ final class MeiliServerKeyService
             $key = $this->meiliService->getMeiliClient()->getKey($keyUid);
             $apiKey = $key->getKey();
 
-            if (!is_string($apiKey) || !$this->keyIsUsable($apiKey)) {
+            if (!\is_string($apiKey) || !$this->keyIsUsable($apiKey)) {
                 return false;
             }
         } catch (ApiException) {
@@ -85,6 +81,7 @@ final class MeiliServerKeyService
 
     /**
      * @param list<KeyAction> $actions
+     *
      * @return array{apiKey:string,keyUid:string,created:bool}
      */
     private function ensureKey(string $alias, array $actions): array
@@ -116,10 +113,10 @@ final class MeiliServerKeyService
         $key = $this->meiliService->getMeiliClient()->createKey(new CreateKeyQuery(
             actions: $actions,
             indexes: ['*'],
-            name: sprintf('Managed %s key', $alias),
-            description: sprintf('Managed Meilisearch %s key', $alias),
+            name: \sprintf('Managed %s key', $alias),
+            description: \sprintf('Managed Meilisearch %s key', $alias),
             uid: $keyUid,
-            expiresAt: new DateTimeImmutable('+5 years'),
+            expiresAt: new \DateTimeImmutable('+5 years'),
         ));
 
         return [
@@ -137,7 +134,7 @@ final class MeiliServerKeyService
      */
     private function keyIsUsable(string $apiKey): bool
     {
-        if ($apiKey === '') {
+        if ('' === $apiKey) {
             return false;
         }
 
@@ -152,26 +149,26 @@ final class MeiliServerKeyService
 
     private function buildKeyUid(string $alias): string
     {
-        $hash = sha1($alias . '|' . ($this->meiliService->getHost() ?? 'meili'));
+        $hash = \sha1($alias.'|'.($this->meiliService->getHost() ?? 'meili'));
 
-        return sprintf(
+        return \sprintf(
             '%s-%s-%s-%s-%s',
-            substr($hash, 0, 8),
-            substr($hash, 8, 4),
-            substr($hash, 12, 4),
-            substr($hash, 16, 4),
-            substr($hash, 20, 12),
+            \substr($hash, 0, 8),
+            \substr($hash, 8, 4),
+            \substr($hash, 12, 4),
+            \substr($hash, 16, 4),
+            \substr($hash, 20, 12),
         );
     }
 
     private function loadOrCreateIndexInfo(string $indexUid): IndexInfo
     {
-        if ($this->indexInfoRepository === null || $this->entityManager === null) {
+        if (null === $this->indexInfoRepository || null === $this->entityManager) {
             throw new \RuntimeException('Index registry storage is not available; cannot persist Meili server keys.');
         }
 
         $entity = $this->indexInfoRepository->find($indexUid);
-        if ($entity !== null) {
+        if (null !== $entity) {
             return $entity;
         }
 

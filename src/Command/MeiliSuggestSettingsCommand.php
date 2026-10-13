@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Command;
@@ -57,7 +58,7 @@ final class MeiliSuggestSettingsCommand
         }
 
         $json = \json_encode($settings, $flags);
-        if ($json === false) {
+        if (false === $json) {
             $io->error('Failed to encode suggested settings to JSON.');
 
             return 1;

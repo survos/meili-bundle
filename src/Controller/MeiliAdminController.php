@@ -7,7 +7,6 @@ namespace Survos\MeiliBundle\Controller;
 use Adbar\Dot;
 use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminRoute;
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
-use Meilisearch\Contracts\ChatWorkspaceSettings;
 use Meilisearch\Exceptions\ApiException;
 use Survos\MeiliBundle\Service\ChatWorkspaceResolver;
 use Survos\MeiliBundle\Service\IndexNameResolver;
@@ -22,28 +21,6 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\RouterInterface;
 use Symfony\UX\Chartjs\Builder\ChartBuilderInterface;
 use Symfony\UX\Chartjs\Model\Chart;
-
-use function addcslashes;
-use function array_key_first;
-use function array_map;
-use function array_merge;
-use function array_slice;
-use function array_values;
-use function count;
-use function file_get_contents;
-use function get_defined_vars;
-use function json_decode;
-use function ltrim;
-use function mb_substr;
-use function rawurlencode;
-use function rtrim;
-use function sprintf;
-use function str_repeat;
-use function str_starts_with;
-use function strlen;
-use function strtolower;
-use function substr;
-use function trim;
 
 class MeiliAdminController extends AbstractController
 {
@@ -91,6 +68,7 @@ class MeiliAdminController extends AbstractController
                 // try next
             }
         }
+
         return null;
     }
 
@@ -102,7 +80,8 @@ class MeiliAdminController extends AbstractController
     private function defaultWorkspace(): ?string
     {
         $workspaces = $this->chatConfig['workspaces'] ?? [];
-        return $workspaces !== [] ? array_key_first($workspaces) : null;
+
+        return [] !== $workspaces ? \array_key_first($workspaces) : null;
     }
 
     /**
@@ -119,24 +98,25 @@ class MeiliAdminController extends AbstractController
             // Redact the API key — show only last 4 chars
             if (!empty($data['apiKey'])) {
                 $key = (string) $data['apiKey'];
-                $data['apiKey'] = strlen($key) > 4
-                    ? str_repeat('*', strlen($key) - 4) . substr($key, -4)
+                $data['apiKey'] = \strlen($key) > 4
+                    ? \str_repeat('*', \strlen($key) - 4).\substr($key, -4)
                     : '****';
             }
+
             return $data;
         } catch (\Throwable) {
             return null;
         }
     }
 
-//    #[AdminRoute('/meili-index', name: 'meili_index')]
+    //    #[AdminRoute('/meili-index', name: 'meili_index')]
     #[Template('@SurvosMeili/ez/dashboard.html.twig')]
     public function index(AdminContext $context): Response|array
     {
         return [
-            'adminContext'    => $context,
-            'indexSettings'  => $this->meiliService->indexedByClass(),
-            'meiliUiUrl'     => $this->meiliUiUrl,
+            'adminContext' => $context,
+            'indexSettings' => $this->meiliService->indexedByClass(),
+            'meiliUiUrl' => $this->meiliUiUrl,
             'defaultWorkspace' => $this->defaultWorkspace(),
         ];
     }
@@ -147,7 +127,7 @@ class MeiliAdminController extends AbstractController
         string $indexName, // IMPORTANT: this is a base key, not a UID
     ): Response {
         $baseIndexName = $indexName;
-        $requestLocale = strtolower((string) $context->getRequest()->getLocale());
+        $requestLocale = \strtolower((string) $context->getRequest()->getLocale());
 
         // Resolve locale policy for this base key.
         // In monolingual mode, we must still apply the prefix via uidFor(), but we should not suffix locale.
@@ -171,29 +151,30 @@ class MeiliAdminController extends AbstractController
             // depending on Meilisearch version/settings. We keep this call for overview,
             // but each facet below requests a single field.
             $results = $indexApi->search(null, [
-                'limit'  => 0,
+                'limit' => 0,
                 'facets' => ['*'],
             ]);
 
             $rawInfo = $indexApi->fetchRawInfo();
         } catch (ApiException $e) {
-            if ((int) $e->getCode() === 404) {
+            if (404 === (int) $e->getCode()) {
                 $chatWorkspace = $this->workspaceForIndex($meiliIndexUid);
+
                 return $this->render('@SurvosMeili/index/show.html.twig', [
-                    'indexName'            => $baseIndexName,
-                    'resolvedUid'          => $meiliIndexUid,
-                    'rawInfo'              => null,
-                    'stats'                => null,
-                    'settings'             => $settings,
-                    'facetCounts'          => [],
-                    'facetCharts'          => [],
-                    'adminContext'         => $context,
-                    'chatWorkspace'        => $chatWorkspace,
-                    'chatWorkspaceInfo'    => $chatWorkspace ? $this->fetchWorkspaceInfo($chatWorkspace) : null,
+                    'indexName' => $baseIndexName,
+                    'resolvedUid' => $meiliIndexUid,
+                    'rawInfo' => null,
+                    'stats' => null,
+                    'settings' => $settings,
+                    'facetCounts' => [],
+                    'facetCharts' => [],
+                    'adminContext' => $context,
+                    'chatWorkspace' => $chatWorkspace,
+                    'chatWorkspaceInfo' => $chatWorkspace ? $this->fetchWorkspaceInfo($chatWorkspace) : null,
                     'chatWorkspaceIndexes' => $chatWorkspace ? ($this->chatConfig['workspaces'][$chatWorkspace]['indexes'] ?? []) : [],
-                    'error'                => sprintf('Index "%s" not found on server (resolved uid: "%s"). Create/populate it first.', $baseIndexName, $meiliIndexUid),
-                    'meiliUiUrl'           => $this->meiliUiUrl,
-                    'indexDashboardUrl'    => $this->indexDashboardUrl($baseIndexName),
+                    'error' => \sprintf('Index "%s" not found on server (resolved uid: "%s"). Create/populate it first.', $baseIndexName, $meiliIndexUid),
+                    'meiliUiUrl' => $this->meiliUiUrl,
+                    'indexDashboardUrl' => $this->indexDashboardUrl($baseIndexName),
                 ]);
             }
 
@@ -210,7 +191,7 @@ class MeiliAdminController extends AbstractController
         foreach (($settings['facets'] ?? []) as $fieldName => $details) {
             try {
                 $params = [
-                    'limit'  => 0,
+                    'limit' => 0,
                     'facets' => [$fieldName],
                 ];
 
@@ -218,7 +199,7 @@ class MeiliAdminController extends AbstractController
             } catch (ApiException $e) {
                 // Keep the dashboard resilient: record the failure per field rather than breaking the page.
                 $facetCounts[$fieldName] = [[
-                    'label' => sprintf('Facet error: %s', $e->getMessage()),
+                    'label' => \sprintf('Facet error: %s', $e->getMessage()),
                     'count' => 0,
                 ]];
                 continue;
@@ -236,50 +217,51 @@ class MeiliAdminController extends AbstractController
 
             $facetCounts[$fieldName] = $counts;
 
-            if ($this->chartBuilder && count($counts) > 0) {
+            if ($this->chartBuilder && \count($counts) > 0) {
                 $facetCharts[$fieldName] = $this->buildFacetChart($fieldName, $counts);
             }
         }
 
         $chatWorkspace = $this->workspaceForIndex($meiliIndexUid);
+
         return $this->render('@SurvosMeili/index/show.html.twig', [
-            'indexName'              => $baseIndexName,
-            'resolvedUid'            => $meiliIndexUid,
-            'facetCounts'            => $facetCounts,
-            'facetCharts'            => $facetCharts,
-            'rawInfo'                => $rawInfo,
-            'stats'                  => $stats,
-            'settings'               => $settings,
-            'adminContext'           => $context,
-            'chatWorkspace'          => $chatWorkspace,
-            'chatWorkspaceInfo'      => $chatWorkspace ? $this->fetchWorkspaceInfo($chatWorkspace) : null,
-            'chatWorkspaceIndexes'   => $chatWorkspace ? ($this->chatConfig['workspaces'][$chatWorkspace]['indexes'] ?? []) : [],
-            'meiliUiUrl'             => $this->meiliUiUrl,
-            'indexDashboardUrl'      => $this->indexDashboardUrl($baseIndexName),
+            'indexName' => $baseIndexName,
+            'resolvedUid' => $meiliIndexUid,
+            'facetCounts' => $facetCounts,
+            'facetCharts' => $facetCharts,
+            'rawInfo' => $rawInfo,
+            'stats' => $stats,
+            'settings' => $settings,
+            'adminContext' => $context,
+            'chatWorkspace' => $chatWorkspace,
+            'chatWorkspaceInfo' => $chatWorkspace ? $this->fetchWorkspaceInfo($chatWorkspace) : null,
+            'chatWorkspaceIndexes' => $chatWorkspace ? ($this->chatConfig['workspaces'][$chatWorkspace]['indexes'] ?? []) : [],
+            'meiliUiUrl' => $this->meiliUiUrl,
+            'indexDashboardUrl' => $this->indexDashboardUrl($baseIndexName),
         ]);
     }
 
     private function buildFacetChart(string $fieldName, array $counts, int $maxItems = 10): Chart
     {
-        $chartData = array_slice($counts, 0, $maxItems);
-        $labels = array_map(static function (array $count): string {
-            $label = $count["label"] ?? null;
+        $chartData = \array_slice($counts, 0, $maxItems);
+        $labels = \array_map(static function (array $count): string {
+            $label = $count['label'] ?? null;
 
-            return mb_substr((string) ($label === null || $label === "" ? "(empty)" : $label), 0, 25);
+            return \mb_substr((string) (null === $label || '' === $label ? '(empty)' : $label), 0, 25);
         }, $chartData);
-        $values = array_map(static fn (array $count): int => (int) ($count["count"] ?? 0), $chartData);
+        $values = \array_map(static fn (array $count): int => (int) ($count['count'] ?? 0), $chartData);
 
-        $chartType = count($chartData) <= 6 ? Chart::TYPE_PIE : Chart::TYPE_BAR;
+        $chartType = \count($chartData) <= 6 ? Chart::TYPE_PIE : Chart::TYPE_BAR;
 
         $chart = $this->chartBuilder->createChart($chartType);
         $chart->setData([
             'labels' => $labels,
             'datasets' => [[
                 'label' => $fieldName,
-                'backgroundColor' => array_slice(
-                    array_merge(self::CHART_COLORS, self::CHART_COLORS, self::CHART_COLORS),
+                'backgroundColor' => \array_slice(
+                    \array_merge(self::CHART_COLORS, self::CHART_COLORS, self::CHART_COLORS),
                     0,
-                    count($chartData)
+                    \count($chartData)
                 ),
                 'data' => $values,
             ]],
@@ -288,11 +270,11 @@ class MeiliAdminController extends AbstractController
         $options = [
             'maintainAspectRatio' => false,
             'plugins' => [
-                'legend' => ['display' => $chartType === Chart::TYPE_PIE],
+                'legend' => ['display' => Chart::TYPE_PIE === $chartType],
             ],
         ];
 
-        if ($chartType === Chart::TYPE_BAR) {
+        if (Chart::TYPE_BAR === $chartType) {
             $options['indexAxis'] = 'y';
         }
 
@@ -306,7 +288,7 @@ class MeiliAdminController extends AbstractController
     public function docs(): Response|array
     {
         $url = 'https://raw.githubusercontent.com/meilisearch/open-api/refs/heads/main/open-api.json';
-        $data = json_decode(file_get_contents($url), true);
+        $data = \json_decode(\file_get_contents($url), true);
         $dot = new Dot($data);
 
         return [
@@ -319,9 +301,9 @@ class MeiliAdminController extends AbstractController
         string $indexName, // base key, not uid
         string $fieldName,
         #[MapQueryParameter] ?string $tableName = null,
-        int $max = 25
+        int $max = 25,
     ): Response {
-        $requestLocale = strtolower((string) $this->getRequestLocaleSafe());
+        $requestLocale = \strtolower((string) $this->getRequestLocaleSafe());
         $isMlFor = $this->resolver->isMultiLingualFor($indexName, $requestLocale);
         $uidLocale = $isMlFor ? $requestLocale : null;
 
@@ -330,13 +312,13 @@ class MeiliAdminController extends AbstractController
         $index = $this->meiliService->getIndexEndpoint($uid);
 
         $params = [
-            'limit'  => 0,
+            'limit' => 0,
             'facets' => [$fieldName],
         ];
 
         if ($tableName) {
             // Quote string values to be safe (Meilisearch filter syntax).
-            $params['filter'] = sprintf('%s = "%s"', $this->coreName, addcslashes($tableName, "\"\\"));
+            $params['filter'] = \sprintf('%s = "%s"', $this->coreName, \addcslashes($tableName, '"\\'));
         }
 
         $data = $index->rawSearch('', $params);
@@ -352,7 +334,7 @@ class MeiliAdminController extends AbstractController
         }
 
         $chartData = [];
-        foreach (array_slice($counts, 0, $max) as $count) {
+        foreach (\array_slice($counts, 0, $max) as $count) {
             $chartData[$count['label'] ?: '(empty)'] = $count['count'];
         }
 
@@ -363,12 +345,12 @@ class MeiliAdminController extends AbstractController
                 'labels' => array_keys($chartData),
                 'datasets' => [[
                     'label' => 'Data Distribution',
-                    'backgroundColor' => array_slice(
-                        array_merge(self::CHART_COLORS, self::CHART_COLORS, self::CHART_COLORS),
+                    'backgroundColor' => \array_slice(
+                        \array_merge(self::CHART_COLORS, self::CHART_COLORS, self::CHART_COLORS),
                         0,
-                        count($chartData)
+                        \count($chartData)
                     ),
-                    'data' => array_values($chartData),
+                    'data' => \array_values($chartData),
                 ]],
             ]);
 
@@ -377,15 +359,15 @@ class MeiliAdminController extends AbstractController
             ]);
         }
 
-        return $this->render('@SurvosApiGrid/facet.html.twig', get_defined_vars() + [
-            'tableData'    => $counts,
-            'chartData'    => $chartData,
-            'chart'        => $chart,
+        return $this->render('@SurvosApiGrid/facet.html.twig', \get_defined_vars() + [
+            'tableData' => $counts,
+            'chartData' => $chartData,
+            'chart' => $chart,
             'currentField' => $fieldName,
-            'indexName'    => $indexName,
-            'resolvedUid'  => $uid,
-            'max'          => $max,
-            'facetFields'  => $index->getFilterableAttributes(),
+            'indexName' => $indexName,
+            'resolvedUid' => $uid,
+            'max' => $max,
+            'facetFields' => $index->getFilterableAttributes(),
         ]);
     }
 
@@ -398,34 +380,34 @@ class MeiliAdminController extends AbstractController
     #[Route('/riccox/{anything}', name: 'riccox_meili_admin', defaults: ['anything' => null], requirements: ['anything' => '.+'])]
     public function riccox(Request $request, ?string $anything = null): Response
     {
-        $baseUrl = rtrim($this->meiliUiUrl, '/');
-        $indexName = trim((string) $anything, '/');
+        $baseUrl = \rtrim($this->meiliUiUrl, '/');
+        $indexName = \trim((string) $anything, '/');
 
-        if ($indexName === '') {
+        if ('' === $indexName) {
             return $this->redirect($baseUrl);
         }
 
-        if (str_starts_with($indexName, 'index/')) {
-            return $this->redirect($baseUrl . '/' . ltrim($indexName, '/'));
+        if (\str_starts_with($indexName, 'index/')) {
+            return $this->redirect($baseUrl.'/'.\ltrim($indexName, '/'));
         }
 
-        $requestLocale = strtolower((string) $request->getLocale());
+        $requestLocale = \strtolower((string) $request->getLocale());
         $isMultilingual = $this->resolver->isMultiLingualFor($indexName, $requestLocale);
         $uidLocale = $isMultilingual ? $requestLocale : null;
-        $resolvedUid = $this->meiliService->getIndexSetting($indexName) === null
+        $resolvedUid = null === $this->meiliService->getIndexSetting($indexName)
             ? $indexName
             : $this->resolver->uidFor($indexName, $uidLocale, $isMultilingual);
 
-        return $this->redirect($baseUrl . '/index/' . rawurlencode($resolvedUid));
+        return $this->redirect($baseUrl.'/index/'.\rawurlencode($resolvedUid));
     }
 
     #[Route(path: '/stats/{indexName}.{_format}', name: 'survos_index_stats', methods: ['GET'])]
     public function stats(
         string $indexName, // base key, not uid
         Request $request,
-        string $_format = 'html'
+        string $_format = 'html',
     ): Response {
-        $requestLocale = strtolower((string) $request->getLocale());
+        $requestLocale = \strtolower((string) $request->getLocale());
         $isMlFor = $this->resolver->isMultiLingualFor($indexName, $requestLocale);
         $uidLocale = $isMlFor ? $requestLocale : null;
 
@@ -441,7 +423,7 @@ class MeiliAdminController extends AbstractController
             'stats' => $stats,
         ];
 
-        return $_format === 'json'
+        return 'json' === $_format
             ? $this->json($data)
             : $this->render('@SurvosMeili/stats.html.twig', $data);
     }
@@ -450,6 +432,7 @@ class MeiliAdminController extends AbstractController
     {
         // For controller methods that do not receive Request explicitly.
         $req = $this->container->has('request_stack') ? $this->container->get('request_stack')->getCurrentRequest() : null;
+
         return $req?->getLocale() ?? 'en';
     }
 }

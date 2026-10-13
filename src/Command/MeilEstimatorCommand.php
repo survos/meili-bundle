@@ -1,10 +1,10 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Command;
 
 use Liquid\Template;
-use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
@@ -29,22 +29,23 @@ final class MeilEstimatorCommand extends MeiliBaseCommand
         $io->title(sprintf('Meili embedder estimator — index "%s"', $indexName));
 
         // Resolve JSONL path: explicit --file wins, else data/<index>.jsonl relative to CWD.
-        if ($jsonlPath === null) {
+        if (null === $jsonlPath) {
             $jsonlPath = sprintf('data/%s.jsonl', $indexName);
         }
 
         if (!is_file($jsonlPath)) {
             $io->error(sprintf('JSONL file not found: %s', $jsonlPath));
+
             return Command::FAILURE;
         }
 
         // Optional profile for recordCount estimate: data/<index>.jsonl.profile.json
-        $profilePath  = str_replace('.jsonl', '.profile.json', $jsonlPath); // $jsonlPath . '.profile.json';
-        assert(file_exists($profilePath), $profilePath . ' does not exist');
+        $profilePath = str_replace('.jsonl', '.profile.json', $jsonlPath); // $jsonlPath . '.profile.json';
+        assert(file_exists($profilePath), $profilePath.' does not exist');
         $totalRecords = null;
         if (is_file($profilePath)) {
-                $profile = json_decode(file_get_contents($profilePath) ?: '{}', true, 512, \JSON_THROW_ON_ERROR);
-                $totalRecords = $profile['recordCount'] ?? null;
+            $profile = json_decode(file_get_contents($profilePath) ?: '{}', true, 512, \JSON_THROW_ON_ERROR);
+            $totalRecords = $profile['recordCount'] ?? null;
             try {
             } catch (\Throwable) {
                 dd(file_get_contents($profilePath));
@@ -53,18 +54,19 @@ final class MeilEstimatorCommand extends MeiliBaseCommand
         }
 
         $io->section('Loading Meilisearch index settings…');
-        $client   = $this->meili->getMeiliClient();
-        $index    = $client->getIndex($this->meili->getPrefixedIndexName($indexName));
+        $client = $this->meili->getMeiliClient();
+        $index = $client->getIndex($this->meili->getPrefixedIndexName($indexName));
         $settings = $index->getSettings();
 
         $embedderConfigs = $settings['embedders'] ?? [];
         if (!$embedderConfigs) {
             $io->warning('No embedders configured for this index (settings["embedders"] is empty).');
+
             return Command::SUCCESS;
         }
 
         $io->writeln(sprintf('JSONL: <info>%s</info>', $jsonlPath));
-        if ($totalRecords !== null) {
+        if (null !== $totalRecords) {
             $io->writeln(sprintf('Total records (from profile): <info>%d</info>', $totalRecords));
         } else {
             $io->writeln('Total records: unknown (profile missing; estimate will be sample-only).');
@@ -73,18 +75,18 @@ final class MeilEstimatorCommand extends MeiliBaseCommand
 
         // Prepare Liquid templates & token encoders per embedder
         $templates = [];
-        $encoders  = [];
-        $totals    = []; // embedderName => ['tokens' => int, 'rows' => int, 'model' => string]
+        $encoders = [];
+        $totals = []; // embedderName => ['tokens' => int, 'rows' => int, 'model' => string]
 
         if (!class_exists(EncoderProvider::class)) {
-            $io->warning(EncoderProvider::class . ' not installed.');
+            $io->warning(EncoderProvider::class.' not installed.');
             dd('composer require yethee/tiktoken --dev');
         }
         $provider = new EncoderProvider();
 
         foreach ($embedderConfigs as $embedderName => $embedder) {
-            $model        = $embedder['model'] ?? null;
-            $docTemplate  = $embedder['documentTemplate'] ?? null;
+            $model = $embedder['model'] ?? null;
+            $docTemplate = $embedder['documentTemplate'] ?? null;
 
             if (!$model || !$docTemplate) {
                 $io->warning(sprintf('Embedder "%s" missing model or documentTemplate; skipping.', $embedderName));
@@ -111,13 +113,14 @@ final class MeilEstimatorCommand extends MeiliBaseCommand
 
             $totals[$embedderName] = [
                 'tokens' => 0,
-                'rows'   => 0,
-                'model'  => $model,
+                'rows' => 0,
+                'model' => $model,
             ];
         }
 
-        if ($templates === [] || $encoders === []) {
+        if ([] === $templates || [] === $encoders) {
             $io->warning('No usable embedders after filtering (missing templates or tokenizers).');
+
             return Command::SUCCESS;
         }
 
@@ -126,17 +129,18 @@ final class MeilEstimatorCommand extends MeiliBaseCommand
         $fh = fopen($jsonlPath, 'rb');
         if (!$fh) {
             $io->error(sprintf('Unable to open JSONL file: %s', $jsonlPath));
+
             return Command::FAILURE;
         }
 
         $sampledRows = 0;
-        $lineNumber  = 0;
+        $lineNumber = 0;
 
         try {
             while (($line = fgets($fh)) !== false) {
-                $lineNumber++;
+                ++$lineNumber;
                 $line = trim($line);
-                if ($line === '') {
+                if ('' === $line) {
                     continue;
                 }
 
@@ -151,7 +155,7 @@ final class MeilEstimatorCommand extends MeiliBaseCommand
                     continue;
                 }
 
-                $sampledRows++;
+                ++$sampledRows;
 
                 foreach ($templates as $embedderName => $tpl) {
                     if (!isset($encoders[$embedderName])) {
@@ -168,7 +172,7 @@ final class MeilEstimatorCommand extends MeiliBaseCommand
                     $tokenCount = \count($tokens);
 
                     $totals[$embedderName]['tokens'] += $tokenCount;
-                    $totals[$embedderName]['rows']++;
+                    ++$totals[$embedderName]['rows'];
                 }
 
                 if ($limit > 0 && $sampledRows >= $limit) {
@@ -179,15 +183,16 @@ final class MeilEstimatorCommand extends MeiliBaseCommand
             fclose($fh);
         }
 
-        if ($sampledRows === 0) {
+        if (0 === $sampledRows) {
             $io->warning('No rows sampled from JSONL; nothing to estimate.');
+
             return Command::SUCCESS;
         }
 
         $io->section(sprintf(
             'Results (sampled %d rows%s):',
             $sampledRows,
-            $totalRecords !== null && $sampledRows < $totalRecords ? sprintf(' of %d', $totalRecords) : ''
+            null !== $totalRecords && $sampledRows < $totalRecords ? sprintf(' of %d', $totalRecords) : ''
         ));
 
         // Hard-coded pricing — cost per 1M tokens.
@@ -199,7 +204,7 @@ final class MeilEstimatorCommand extends MeiliBaseCommand
         ];
 
         foreach ($totals as $embedderName => $data) {
-            if ($data['rows'] === 0) {
+            if (0 === $data['rows']) {
                 $io->writeln(sprintf(
                     '<comment>Embedder "%s": no rows processed.</comment>',
                     $embedderName
@@ -207,27 +212,27 @@ final class MeilEstimatorCommand extends MeiliBaseCommand
                 continue;
             }
 
-            $tokens    = $data['tokens'];
-            $rows      = $data['rows'];
-            $model     = $data['model'];
+            $tokens = $data['tokens'];
+            $rows = $data['rows'];
+            $model = $data['model'];
             $avgTokens = $tokens / $rows;
 
             $perMillion = $costPerMillion[$model] ?? null;
-            $costLabel  = $perMillion !== null
+            $costLabel = null !== $perMillion
                 ? sprintf('$%.4f / 1M tokens', $perMillion)
                 : '<comment>(price unknown)</comment>';
 
-            $priceTotal     = null;
-            $priceEstimate  = null;
+            $priceTotal = null;
+            $priceEstimate = null;
             $estTotalTokens = null;
 
-            if ($perMillion !== null) {
+            if (null !== $perMillion) {
                 $costPerToken = $perMillion / 1_000_000;
-                $priceTotal   = $tokens * $costPerToken;
+                $priceTotal = $tokens * $costPerToken;
 
-                if ($totalRecords !== null && $rows < $totalRecords) {
+                if (null !== $totalRecords && $rows < $totalRecords) {
                     $estTotalTokens = $avgTokens * $totalRecords;
-                    $priceEstimate  = $estTotalTokens * $costPerToken;
+                    $priceEstimate = $estTotalTokens * $costPerToken;
                 }
             }
 
@@ -245,14 +250,14 @@ final class MeilEstimatorCommand extends MeiliBaseCommand
             );
             $lines[] = sprintf('  • price: %s', $costLabel);
 
-            if ($priceTotal !== null) {
+            if (null !== $priceTotal) {
                 $lines[] = sprintf(
                     '    - sample cost: <info>$%.4f</info>',
                     $priceTotal
                 );
             }
 
-            if ($priceEstimate !== null && $estTotalTokens !== null) {
+            if (null !== $priceEstimate && null !== $estTotalTokens) {
                 $lines[] = sprintf(
                     '    - est. full corpus (%d rows): <info>%d</info> tokens → <info>$%.4f</info>',
                     $totalRecords,
@@ -266,6 +271,7 @@ final class MeilEstimatorCommand extends MeiliBaseCommand
         }
 
         $io->success('Estimation complete.');
+
         return Command::SUCCESS;
     }
 }

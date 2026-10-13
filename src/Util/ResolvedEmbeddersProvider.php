@@ -1,12 +1,8 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Util;
-
-use function file_get_contents;
-use function is_file;
-use function rtrim;
-use function str_starts_with;
 
 /**
  * Minimal runtime-normalizer for Meili embedders.
@@ -35,7 +31,8 @@ final class ResolvedEmbeddersProvider
     public function __construct(
         private readonly array $rawEmbedders,
         private readonly string $projectDir = '',
-    ) {}
+    ) {
+    }
 
     /**
      * Return the exact structure Meili expects for $index->updateEmbedders($embedders).
@@ -51,27 +48,28 @@ final class ResolvedEmbeddersProvider
             }
             // allow 'template' alias for 'documentTemplate'
             $tpl = $cfg['documentTemplate'] ?? $cfg['template'] ?? null;
-            $source = (string)($cfg['source'] ?? '');
-            $model  = (string)($cfg['model']  ?? '');
-            if ($source === '' || $model === '') {
+            $source = (string) ($cfg['source'] ?? '');
+            $model = (string) ($cfg['model'] ?? '');
+            if ('' === $source || '' === $model) {
                 continue; // silently skip invalid
             }
 
             $resolvedTpl = null;
-            if ($tpl !== null && $tpl !== '') {
+            if (null !== $tpl && '' !== $tpl) {
                 $resolvedTpl = $this->resolveTemplate((string) $tpl);
             }
 
             $item = [
-                'source'           => $source,
-                'model'            => $model,
+                'source' => $source,
+                'model' => $model,
                 'documentTemplate' => $resolvedTpl,
-                'apiKey'           => isset($cfg['apiKey']) && $cfg['apiKey'] !== '' ? (string)$cfg['apiKey'] : null,
+                'apiKey' => isset($cfg['apiKey']) && '' !== $cfg['apiKey'] ? (string) $cfg['apiKey'] : null,
             ];
 
-            /** @var array{source:string,model:string,documentTemplate:?string,apiKey:?string} $item */
-            $out[(string)$name] = $item;
+            /* @var array{source:string,model:string,documentTemplate:?string,apiKey:?string} $item */
+            $out[(string) $name] = $item;
         }
+
         return $out;
     }
 
@@ -83,15 +81,15 @@ final class ResolvedEmbeddersProvider
     private function resolveTemplate(string $value): string
     {
         // Absolute path
-        if (str_starts_with($value, '/') && is_file($value)) {
-            return (string) file_get_contents($value);
+        if (\str_starts_with($value, '/') && \is_file($value)) {
+            return (string) \file_get_contents($value);
         }
 
         // Relative path — resolve against project dir
-        if ($this->projectDir !== '') {
-            $absolute = rtrim($this->projectDir, '/') . '/' . $value;
-            if (is_file($absolute)) {
-                return (string) file_get_contents($absolute);
+        if ('' !== $this->projectDir) {
+            $absolute = \rtrim($this->projectDir, '/').'/'.$value;
+            if (\is_file($absolute)) {
+                return (string) \file_get_contents($absolute);
             }
         }
 

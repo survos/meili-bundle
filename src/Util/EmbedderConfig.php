@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Util;
@@ -27,7 +28,8 @@ final class EmbedderConfig
      *
      * Also accepts 'template' as an alias for 'documentTemplate'.
      *
-     * @param array<string,mixed> $bundleConfig  Full bundle config root (e.g. from AbstractBundle::loadExtension)
+     * @param array<string,mixed> $bundleConfig Full bundle config root (e.g. from AbstractBundle::loadExtension)
+     *
      * @return array<string,array{source:string,model:string,documentTemplate:?string,apiKey:?string}>
      */
     public static function resolveEmbedders(array $bundleConfig, ContainerBuilder $container): array
@@ -50,34 +52,34 @@ final class EmbedderConfig
             $template = $cfg['documentTemplate'] ?? $cfg['template'] ?? null;
 
             $item = [
-                'source'            => isset($cfg['source']) ? (string)$cfg['source'] : '',
-                'model'             => isset($cfg['model']) ? (string)$cfg['model'] : '',
-                'documentTemplate'  => $template !== null ? (string)$template : null,
-                'apiKey'            => $cfg['apiKey'] ?? null,
+                'source' => isset($cfg['source']) ? (string) $cfg['source'] : '',
+                'model' => isset($cfg['model']) ? (string) $cfg['model'] : '',
+                'documentTemplate' => null !== $template ? (string) $template : null,
+                'apiKey' => $cfg['apiKey'] ?? null,
             ];
 
             // Resolve env/params on every scalar value
             foreach ($item as $k => $v) {
                 if (\is_string($v)) {
-                    $item[$k] = (string)$bag->resolveValue($v);
+                    $item[$k] = (string) $bag->resolveValue($v);
                 }
             }
 
             // Keep only non-empty required fields
-            if ($item['source'] === '' || $item['model'] === '') {
+            if ('' === $item['source'] || '' === $item['model']) {
                 continue;
             }
 
             // Normalize empty strings to null for optional fields
-            if ($item['documentTemplate'] === '') {
+            if ('' === $item['documentTemplate']) {
                 $item['documentTemplate'] = null;
             }
-            if ($item['apiKey'] === '') {
+            if ('' === $item['apiKey']) {
                 $item['apiKey'] = null;
             }
 
-            /** @var array{source:string,model:string,documentTemplate:?string,apiKey:?string} $item */
-            $out[(string)$name] = $item;
+            /* @var array{source:string,model:string,documentTemplate:?string,apiKey:?string} $item */
+            $out[(string) $name] = $item;
         }
 
         return $out;

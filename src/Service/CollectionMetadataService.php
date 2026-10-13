@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
@@ -6,34 +7,6 @@ namespace Survos\MeiliBundle\Service;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
-
-use function array_filter;
-use function array_intersect;
-use function array_keys;
-use function array_map;
-use function array_merge;
-use function array_slice;
-use function array_sum;
-use function array_unique;
-use function arsort;
-use function count;
-use function error_get_last;
-use function file_get_contents;
-use function hash;
-use function is_array;
-use function is_numeric;
-use function is_scalar;
-use function json_decode;
-use function json_encode;
-use function implode;
-use function in_array;
-use function rawurlencode;
-use function rtrim;
-use function sort;
-use function sprintf;
-use function str_starts_with;
-use function stream_context_create;
-use function trim;
 
 final class CollectionMetadataService
 {
@@ -53,9 +26,9 @@ final class CollectionMetadataService
     public function describeCollection(string $indexUid, ?string $schemaUrl = null, int $facetValueLimit = 8): string
     {
         $schemaUrl = $this->normalizeSchemaUrl($schemaUrl);
-        $cacheKey = 'meili_collection_meta_' . hash('xxh128', $indexUid . '|' . ($schemaUrl ?? ''));
+        $cacheKey = 'meili_collection_meta_'.\hash('xxh128', $indexUid.'|'.($schemaUrl ?? ''));
 
-        if ($this->cache !== null) {
+        if (null !== $this->cache) {
             return $this->cache->get($cacheKey, function (ItemInterface $item) use ($indexUid, $schemaUrl, $facetValueLimit): string {
                 $item->expiresAfter(3600);
 
@@ -72,11 +45,11 @@ final class CollectionMetadataService
         $stats = $index->stats();
         $settings = $index->getSettings();
         $globalStats = $this->safeGlobalStats();
-        $fieldsResponse = $this->safeRequestJson($this->buildMeiliUrl('/indexes/' . rawurlencode($indexUid) . '/fields'));
-        $openApiDocument = $schemaUrl !== null ? $this->getSchemaDocument($schemaUrl) : null;
+        $fieldsResponse = $this->safeRequestJson($this->buildMeiliUrl('/indexes/'.\rawurlencode($indexUid).'/fields'));
+        $openApiDocument = null !== $schemaUrl ? $this->getSchemaDocument($schemaUrl) : null;
 
         $fieldDistribution = $stats->getFieldDistribution();
-        arsort($fieldDistribution);
+        \arsort($fieldDistribution);
 
         $searchable = $this->stringList($settings['searchableAttributes'] ?? []);
         $filterable = $this->stringList($settings['filterableAttributes'] ?? []);
@@ -121,17 +94,17 @@ final class CollectionMetadataService
             'location',
         );
 
-        $fieldNames = array_values(array_unique(array_merge(
-            array_keys($fieldDistribution),
+        $fieldNames = array_values(\array_unique(\array_merge(
+            \array_keys($fieldDistribution),
             $searchable,
             $filterable,
             $sortable,
             $displayed,
             $this->extractFieldNames($fieldsResponse),
         )));
-        sort($fieldNames);
+        \sort($fieldNames);
 
-        $schemaMetadata = is_array($openApiDocument)
+        $schemaMetadata = \is_array($openApiDocument)
             ? $this->openApiFieldMetadataResolver->resolve($openApiDocument, $indexUid, $fieldNames)
             : [];
 
@@ -139,17 +112,17 @@ final class CollectionMetadataService
         foreach ($fieldNames as $fieldName) {
             $entry = ['name' => $fieldName];
             $roles = $this->rolesForField($fieldName, $searchable, $filterable, $sortable, $displayed);
-            if ($roles !== []) {
+            if ([] !== $roles) {
                 $entry['roles'] = $roles;
             }
 
-            if (isset($fieldDistribution[$fieldName]) && is_numeric($fieldDistribution[$fieldName])) {
+            if (isset($fieldDistribution[$fieldName]) && \is_numeric($fieldDistribution[$fieldName])) {
                 $entry['distribution'] = (float) $fieldDistribution[$fieldName];
             }
 
             $fieldMeta = $this->fieldMetadataFromFieldsEndpoint($fieldsResponse, $fieldName);
-            if ($fieldMeta !== []) {
-                $entry = array_merge($entry, $fieldMeta);
+            if ([] !== $fieldMeta) {
+                $entry = \array_merge($entry, $fieldMeta);
             }
 
             if (isset($schemaMetadata[$fieldName])) {
@@ -159,32 +132,32 @@ final class CollectionMetadataService
             $fields[] = $entry;
         }
 
-        $describedFields = array_values(array_filter($fields, static fn(array $field): bool => isset($field['schema']['description'])));
-        $topFields = array_map(
-            static fn(string $fieldName): array => ['name' => $fieldName, 'distribution' => (float) $fieldDistribution[$fieldName]],
-            array_slice(array_keys($fieldDistribution), 0, $facetValueLimit)
+        $describedFields = array_values(\array_filter($fields, static fn (array $field): bool => isset($field['schema']['description'])));
+        $topFields = \array_map(
+            static fn (string $fieldName): array => ['name' => $fieldName, 'distribution' => (float) $fieldDistribution[$fieldName]],
+            \array_slice(\array_keys($fieldDistribution), 0, $facetValueLimit)
         );
 
         $summaryBits = [
-            sprintf('The index contains %d documents.', $stats->getNumberOfDocuments()),
+            \sprintf('The index contains %d documents.', $stats->getNumberOfDocuments()),
         ];
 
-        if ($topFields !== []) {
-            $summaryBits[] = sprintf(
+        if ([] !== $topFields) {
+            $summaryBits[] = \sprintf(
                 'Frequently populated fields include %s.',
-                implode(', ', array_map(static fn(array $field): string => $field['name'], $topFields))
+                \implode(', ', \array_map(static fn (array $field): string => $field['name'], $topFields))
             );
         }
-        if ($filterable !== []) {
-            $summaryBits[] = sprintf('You can filter by %s.', implode(', ', array_slice($filterable, 0, 10)));
+        if ([] !== $filterable) {
+            $summaryBits[] = \sprintf('You can filter by %s.', \implode(', ', \array_slice($filterable, 0, 10)));
         }
-        if ($describedFields !== []) {
-            $summaryBits[] = sprintf('Schema descriptions are available for %d fields.', count($describedFields));
+        if ([] !== $describedFields) {
+            $summaryBits[] = \sprintf('Schema descriptions are available for %d fields.', \count($describedFields));
         }
 
-        return (string) json_encode([
+        return (string) \json_encode([
             'index' => $indexUid,
-            'summary' => implode(' ', $summaryBits),
+            'summary' => \implode(' ', $summaryBits),
             'documents' => $stats->getNumberOfDocuments(),
             'primaryKey' => $settings['primaryKey'] ?? 'id',
             'searchableAttributes' => $searchable,
@@ -194,11 +167,11 @@ final class CollectionMetadataService
             'topFields' => $topFields,
             'overviewFacet' => $overviewFacet,
             'locationFacet' => $locationFacet,
-            'describedFieldCount' => count($describedFields),
+            'describedFieldCount' => \count($describedFields),
             'fields' => $fields,
             'indexStats' => [
                 'isIndexing' => $stats->isIndexing(),
-                'fieldDistributionCount' => count($fieldDistribution),
+                'fieldDistributionCount' => \count($fieldDistribution),
             ],
             'serverStats' => $globalStats,
             'schemaUrl' => $schemaUrl,
@@ -208,19 +181,20 @@ final class CollectionMetadataService
     private function buildMeiliUrl(string $path): string
     {
         $config = $this->meiliService->getConfig();
-        $host = rtrim((string) ($config['host'] ?? 'http://localhost:7700'), '/');
+        $host = \rtrim((string) ($config['host'] ?? 'http://localhost:7700'), '/');
 
-        return $host . $path;
+        return $host.$path;
     }
 
     /**
      * @param list<string> $filterable
+     *
      * @return array<string,mixed>|null
      */
     private function buildOverviewFacet(string $indexUid, int $documents, array $filterable, array $preferredFields, string $kind): ?array
     {
         $facetField = $this->pickOverviewFacetField($filterable, $preferredFields);
-        if ($facetField === null) {
+        if (null === $facetField) {
             return null;
         }
 
@@ -240,18 +214,18 @@ final class CollectionMetadataService
         }
 
         $distribution = $results->getFacetDistribution()[$facetField] ?? null;
-        if (!is_array($distribution) || $distribution === []) {
+        if (!\is_array($distribution) || [] === $distribution) {
             return null;
         }
 
-        arsort($distribution);
-        $total = $documents > 0 ? $documents : (int) array_sum($distribution);
+        \arsort($distribution);
+        $total = $documents > 0 ? $documents : (int) \array_sum($distribution);
 
         // Resolve lookup map from compiled #[Facet(lookup: [...])] if available.
         $lookup = $this->resolveFacetLookup($indexUid, $facetField);
 
         $topValues = [];
-        foreach (array_slice($distribution, 0, 3, true) as $value => $count) {
+        foreach (\array_slice($distribution, 0, 3, true) as $value => $count) {
             $count = (int) $count;
             $label = $lookup[(string) $value] ?? null;
             $topValues[] = [
@@ -262,7 +236,7 @@ final class CollectionMetadataService
             ];
         }
 
-        if ($topValues === []) {
+        if ([] === $topValues) {
             return null;
         }
 
@@ -280,7 +254,7 @@ final class CollectionMetadataService
     private function pickOverviewFacetField(array $filterable, array $preferred): ?string
     {
         foreach ($preferred as $candidate) {
-            if (in_array($candidate, $filterable, true)) {
+            if (\in_array($candidate, $filterable, true)) {
                 return $candidate;
             }
         }
@@ -308,7 +282,8 @@ final class CollectionMetadataService
         $baseName = $this->meiliService->baseNameFromUid($indexUid);
         $settings = $this->meiliService->getRawIndexSettings();
         $lookup = $settings[$baseName]['facets'][$fieldName]['lookup'] ?? [];
-        return is_array($lookup) ? $lookup : [];
+
+        return \is_array($lookup) ? $lookup : [];
     }
 
     private function overviewFacetLabel(string $fieldName): string
@@ -332,8 +307,8 @@ final class CollectionMetadataService
      */
     private function getSchemaDocument(string $schemaUrl): ?array
     {
-        $cacheKey = 'meili_schema_url_' . hash('xxh128', $schemaUrl);
-        if ($this->cache !== null) {
+        $cacheKey = 'meili_schema_url_'.\hash('xxh128', $schemaUrl);
+        if (null !== $this->cache) {
             return $this->cache->get($cacheKey, function (ItemInterface $item) use ($schemaUrl): ?array {
                 $item->expiresAfter(86400);
 
@@ -356,7 +331,7 @@ final class CollectionMetadataService
                 'databaseSize' => $stats->getDatabaseSize(),
                 'usedDatabaseSize' => $stats->getUsedDatabaseSize(),
                 'lastUpdate' => $stats->getLastUpdate()?->format(DATE_ATOM),
-                'indexCount' => count($stats->getIndexes()),
+                'indexCount' => \count($stats->getIndexes()),
             ];
         } catch (\Throwable $exception) {
             $this->logger?->warning('Unable to fetch Meilisearch global stats.', ['exception' => $exception]);
@@ -373,19 +348,19 @@ final class CollectionMetadataService
         $config = $this->meiliService->getConfig();
         $hasAuthorizationHeader = false;
         foreach ($headers as $header) {
-            if (is_scalar($header) && trim((string) $header) !== '' && str_starts_with((string) $header, 'Authorization:')) {
+            if (\is_scalar($header) && '' !== \trim((string) $header) && \str_starts_with((string) $header, 'Authorization:')) {
                 $hasAuthorizationHeader = true;
                 break;
             }
         }
 
-        if (isset($config['apiKey']) && $config['apiKey'] !== '' && !$hasAuthorizationHeader) {
-            $headers[] = 'Authorization: Bearer ' . $config['apiKey'];
+        if (isset($config['apiKey']) && '' !== $config['apiKey'] && !$hasAuthorizationHeader) {
+            $headers[] = 'Authorization: Bearer '.$config['apiKey'];
         }
 
         try {
-            $response = file_get_contents($url, false, stream_context_create(['http' => [
-                'header' => implode("\r\n", $headers),
+            $response = \file_get_contents($url, false, \stream_context_create(['http' => [
+                'header' => \implode("\r\n", $headers),
                 'ignore_errors' => true,
                 'timeout' => 10,
             ]]));
@@ -395,70 +370,72 @@ final class CollectionMetadataService
             return null;
         }
 
-        if ($response === false) {
-            $error = error_get_last();
+        if (false === $response) {
+            $error = \error_get_last();
             $this->logger?->warning('Unable to fetch JSON document.', ['url' => $url, 'error' => $error]);
 
             return null;
         }
 
-        $decoded = json_decode($response, true);
+        $decoded = \json_decode($response, true);
 
-        return is_array($decoded) ? $decoded : null;
+        return \is_array($decoded) ? $decoded : null;
     }
 
     /**
      * @param array<string,mixed>|null $fieldsResponse
+     *
      * @return list<string>
      */
     private function extractFieldNames(?array $fieldsResponse): array
     {
-        if (!is_array($fieldsResponse)) {
+        if (!\is_array($fieldsResponse)) {
             return [];
         }
 
         $fieldNames = [];
         foreach ($fieldsResponse as $key => $value) {
-            if (is_array($value) && isset($value['name']) && is_scalar($value['name'])) {
+            if (\is_array($value) && isset($value['name']) && \is_scalar($value['name'])) {
                 $fieldNames[] = (string) $value['name'];
                 continue;
             }
 
-            if (!is_numeric($key)) {
+            if (!\is_numeric($key)) {
                 $fieldNames[] = (string) $key;
             }
         }
 
-        return array_values(array_unique($fieldNames));
+        return array_values(\array_unique($fieldNames));
     }
 
     /**
      * @param array<string,mixed>|null $fieldsResponse
+     *
      * @return array<string,mixed>
      */
     private function fieldMetadataFromFieldsEndpoint(?array $fieldsResponse, string $fieldName): array
     {
-        if (!is_array($fieldsResponse)) {
+        if (!\is_array($fieldsResponse)) {
             return [];
         }
 
         $raw = $fieldsResponse[$fieldName] ?? null;
-        if (!is_array($raw)) {
+        if (!\is_array($raw)) {
             foreach ($fieldsResponse as $entry) {
-                if (is_array($entry) && ($entry['name'] ?? null) === $fieldName) {
+                if (\is_array($entry) && ($entry['name'] ?? null) === $fieldName) {
                     $raw = $entry;
                     break;
                 }
             }
         }
 
-        if (!is_array($raw)) {
+        if (!\is_array($raw)) {
             return [];
         }
 
         $metadata = [];
         foreach (['type', 'kind', 'distinct', 'example'] as $key) {
-            if (isset($raw[$key]) && is_scalar($raw[$key])) {
+            if (isset($raw[$key]) && \is_scalar($raw[$key])) {
                 $metadata[$key] = (string) $raw[$key];
             }
         }
@@ -471,21 +448,22 @@ final class CollectionMetadataService
      * @param list<string> $filterable
      * @param list<string> $sortable
      * @param list<string> $displayed
+     *
      * @return list<string>
      */
     private function rolesForField(string $fieldName, array $searchable, array $filterable, array $sortable, array $displayed): array
     {
         $roles = [];
-        if (array_intersect([$fieldName], $searchable) !== []) {
+        if ([] !== \array_intersect([$fieldName], $searchable)) {
             $roles[] = 'searchable';
         }
-        if (array_intersect([$fieldName], $filterable) !== []) {
+        if ([] !== \array_intersect([$fieldName], $filterable)) {
             $roles[] = 'filterable';
         }
-        if (array_intersect([$fieldName], $sortable) !== []) {
+        if ([] !== \array_intersect([$fieldName], $sortable)) {
             $roles[] = 'sortable';
         }
-        if (array_intersect([$fieldName], $displayed) !== []) {
+        if ([] !== \array_intersect([$fieldName], $displayed)) {
             $roles[] = 'displayed';
         }
 
@@ -497,23 +475,23 @@ final class CollectionMetadataService
      */
     private function stringList(mixed $value): array
     {
-        if (!is_array($value)) {
+        if (!\is_array($value)) {
             return [];
         }
 
-        return array_values(array_filter(array_map(static function (mixed $item): string {
-            return is_scalar($item) ? trim((string) $item) : '';
-        }, $value), static fn(string $item): bool => $item !== ''));
+        return array_values(\array_filter(\array_map(static function (mixed $item): string {
+            return \is_scalar($item) ? \trim((string) $item) : '';
+        }, $value), static fn (string $item): bool => '' !== $item));
     }
 
     private function normalizeSchemaUrl(?string $schemaUrl): ?string
     {
-        if ($schemaUrl === null) {
+        if (null === $schemaUrl) {
             return null;
         }
 
-        $schemaUrl = trim($schemaUrl);
+        $schemaUrl = \trim($schemaUrl);
 
-        return $schemaUrl === '' ? null : $schemaUrl;
+        return '' === $schemaUrl ? null : $schemaUrl;
     }
 }

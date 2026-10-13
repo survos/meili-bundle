@@ -1,10 +1,10 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Compiler;
 
 use Doctrine\ORM\Mapping as ORM;
-use ReflectionClass;
 use Survos\MeiliBundle\Metadata\AiChatInput;
 use Survos\MeiliBundle\Metadata\Facet;
 use Survos\MeiliBundle\Metadata\FacetWidget;
@@ -40,22 +40,22 @@ final class MeiliIndexPass implements CompilerPassInterface
             : []);
 
         // Default: scan Doctrine entities AND index DTOs
-        if ($scanDirs === []) {
+        if ([] === $scanDirs) {
             $scanDirs = [
-                (string) $container->getParameter('kernel.project_dir') . '/src/Entity',
-                (string) $container->getParameter('kernel.project_dir') . '/src/Index',
+                (string) $container->getParameter('kernel.project_dir').'/src/Entity',
+                (string) $container->getParameter('kernel.project_dir').'/src/Index',
             ];
         }
 
         // Always scan the bundle's own Entity dir so IndexInfo #[MeiliIndex]
         // is registered in every app that has the bundle installed — no yaml required.
-        $bundleEntityDir = \dirname(__DIR__) . '/Entity';
+        $bundleEntityDir = \dirname(__DIR__).'/Entity';
         if (!in_array($bundleEntityDir, $scanDirs, true)) {
             $scanDirs[] = $bundleEntityDir;
         }
 
         $bag = $container->getParameterBag();
-        $scanDirs = array_map(static fn($p) => (string) $bag->resolveValue($p), $scanDirs);
+        $scanDirs = array_map(static fn ($p) => (string) $bag->resolveValue($p), $scanDirs);
 
         $indexEntities = [];
         $indexSettings = [];
@@ -66,7 +66,7 @@ final class MeiliIndexPass implements CompilerPassInterface
                     continue;
                 }
 
-                $ref = new ReflectionClass($fqcn);
+                $ref = new \ReflectionClass($fqcn);
                 $facetMap = $this->collectFacetMap($ref);
                 $chatInputMap = $this->collectChatInputMap($ref);
 
@@ -78,16 +78,16 @@ final class MeiliIndexPass implements CompilerPassInterface
                     }
 
                     $class = $cfg->class ?? $fqcn;
-                    $name  = $cfg->name ?? $cfg->defaultName($class);
+                    $name = $cfg->name ?? $cfg->defaultName($class);
 
-                    $display    = $this->groupResolver->expandUnion($class, $cfg->displayFields(),    $cfg->displayGroups());
+                    $display = $this->groupResolver->expandUnion($class, $cfg->displayFields(), $cfg->displayGroups());
                     $filterable = $this->groupResolver->expandUnion($class, $cfg->filterableFields(), $cfg->filterableGroups());
-                    $sortable   = $this->groupResolver->expandUnion($class, $cfg->sortableFields(),   $cfg->sortableGroups());
+                    $sortable = $this->groupResolver->expandUnion($class, $cfg->sortableFields(), $cfg->sortableGroups());
                     $searchable = $this->groupResolver->expandUnion($class, $cfg->searchableFields(), $cfg->searchableGroups());
 
                     $persistedFields = $cfg->persistedFields();
                     $persistedGroups = $cfg->persistedGroups();
-                    $persisted       = $this->groupResolver->expandUnion($class, $persistedFields, $persistedGroups);
+                    $persisted = $this->groupResolver->expandUnion($class, $persistedFields, $persistedGroups);
 
                     // Add any #[Facet] fields to filterable (so UI config implies filterability)
                     foreach (array_keys($facetMap) as $field) {
@@ -101,26 +101,20 @@ final class MeiliIndexPass implements CompilerPassInterface
                         ? $container->getParameter('survos_meili.strict')
                         : false);
 
-                    if ($persisted !== [] && $strict) {
+                    if ([] !== $persisted && $strict) {
                         $toCheck = [
                             'filterable' => $filterable,
-                            'sortable'   => $sortable,
+                            'sortable' => $sortable,
                             'searchable' => ($searchable === ['*']) ? [] : $searchable,
                         ];
 
                         foreach ($toCheck as $label => $fields) {
                             foreach ($fields as $f) {
-                                if ($f === '*') {
+                                if ('*' === $f) {
                                     continue;
                                 }
                                 if (!in_array($f, $persisted, true)) {
-                                    throw new \InvalidArgumentException(sprintf(
-                                        '[Survos/Meili] %s field "%s" is not in persisted for index "%s" (%s); it will not be effective.',
-                                        $label,
-                                        $f,
-                                        $name,
-                                        $class
-                                    ));
+                                    throw new \InvalidArgumentException(sprintf('[Survos/Meili] %s field "%s" is not in persisted for index "%s" (%s); it will not be effective.', $label, $f, $name, $class));
                                 }
                             }
                         }
@@ -129,9 +123,9 @@ final class MeiliIndexPass implements CompilerPassInterface
                     $indexEntities[$name] = $class;
 
                     $indexSchema = [
-                        'displayedAttributes'  => $display ?: ['*'],
+                        'displayedAttributes' => $display ?: ['*'],
                         'filterableAttributes' => array_values(array_unique($filterable)),
-                        'sortableAttributes'   => array_values(array_unique($sortable)),
+                        'sortableAttributes' => array_values(array_unique($sortable)),
                         'searchableAttributes' => $searchable ?: ['*'],
                         'faceting' => [
                             'sortFacetValuesBy' => ['*' => 'count'],
@@ -145,10 +139,10 @@ final class MeiliIndexPass implements CompilerPassInterface
                         /** @var InstaView $iv */
                         $iv = $ivAttr->newInstance();
                         $instaViewHints = array_filter([
-                            'hitClass'  => $iv->hitClass,
-                            'template'  => $iv->template,
+                            'hitClass' => $iv->hitClass,
+                            'template' => $iv->template,
                             'showStats' => $iv->showStats,
-                        ], static fn($v) => $v !== null);
+                        ], static fn ($v) => null !== $v);
                         break;
                     }
 
@@ -165,11 +159,7 @@ final class MeiliIndexPass implements CompilerPassInterface
                     // Validate: no facet config for non-filterable field
                     foreach (array_keys($facetMap) as $field) {
                         if (!in_array($field, $filterable, true)) {
-                            throw new \InvalidArgumentException(sprintf(
-                                '[Survos/Meili] Facet "%s" is not listed in MeiliIndex::filterable for "%s".',
-                                $field,
-                                $name
-                            ));
+                            throw new \InvalidArgumentException(sprintf('[Survos/Meili] Facet "%s" is not listed in MeiliIndex::filterable for "%s".', $field, $name));
                         }
                     }
 
@@ -177,10 +167,7 @@ final class MeiliIndexPass implements CompilerPassInterface
                     if (!$cfg->primaryKey) {
                         $cfg->primaryKey = $this->inferPrimaryKey($ref);
                         if (!$cfg->primaryKey) {
-                            throw new \RuntimeException(sprintf(
-                                '[Survos/Meili] %s must declare primaryKey in #[MeiliIndex] (no id/code/key property and not a Doctrine entity with #[ORM\\Id]).',
-                                $class
-                            ));
+                            throw new \RuntimeException(sprintf('[Survos/Meili] %s must declare primaryKey in #[MeiliIndex] (no id/code/key property and not a Doctrine entity with #[ORM\\Id]).', $class));
                         }
                     }
 
@@ -208,10 +195,10 @@ final class MeiliIndexPass implements CompilerPassInterface
                     // survos_meili.chat.workspaces helped, because the block came from the
                     // compiled schema rather than from either of those.
                     $activeChats = array_intersect($cfg->chats, $configuredWorkspaces);
-                    $chatDocumentTemplate = $activeChats === []
+                    $chatDocumentTemplate = [] === $activeChats
                         ? null
                         : $this->buildChatDocumentTemplate($cfg->primaryKey, $chatInputMap);
-                    if ($chatDocumentTemplate !== null) {
+                    if (null !== $chatDocumentTemplate) {
                         $indexSchema['chat'] = [
                             'documentTemplate' => $chatDocumentTemplate,
                         ];
@@ -230,18 +217,18 @@ final class MeiliIndexPass implements CompilerPassInterface
                     }
 
                     $indexSettings[$class][$name] = [
-                        'schema'      => $indexSchema,
-                        'primaryKey'  => $cfg->primaryKey,
-                        'persisted'   => $persistedArray,
-                        'class'       => $class,
-                        'facets'      => $facetMap,
-                        'embedders'   => $cfg->embedders,
-                        'chats'       => $cfg->chats,
-                        'prompts'     => $cfg->prompts,
-                        'chatInputs'  => array_keys($chatInputMap),
-                        'autoIndex'   => $cfg->autoIndex,
-                        'ui'          => $cfg->ui,
-                        'instaView'   => $instaViewHints,
+                        'schema' => $indexSchema,
+                        'primaryKey' => $cfg->primaryKey,
+                        'persisted' => $persistedArray,
+                        'class' => $class,
+                        'facets' => $facetMap,
+                        'embedders' => $cfg->embedders,
+                        'chats' => $cfg->chats,
+                        'prompts' => $cfg->prompts,
+                        'chatInputs' => array_keys($chatInputMap),
+                        'autoIndex' => $cfg->autoIndex,
+                        'ui' => $cfg->ui,
+                        'instaView' => $instaViewHints,
                     ];
                 }
             }
@@ -288,7 +275,7 @@ final class MeiliIndexPass implements CompilerPassInterface
 
         foreach ($finder as $file) {
             $src = @file_get_contents($file->getPathname());
-            if ($src === false) {
+            if (false === $src) {
                 continue;
             }
 
@@ -301,11 +288,11 @@ final class MeiliIndexPass implements CompilerPassInterface
                 continue;
             }
 
-            yield trim($ns[1]) . '\\' . trim($cls[1]);
+            yield trim($ns[1]).'\\'.trim($cls[1]);
         }
     }
 
-    private function collectFacetMap(ReflectionClass $ref): array
+    private function collectFacetMap(\ReflectionClass $ref): array
     {
         $map = [];
 
@@ -316,22 +303,22 @@ final class MeiliIndexPass implements CompilerPassInterface
             }
 
             return [
-                'label'             => $f->label ?? $name,
-                'order'             => $f->order,
+                'label' => $f->label ?? $name,
+                'order' => $f->order,
                 'showMoreThreshold' => $f->showMoreThreshold,
-                'widget'            => $widget,
-                'type'              => $widget, // soft-compat
-                'format'            => $f->format,
-                'visible'           => $f->visible,
-                'tagsAny'           => $f->tagsAny,
-                'props'             => $f->props,
-                'sortMode'          => $f->sortMode,
-                'collapsed'         => $f->collapsed,
-                'limit'             => $f->limit,
-                'showMoreLimit'     => $f->showMoreLimit,
-                'searchable'        => $f->searchable,
-                'lookup'            => $f->lookup,
-                'returnInChat'      => $f->returnInChat,
+                'widget' => $widget,
+                'type' => $widget, // soft-compat
+                'format' => $f->format,
+                'visible' => $f->visible,
+                'tagsAny' => $f->tagsAny,
+                'props' => $f->props,
+                'sortMode' => $f->sortMode,
+                'collapsed' => $f->collapsed,
+                'limit' => $f->limit,
+                'showMoreLimit' => $f->showMoreLimit,
+                'searchable' => $f->searchable,
+                'lookup' => $f->lookup,
+                'returnInChat' => $f->returnInChat,
             ];
         };
 
@@ -355,7 +342,7 @@ final class MeiliIndexPass implements CompilerPassInterface
     }
 
     /** @return array<string,array{label:?string,order:int,position:int}> */
-    private function collectChatInputMap(ReflectionClass $ref): array
+    private function collectChatInputMap(\ReflectionClass $ref): array
     {
         $map = [];
         $position = 0;
@@ -390,7 +377,7 @@ final class MeiliIndexPass implements CompilerPassInterface
 
         uasort($map, static function (array $a, array $b): int {
             $byOrder = $a['order'] <=> $b['order'];
-            if ($byOrder !== 0) {
+            if (0 !== $byOrder) {
                 return $byOrder;
             }
 
@@ -403,7 +390,7 @@ final class MeiliIndexPass implements CompilerPassInterface
     /** @param array<string,array{label:?string,order:int,position:int}> $chatInputMap */
     private function buildChatDocumentTemplate(string $primaryKey, array $chatInputMap): ?string
     {
-        if ($chatInputMap === []) {
+        if ([] === $chatInputMap) {
             return str_replace('%', '%%', implode("\n", [
                 sprintf('id: {{ doc.%s }}', $primaryKey),
                 sprintf('{%% for field in fields %%}{%% if field.is_searchable and field.name != "%s" and field.value != nil %%}{{ field.name }}: {{ field.value }}', $primaryKey),
@@ -431,35 +418,41 @@ final class MeiliIndexPass implements CompilerPassInterface
      *  2) remaining facets follow in class-declaration order
      *
      * @param array<string,array<string,mixed>> $facetMap
-     * @param string[] $filterable
+     * @param string[]                          $filterable
+     *
      * @return array<string,array<string,mixed>>
      */
     private function orderFacets(array $facetMap, array $filterable): array
     {
-        if ($facetMap === []) {
+        if ([] === $facetMap) {
             return $facetMap;
         }
 
         $classOrder = array_keys($facetMap);
-        $priority   = array_values(array_intersect($filterable, $classOrder));
-        $remaining  = array_values(array_diff($classOrder, $priority));
+        $priority = array_values(array_intersect($filterable, $classOrder));
+        $remaining = array_values(array_diff($classOrder, $priority));
 
         $byOrder = static function (array $a, array $b): int {
             $oa = $a['order'] ?? 0;
             $ob = $b['order'] ?? 0;
+
             return $oa <=> $ob;
         };
 
         if ($priority) {
             $tmp = [];
-            foreach ($priority as $k) { $tmp[$k] = $facetMap[$k]; }
+            foreach ($priority as $k) {
+                $tmp[$k] = $facetMap[$k];
+            }
             uasort($tmp, $byOrder);
             $priority = array_keys($tmp);
         }
 
         if ($remaining) {
             $tmp = [];
-            foreach ($remaining as $k) { $tmp[$k] = $facetMap[$k]; }
+            foreach ($remaining as $k) {
+                $tmp[$k] = $facetMap[$k];
+            }
             uasort($tmp, $byOrder);
             $remaining = array_keys($tmp);
         }
@@ -477,9 +470,9 @@ final class MeiliIndexPass implements CompilerPassInterface
     /**
      * Create a default facet definition for a filterable field without #[Facet].
      */
-    private function defaultFacetConfig(ReflectionClass $ref, string $field): array
+    private function defaultFacetConfig(\ReflectionClass $ref, string $field): array
     {
-        $label  = $this->humanize($field);
+        $label = $this->humanize($field);
         $widget = 'RefinementList';
         $format = null;
 
@@ -488,36 +481,36 @@ final class MeiliIndexPass implements CompilerPassInterface
             $t = $prop->getType();
             if ($t instanceof \ReflectionNamedType && $t->isBuiltin()) {
                 $name = $t->getName();
-                if (in_array($name, ['int','float'], true)) {
+                if (in_array($name, ['int', 'float'], true)) {
                     $widget = 'RangeSlider';
-                } elseif ($name === 'array') {
+                } elseif ('array' === $name) {
                     $widget = 'RefinementList';
                 }
             }
         }
 
-        if ($widget === 'RefinementList') {
+        if ('RefinementList' === $widget) {
             if (preg_match('/(year|count|age|price|score|rating|runtime|length|index)$/i', $field)) {
                 $widget = 'RangeSlider';
             }
         }
 
         return [
-            'label'             => $label,
-            'order'             => 0,
+            'label' => $label,
+            'order' => 0,
             'showMoreThreshold' => 8,
-            'widget'            => $widget,
-            'type'              => $widget, // soft-compat
-            'format'            => $format,
-            'visible'           => null,
-            'tagsAny'           => [],
-            'props'             => [],
-            'sortMode'          => 'count',
-            'collapsed'         => false,
-            'limit'             => null,
-            'showMoreLimit'     => null,
-            'searchable'        => null,
-            'lookup'            => [],
+            'widget' => $widget,
+            'type' => $widget, // soft-compat
+            'format' => $format,
+            'visible' => null,
+            'tagsAny' => [],
+            'props' => [],
+            'sortMode' => 'count',
+            'collapsed' => false,
+            'limit' => null,
+            'showMoreLimit' => null,
+            'searchable' => null,
+            'lookup' => [],
         ];
     }
 
@@ -525,6 +518,7 @@ final class MeiliIndexPass implements CompilerPassInterface
     {
         $s = preg_replace('/([a-z])([A-Z])/u', '$1 $2', $name);
         $s = str_replace('_', ' ', (string) $s);
+
         return ucfirst((string) $s);
     }
 
@@ -533,7 +527,7 @@ final class MeiliIndexPass implements CompilerPassInterface
      *  - prefer conventional property names for index DTOs: id, code, key
      *  - if Doctrine entity, infer #[ORM\Id] (single id only)
      */
-    private function inferPrimaryKey(ReflectionClass $ref): ?string
+    private function inferPrimaryKey(\ReflectionClass $ref): ?string
     {
         foreach (['id', 'code', 'key'] as $cand) {
             if ($ref->hasProperty($cand)) {
@@ -544,7 +538,7 @@ final class MeiliIndexPass implements CompilerPassInterface
         // Doctrine entity? look for #[ORM\Id]
         if ($this->isDoctrineEntity($ref)) {
             $ids = $this->findIdentifierFields($ref->getName());
-            if (count($ids) === 1) {
+            if (1 === count($ids)) {
                 return $ids[0];
             }
         }
@@ -552,7 +546,7 @@ final class MeiliIndexPass implements CompilerPassInterface
         return null;
     }
 
-    private function isDoctrineEntity(ReflectionClass $ref): bool
+    private function isDoctrineEntity(\ReflectionClass $ref): bool
     {
         return (bool) $ref->getAttributes(ORM\Entity::class)
             || (bool) $ref->getAttributes(ORM\MappedSuperclass::class)
@@ -561,7 +555,7 @@ final class MeiliIndexPass implements CompilerPassInterface
 
     private function findIdentifierFields(string $entityClass): array
     {
-        $rc = new ReflectionClass($entityClass);
+        $rc = new \ReflectionClass($entityClass);
 
         foreach ($rc->getProperties() as $p) {
             if ($p->getAttributes(ORM\EmbeddedId::class)) {

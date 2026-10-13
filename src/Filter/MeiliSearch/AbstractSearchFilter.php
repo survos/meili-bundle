@@ -7,35 +7,28 @@ declare(strict_types=1);
 namespace Survos\MeiliBundle\Filter\MeiliSearch;
 
 use ApiPlatform\Metadata\Exception\PropertyNotFoundException;
-use ApiPlatform\Metadata\FilterInterface;
-use ApiPlatform\Metadata\ResourceClassResolverInterface;
-//use Survos\ApiGrid\Filter\MeiliSearch\MeilISearchUtilTrait;
 use ApiPlatform\Metadata\Exception\ResourceClassNotFoundException;
+use ApiPlatform\Metadata\FilterInterface;
+// use Survos\ApiGrid\Filter\MeiliSearch\MeilISearchUtilTrait;
 use ApiPlatform\Metadata\Property\Factory\PropertyMetadataFactoryInterface;
 use ApiPlatform\Metadata\Property\Factory\PropertyNameCollectionFactoryInterface;
-use Symfony\Component\TypeInfo\Type;
+use ApiPlatform\Metadata\ResourceClassResolverInterface;
 use Symfony\Component\Serializer\NameConverter\NameConverterInterface;
-
-use function array_keys;
-use function count;
-use function explode;
-use function in_array;
-use function iterator_to_array;
+use Symfony\Component\TypeInfo\Type;
 
 /**
  * Abstract class with helpers for easing the implementation of a filter.
  *
  * @experimental
- *
  */
-abstract class AbstractSearchFilter # implements FilterInterface
+abstract class AbstractSearchFilter // implements FilterInterface
 {
     use UtilTrait { getNestedFieldPath as protected; }
 
     public function __construct(protected PropertyNameCollectionFactoryInterface $propertyNameCollectionFactory,
-                                PropertyMetadataFactoryInterface $propertyMetadataFactory,
-                                ?ResourceClassResolverInterface $resourceClassResolver=null,
-                                protected ?NameConverterInterface $nameConverter = null, protected ?array $properties = null)
+        PropertyMetadataFactoryInterface $propertyMetadataFactory,
+        ?ResourceClassResolverInterface $resourceClassResolver = null,
+        protected ?NameConverterInterface $nameConverter = null, protected ?array $properties = null)
     {
         $this->propertyMetadataFactory = $propertyMetadataFactory;
         $this->resourceClassResolver = $resourceClassResolver;
@@ -47,7 +40,7 @@ abstract class AbstractSearchFilter # implements FilterInterface
     protected function getProperties(string $resourceClass): \Traversable
     {
         if (null !== $this->properties) {
-            return yield from array_keys($this->properties);
+            return yield from \array_keys($this->properties);
         }
 
         try {
@@ -61,7 +54,7 @@ abstract class AbstractSearchFilter # implements FilterInterface
      */
     protected function hasProperty(string $resourceClass, string $property): bool
     {
-        return in_array($property, iterator_to_array($this->getProperties($resourceClass)), true);
+        return \in_array($property, \iterator_to_array($this->getProperties($resourceClass)), true);
     }
 
     /**
@@ -81,8 +74,8 @@ abstract class AbstractSearchFilter # implements FilterInterface
             return $noop;
         }
 
-        $properties = explode('.', $property);
-        $totalProperties = count($properties);
+        $properties = \explode('.', $property);
+        $totalProperties = \count($properties);
         $currentResourceClass = $resourceClass;
         $hasAssociation = false;
         $currentProperty = null;

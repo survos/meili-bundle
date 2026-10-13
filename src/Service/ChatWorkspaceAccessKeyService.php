@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
@@ -10,17 +11,6 @@ use Meilisearch\Exceptions\ApiException;
 use Psr\Log\LoggerInterface;
 use Survos\MeiliBundle\Entity\IndexInfo;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
-
-use function array_merge;
-use function array_unique;
-use function array_values;
-use function hash;
-use function in_array;
-use function is_array;
-use function is_string;
-use function preg_match;
-use function sprintf;
-use function substr;
 
 final class ChatWorkspaceAccessKeyService
 {
@@ -45,7 +35,7 @@ final class ChatWorkspaceAccessKeyService
     {
         $entity = $this->indexInfoRepository?->find($indexUid);
 
-        return $entity?->getChatWorkspaceApiKey($workspace) !== null;
+        return null !== $entity?->getChatWorkspaceApiKey($workspace);
     }
 
     /**
@@ -57,7 +47,7 @@ final class ChatWorkspaceAccessKeyService
         $keyUid = $entity?->getChatWorkspaceKeyUid($workspace);
         $apiKey = $entity?->getChatWorkspaceApiKey($workspace);
 
-        if ($apiKey !== null) {
+        if (null !== $apiKey) {
             return [
                 'status' => 'registry',
                 'keyUid' => $keyUid,
@@ -76,6 +66,7 @@ final class ChatWorkspaceAccessKeyService
 
     /**
      * @param array<string,mixed> $workspaceCfg
+     *
      * @return list<string>
      */
     public function resolveWorkspaceIndexes(string $workspace, array $workspaceCfg): array
@@ -88,12 +79,12 @@ final class ChatWorkspaceAccessKeyService
      */
     public function ensureApiKey(string $indexUid, string $workspace): array
     {
-        if ($this->indexInfoRepository === null || $this->entityManager === null) {
+        if (null === $this->indexInfoRepository || null === $this->entityManager) {
             throw new \RuntimeException('Index registry storage is not available; cannot persist chat API keys.');
         }
 
         $entity = $this->indexInfoRepository->find($indexUid);
-        if ($entity === null) {
+        if (null === $entity) {
             $entity = new IndexInfo($indexUid, $this->fetchPrimaryKey($indexUid));
             $this->entityManager->persist($entity);
         }
@@ -101,7 +92,7 @@ final class ChatWorkspaceAccessKeyService
         $storedKeyUid = $entity->getChatWorkspaceKeyUid($workspace);
         $storedApiKey = $entity->getChatWorkspaceApiKey($workspace);
 
-        if ($storedKeyUid !== null && $storedApiKey !== null) {
+        if (null !== $storedKeyUid && null !== $storedApiKey) {
             try {
                 $key = $this->meiliService->getMeiliClient()->getKey($storedKeyUid);
                 $resolvedApiKey = $key->getKey() ?? $storedApiKey;
@@ -130,8 +121,8 @@ final class ChatWorkspaceAccessKeyService
             $key = $this->meiliService->getMeiliClient()->createKey(new CreateKeyQuery(
                 actions: [KeyAction::Any],
                 indexes: [$indexUid],
-                name: sprintf('Chat access for %s (%s)', $workspace, $indexUid),
-                description: sprintf('Scoped chat key for workspace %s restricted to index %s', $workspace, $indexUid),
+                name: \sprintf('Chat access for %s (%s)', $workspace, $indexUid),
+                description: \sprintf('Scoped chat key for workspace %s restricted to index %s', $workspace, $indexUid),
                 uid: $keyUid,
                 expiresAt: new \DateTimeImmutable('+5 years'),
             ));
@@ -143,12 +134,12 @@ final class ChatWorkspaceAccessKeyService
             }
 
             $existingIndexes = $existing->getIndexes() ?? [];
-            if (!is_array($existingIndexes) || !in_array($indexUid, $existingIndexes, true)) {
+            if (!\is_array($existingIndexes) || !\in_array($indexUid, $existingIndexes, true)) {
                 throw $exception;
             }
 
             $apiKey = $existing->getKey();
-            if (!is_string($apiKey) || $apiKey === '') {
+            if (!\is_string($apiKey) || '' === $apiKey) {
                 throw $exception;
             }
 
@@ -163,8 +154,8 @@ final class ChatWorkspaceAccessKeyService
         }
 
         $apiKey = $key->getKey();
-        if (!is_string($apiKey) || $apiKey === '') {
-            throw new \RuntimeException(sprintf('Meilisearch did not return a key value for workspace %s and index %s.', $workspace, $indexUid));
+        if (!\is_string($apiKey) || '' === $apiKey) {
+            throw new \RuntimeException(\sprintf('Meilisearch did not return a key value for workspace %s and index %s.', $workspace, $indexUid));
         }
 
         $resolvedKeyUid = $key->getUid() ?? $keyUid;
@@ -183,12 +174,12 @@ final class ChatWorkspaceAccessKeyService
      */
     public function syncRegistryKey(string $indexUid, string $workspace): bool
     {
-        if ($this->indexInfoRepository === null || $this->entityManager === null) {
+        if (null === $this->indexInfoRepository || null === $this->entityManager) {
             return false;
         }
 
         $entity = $this->indexInfoRepository->find($indexUid);
-        if ($entity === null) {
+        if (null === $entity) {
             $entity = new IndexInfo($indexUid, $this->fetchPrimaryKey($indexUid));
             $this->entityManager->persist($entity);
         }
@@ -205,7 +196,7 @@ final class ChatWorkspaceAccessKeyService
         }
 
         $apiKey = $key->getKey();
-        if (!is_string($apiKey) || $apiKey === '') {
+        if (!\is_string($apiKey) || '' === $apiKey) {
             return false;
         }
 
@@ -217,25 +208,25 @@ final class ChatWorkspaceAccessKeyService
 
     private function buildKeyUid(string $indexUid, string $workspace): string
     {
-        $hash = hash('sha1', $workspace . '|' . $indexUid);
+        $hash = \hash('sha1', $workspace.'|'.$indexUid);
 
-        return sprintf(
+        return \sprintf(
             '%s-%s-%s-%s-%s',
-            substr($hash, 0, 8),
-            substr($hash, 8, 4),
-            substr($hash, 12, 4),
-            substr($hash, 16, 4),
-            substr($hash, 20, 12),
+            \substr($hash, 0, 8),
+            \substr($hash, 8, 4),
+            \substr($hash, 12, 4),
+            \substr($hash, 16, 4),
+            \substr($hash, 20, 12),
         );
     }
 
     private function isValidKeyUid(?string $keyUid): bool
     {
-        if (!is_string($keyUid) || $keyUid === '') {
+        if (!\is_string($keyUid) || '' === $keyUid) {
             return false;
         }
 
-        return preg_match('/^(urn:uuid:)?[0-9a-fA-F-]+$/', $keyUid) === 1;
+        return 1 === \preg_match('/^(urn:uuid:)?[0-9a-fA-F-]+$/', $keyUid);
     }
 
     private function fetchPrimaryKey(string $indexUid): string

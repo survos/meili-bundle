@@ -1,15 +1,8 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
-
-use function array_filter;
-use function array_intersect_key;
-use function array_key_exists;
-use function array_keys;
-use function is_array;
-use function is_string;
-use function json_encode;
 
 /**
  * Shapes raw Meilisearch hit arrays into compact, LLM-friendly payloads.
@@ -23,15 +16,16 @@ final class ResultNormalizer
     /**
      * Normalize a single raw hit from Meilisearch.
      *
-     * @param array<string,mixed> $hit        Raw hit from the SDK.
-     * @param list<string>|null   $whitelist  If supplied, only these fields are kept.
-     *                                        Pass null (default) to keep everything.
+     * @param array<string,mixed> $hit       raw hit from the SDK
+     * @param list<string>|null   $whitelist If supplied, only these fields are kept.
+     *                                       Pass null (default) to keep everything.
+     *
      * @return array<string,mixed>
      */
     public function normalizeHit(array $hit, ?array $whitelist = null): array
     {
-        if ($whitelist !== null && $whitelist !== []) {
-            $hit = array_intersect_key($hit, array_flip($whitelist));
+        if (null !== $whitelist && [] !== $whitelist) {
+            $hit = \array_intersect_key($hit, array_flip($whitelist));
         }
 
         // Strip internal Meilisearch metadata fields that add noise for LLMs.
@@ -45,16 +39,18 @@ final class ResultNormalizer
      *
      * @param array<int,array<string,mixed>> $hits
      * @param list<string>|null              $whitelist
+     *
      * @return array<int,array<string,mixed>>
      */
     public function normalizeHits(array $hits, ?array $whitelist = null): array
     {
         $out = [];
         foreach ($hits as $hit) {
-            if (is_array($hit)) {
+            if (\is_array($hit)) {
                 $out[] = $this->normalizeHit($hit, $whitelist);
             }
         }
+
         return $out;
     }
 
@@ -68,14 +64,14 @@ final class ResultNormalizer
     public function labelFor(array $hit): string
     {
         foreach (['title', 'name', 'label', 'subject', 'heading'] as $field) {
-            if (isset($hit[$field]) && is_string($hit[$field]) && $hit[$field] !== '') {
+            if (isset($hit[$field]) && \is_string($hit[$field]) && '' !== $hit[$field]) {
                 return $hit[$field];
             }
         }
 
         // Fall back to first string scalar value we find.
         foreach ($hit as $value) {
-            if (is_string($value) && $value !== '') {
+            if (\is_string($value) && '' !== $value) {
                 return $value;
             }
         }
@@ -90,6 +86,6 @@ final class ResultNormalizer
      */
     public function toJson(array $hit): string
     {
-        return (string) json_encode($hit, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return (string) \json_encode($hit, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 }

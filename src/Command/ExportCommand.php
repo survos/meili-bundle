@@ -22,7 +22,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 class ExportCommand
 {
     public function __construct(
-        private MeiliService    $meiliService,
+        private MeiliService $meiliService,
         private LoggerInterface $logger,
     ) {
     }
@@ -50,13 +50,14 @@ class ExportCommand
         #[Option('Compress output with gzip (or infer from .gz extension).')]
         bool $gzip = false,
     ): int {
-
         if (!class_exists(JsonlWriter::class)) {
             $io->error("jsonl-bundle is not installed.\n\ncomposer req survos/jsonl-bundle");
+
             return Command::FAILURE;
         }
         if (!$indexName) {
             $io->error('You must provide an index name.');
+
             return Command::FAILURE;
         }
 
@@ -65,8 +66,9 @@ class ExportCommand
 
         // Resolve base directory (for archival, git, etc.)
         $baseDir = $dir ? rtrim($dir, DIRECTORY_SEPARATOR) : getcwd();
-        if ($baseDir === '' || $baseDir === false) {
+        if ('' === $baseDir || false === $baseDir) {
             $io->error('Could not determine a working directory.');
+
             return Command::FAILURE;
         }
 
@@ -74,6 +76,7 @@ class ExportCommand
             if (!is_dir($baseDir)) {
                 if (!@mkdir($baseDir, 0o777, true) && !is_dir($baseDir)) {
                     $io->error(sprintf('Failed to create directory "%s".', $baseDir));
+
                     return Command::FAILURE;
                 }
                 $io->writeln(sprintf('Created archive directory: <info>%s</info>', $baseDir));
@@ -81,9 +84,9 @@ class ExportCommand
         }
 
         // Resolve filename + gzip behavior
-        $defaultBase = $prefixedIndexName . '.jsonl';
+        $defaultBase = $prefixedIndexName.'.jsonl';
 
-        if ($output !== null) {
+        if (null !== $output) {
             // If user gave an explicit output path, we respect it and ignore --dir as a prefix.
             $filename = $output;
             if ($dir) {
@@ -92,7 +95,7 @@ class ExportCommand
         } else {
             $filename = $defaultBase;
             if ($dir) {
-                $filename = $baseDir . DIRECTORY_SEPARATOR . $filename;
+                $filename = $baseDir.DIRECTORY_SEPARATOR.$filename;
             }
         }
 
@@ -110,7 +113,7 @@ class ExportCommand
         // unless you add support there; we just log them for now).
         if ($host || $apiKey) {
             $this->logger->info('meili:export called with host/apiKey override', [
-                'host'   => $host,
+                'host' => $host,
                 'apiKey' => $apiKey ? '[provided]' : null,
             ]);
         }
@@ -118,7 +121,7 @@ class ExportCommand
         // $client->getIndex() no longer hits the network by itself (lazy Index handle);
         // the real existence check happens below when we fetch stats().
         $client = $this->meiliService->getMeiliClient();
-        $index  = $client->getIndex($prefixedIndexName);
+        $index = $client->getIndex($prefixedIndexName);
 
         // Determine total docs (for progress bar); this doubles as the existence check.
         $total = null;
@@ -130,10 +133,11 @@ class ExportCommand
                 $prefixedIndexName,
                 $e->getMessage()
             ));
+
             return Command::FAILURE;
         }
 
-        if ($total === null) {
+        if (null === $total) {
             $io->warning('Could not determine numberOfDocuments from Meilisearch stats; progress bar will be indeterminate.');
         }
 
@@ -141,9 +145,10 @@ class ExportCommand
 
         // Ensure parent directory exists for filename if user passed a path via --output
         $parentDir = dirname($filename);
-        if ($parentDir && $parentDir !== '.' && !is_dir($parentDir)) {
+        if ($parentDir && '.' !== $parentDir && !is_dir($parentDir)) {
             if (!@mkdir($parentDir, 0o777, true) && !is_dir($parentDir)) {
                 $io->error(sprintf('Failed to create directory "%s" for output file.', $parentDir));
+
                 return Command::FAILURE;
             }
             $io->writeln(sprintf('Created directory for output file: <info>%s</info>', $parentDir));
@@ -154,16 +159,16 @@ class ExportCommand
 
         $io->section('Exporting documents…');
 
-        $progress = $total !== null
+        $progress = null !== $total
             ? new ProgressBar($io, (int) $total)
             : new ProgressBar($io);
 
         $progress->setFormat('verbose');
         $progress->start();
 
-        $offset  = 0;
+        $offset = 0;
         $written = 0;
-        $done    = false;
+        $done = false;
 
         try {
             while (!$done) {
@@ -179,14 +184,11 @@ class ExportCommand
                 } elseif (is_object($batch) && method_exists($batch, 'getResults')) {
                     $documents = $batch->getResults();
                 } else {
-                    throw new \RuntimeException(sprintf(
-                        'Unexpected getDocuments() return type: %s',
-                        get_debug_type($batch)
-                    ));
+                    throw new \RuntimeException(sprintf('Unexpected getDocuments() return type: %s', get_debug_type($batch)));
                 }
 
                 $count = \count($documents);
-                if ($count === 0) {
+                if (0 === $count) {
                     $done = true;
                     break;
                 }
@@ -198,14 +200,14 @@ class ExportCommand
                     }
 
                     $writer->write($document);
-                    $written++;
+                    ++$written;
                     $progress->advance();
                 }
 
                 $offset += $batchSize;
 
                 // Safety: stop if total known and we've reached it
-                if ($total !== null && $written >= $total) {
+                if (null !== $total && $written >= $total) {
                     $done = true;
                 }
             }
@@ -218,7 +220,7 @@ class ExportCommand
             $io->success(sprintf(
                 'Exported %d document%s from index "%s" to %s',
                 $written,
-                $written === 1 ? '' : 's',
+                1 === $written ? '' : 's',
                 $prefixedIndexName,
                 $filename
             ));
@@ -235,8 +237,8 @@ class ExportCommand
             $writer->close();
 
             $this->logger->error('Error during Meilisearch index export', [
-                'index'   => $prefixedIndexName,
-                'file'    => $filename,
+                'index' => $prefixedIndexName,
+                'file' => $filename,
                 'message' => $e->getMessage(),
             ]);
 

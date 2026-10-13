@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Model;
@@ -9,10 +10,11 @@ namespace Survos\MeiliBundle\Model;
 final class IndexPlan
 {
     public function __construct(
-        public readonly string  $entityClass,
+        public readonly string $entityClass,
         public readonly ?string $locale,         // e.g. 'en'
-        public readonly string  $indexName,      // fully-resolved, including prefix + _{locale} suffix
-        public readonly string  $primaryKeyName, // e.g. 'id' or external key
-        public readonly ?string $transport = null
-    ) {}
+        public readonly string $indexName,      // fully-resolved, including prefix + _{locale} suffix
+        public readonly string $primaryKeyName, // e.g. 'id' or external key
+        public readonly ?string $transport = null,
+    ) {
+    }
 }

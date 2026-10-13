@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Message;
@@ -24,5 +25,6 @@ final class BatchIndexEntitiesMessage
         public readonly bool $sync = false,
         public readonly bool $wait = false,
         public readonly bool $dump = false,
-    ) {}
+    ) {
+    }
 }

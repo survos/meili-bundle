@@ -1,9 +1,8 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Metadata;
-
-use Attribute;
 
 /**
  * DTO for Meilisearch Embedders configuration.
@@ -14,9 +13,9 @@ use Attribute;
  *     model: 'text-embedding-3-small',
  *     apiKeyParameter: 'OPENAI_API_KEY',
  *     documentTemplate: 'Instrument {{ doc.name }} ...' // blade syntax
- *  )
+ *  ).
  */
-#[Attribute(Attribute::TARGET_CLASS | Attribute::IS_REPEATABLE)]
+#[\Attribute(\Attribute::TARGET_CLASS | \Attribute::IS_REPEATABLE)]
 final class Embedder
 {
     public function __construct(
@@ -24,6 +23,7 @@ final class Embedder
         public string $source,
         public string $model,
         public ?string $apiKeyParameter = null, // read from env/params in the updater
-        public ?string $documentTemplate = null // blade template string
-    ) {}
+        public ?string $documentTemplate = null, // blade template string
+    ) {
+    }
 }

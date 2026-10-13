@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Model;
@@ -34,7 +35,7 @@ final class MeiliSuggestion
         return [
             'filterableAttributes' => \array_values(\array_unique($this->facetFields)),
             'searchableAttributes' => \array_values(\array_unique($this->searchableFields)),
-            'sortableAttributes'   => \array_values(\array_unique($this->sortableFields)),
+            'sortableAttributes' => \array_values(\array_unique($this->sortableFields)),
         ];
     }
 }

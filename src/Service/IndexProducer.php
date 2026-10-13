@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
@@ -14,7 +15,8 @@ final class IndexProducer
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly MessageBusInterface $bus,
-    ) {}
+    ) {
+    }
 
     /**
      * Dispatch BatchIndexEntitiesMessage chunks for a target.
@@ -38,16 +40,10 @@ final class IndexProducer
         }
 
         if ($this->entityManager->getMetadataFactory()->isTransient($target->class)) {
-            throw new \LogicException(sprintf(
-                'Class "%s" is not a Doctrine entity and cannot be streamed by meili:populate. ' .
-                'For file-backed collections use: bin/console meili:flush-file %s --dataset=mus/%s',
-                $target->class,
-                $target->base,
-                $target->base,
-            ));
+            throw new \LogicException(sprintf('Class "%s" is not a Doctrine entity and cannot be streamed by meili:populate. For file-backed collections use: bin/console meili:flush-file %s --dataset=mus/%s', $target->class, $target->base, $target->base));
         }
 
-        $streamer  = new DoctrinePrimaryKeyStreamer($this->entityManager, $target->class);
+        $streamer = new DoctrinePrimaryKeyStreamer($this->entityManager, $target->class);
         $generator = $streamer->stream($batchSize);
 
         $sent = 0;
@@ -69,7 +65,7 @@ final class IndexProducer
             $this->bus->dispatch($message, $stamps);
             $sent += \count($chunk);
 
-            if ($limit !== null && $sent >= $limit) {
+            if (null !== $limit && $sent >= $limit) {
                 break;
             }
         }

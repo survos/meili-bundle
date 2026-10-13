@@ -1,4 +1,6 @@
-<?php // sync live data with IndexInfo doctrine entities
+<?php
+
+// sync live data with IndexInfo doctrine entities
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
@@ -7,7 +9,6 @@ use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerAwareInterface;
 use Psr\Log\LoggerAwareTrait;
-use Psr\Log\LoggerInterface;
 use Survos\MeiliBundle\Entity\IndexInfo;
 use Survos\MeiliBundle\Message\UpdateIndexInfoMessage;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
@@ -16,11 +17,13 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 final class IndexSyncService implements LoggerAwareInterface
 {
     use LoggerAwareTrait;
+
     public function __construct(
         private readonly MeiliService $meili,
         private readonly EntityManagerInterface $em,
         private readonly IndexInfoRepository $repo,
-    ) {}
+    ) {
+    }
 
     /**
      * Walk every index the Meilisearch server actually has (filtered by prefix)
@@ -33,16 +36,16 @@ final class IndexSyncService implements LoggerAwareInterface
      */
     public function syncFromServer(bool $prune = false): array
     {
-        $now      = new \DateTime();
-        $prefix   = $this->meili->getPrefix() ?? '';
-        $liveMap  = $this->meili->listIndexesFast(); // uid => Indexes
+        $now = new \DateTime();
+        $prefix = $this->meili->getPrefix() ?? '';
+        $liveMap = $this->meili->listIndexesFast(); // uid => Indexes
 
         $created = $updated = $unchanged = 0;
         $seenUids = [];
 
         foreach ($liveMap as $uid => $liveIndex) {
             // Filter to our prefix (empty prefix = accept all)
-            if ($prefix !== '' && !str_starts_with($uid, $prefix)) {
+            if ('' !== $prefix && !str_starts_with($uid, $prefix)) {
                 continue;
             }
 
@@ -55,11 +58,11 @@ final class IndexSyncService implements LoggerAwareInterface
             }
 
             $primaryKey = $liveIndex->getPrimaryKey() ?? 'id';
-            $createdAt  = $liveIndex->getCreatedAt() ? \DateTime::createFromInterface($liveIndex->getCreatedAt()) : null;
-            $updatedAt  = $liveIndex->getUpdatedAt() ? \DateTime::createFromInterface($liveIndex->getUpdatedAt()) : null;
+            $createdAt = $liveIndex->getCreatedAt() ? \DateTime::createFromInterface($liveIndex->getCreatedAt()) : null;
+            $updatedAt = $liveIndex->getUpdatedAt() ? \DateTime::createFromInterface($liveIndex->getUpdatedAt()) : null;
 
             $indexInfo = $this->repo->find($uid);
-            $isNew     = $indexInfo === null;
+            $isNew = null === $indexInfo;
 
             if ($isNew) {
                 $indexInfo = new IndexInfo($uid, $primaryKey);
@@ -73,11 +76,11 @@ final class IndexSyncService implements LoggerAwareInterface
                 $indexInfo->updatedAt?->getTimestamp(),
             ];
 
-            $indexInfo->primaryKey    = $primaryKey;
+            $indexInfo->primaryKey = $primaryKey;
             $indexInfo->documentCount = $numDocuments;
-            $indexInfo->createdAt     = $createdAt;
-            $indexInfo->updatedAt     = $updatedAt;
-            $indexInfo->lastIndexed   = $now;
+            $indexInfo->createdAt = $createdAt;
+            $indexInfo->updatedAt = $updatedAt;
+            $indexInfo->lastIndexed = $now;
             // settings stays empty for server-discovered indexes — we don't know
             // the local attribute config.  The uid itself is the link.
 
@@ -89,11 +92,11 @@ final class IndexSyncService implements LoggerAwareInterface
             ];
 
             if ($isNew) {
-                $created++;
+                ++$created;
             } elseif ($before === $after) {
-                $unchanged++;
+                ++$unchanged;
             } else {
-                $updated++;
+                ++$updated;
             }
         }
 
@@ -102,11 +105,11 @@ final class IndexSyncService implements LoggerAwareInterface
         // Always enforce prefix: remove any rows that don't belong to this prefix.
         // This keeps the local catalog authoritative — no foreign-app rows polluting queries.
         $qb = $this->em->createQueryBuilder()->select('i')->from(IndexInfo::class, 'i');
-        if ($prefix !== '') {
+        if ('' !== $prefix) {
             // Rows outside the prefix should never be here.
             $qb->where('i.indexName NOT LIKE :prefix')
-               ->setParameter('prefix', $prefix . '%');
-        } elseif ($prune && $seenUids !== []) {
+               ->setParameter('prefix', $prefix.'%');
+        } elseif ($prune && [] !== $seenUids) {
             // No prefix configured: only prune rows not seen on the server (original behaviour).
             $qb->where('i.indexName NOT IN (:uids)')
                ->setParameter('uids', $seenUids);
@@ -114,48 +117,49 @@ final class IndexSyncService implements LoggerAwareInterface
             $qb = null; // nothing to prune
         }
 
-        if ($qb !== null) {
+        if (null !== $qb) {
             foreach ($qb->getQuery()->getResult() as $o) {
                 $this->em->remove($o);
-                $pruned++;
+                ++$pruned;
             }
         }
 
         // When prefix is set and prune requested, also remove seen-prefix rows no longer on server.
-        if ($prune && $prefix !== '' && $seenUids !== []) {
+        if ($prune && '' !== $prefix && [] !== $seenUids) {
             $orphans = $this->em->createQueryBuilder()
                 ->select('i')->from(IndexInfo::class, 'i')
                 ->where('i.indexName NOT IN (:uids)')
                 ->andWhere('i.indexName LIKE :prefix')
                 ->setParameter('uids', $seenUids)
-                ->setParameter('prefix', $prefix . '%')
+                ->setParameter('prefix', $prefix.'%')
                 ->getQuery()->getResult();
             foreach ($orphans as $o) {
                 $this->em->remove($o);
-                $pruned++;
+                ++$pruned;
             }
         }
 
         $this->em->flush();
 
         return [
-            'created'   => $created,
-            'updated'   => $updated,
+            'created' => $created,
+            'updated' => $updated,
             'unchanged' => $unchanged,
-            'pruned'    => $pruned,
-            'total'     => count($seenUids),
+            'pruned' => $pruned,
+            'total' => count($seenUids),
         ];
     }
 
     /**
      * @param callable(string $uid): ?string $localeResolver  Optional
      * @param callable(string $uid): ?string $datasetResolver Optional
+     *
      * @return array{created:int,updated:int,unchanged:int,pruned:int,total:int}
      */
     public function sync(
         bool $prune = false,
         ?callable $localeResolver = null,
-        ?callable $datasetResolver = null
+        ?callable $datasetResolver = null,
     ): array {
         $now = new \DateTime();
 
@@ -172,22 +176,22 @@ final class IndexSyncService implements LoggerAwareInterface
             $uid = $this->meili->uidForBase($baseName, null);
 
             // Skip indexes that don't match the configured prefix.
-            if ($prefix !== '' && !str_starts_with($uid, $prefix)) {
+            if ('' !== $prefix && !str_starts_with($uid, $prefix)) {
                 continue;
             }
 
             $syncedIndexNames[] = $uid;
 
             // Fetch live stats from Meilisearch server (numberOfDocuments, isIndexing, etc.)
-            $primaryKey = (string)($settings['primaryKey'] ?? 'id');
+            $primaryKey = (string) ($settings['primaryKey'] ?? 'id');
             try {
                 $liveIndex = $this->meili->getMeiliClient()->index($uid);
                 $numDocuments = $liveIndex->stats()->getNumberOfDocuments();
                 $createdAtRaw = $liveIndex->getCreatedAt();
                 $updatedAtRaw = $liveIndex->getUpdatedAt();
                 // IndexInfo::$createdAt/$updatedAt are DateTime columns; the SDK returns DateTimeImmutable.
-                $createdAt = $createdAtRaw !== null ? \DateTime::createFromInterface($createdAtRaw) : null;
-                $updatedAt = $updatedAtRaw !== null ? \DateTime::createFromInterface($updatedAtRaw) : null;
+                $createdAt = null !== $createdAtRaw ? \DateTime::createFromInterface($createdAtRaw) : null;
+                $updatedAt = null !== $updatedAtRaw ? \DateTime::createFromInterface($updatedAtRaw) : null;
             } catch (\Throwable) {
                 // Index not yet created on server — still record it locally with zero docs.
                 $numDocuments = 0;
@@ -209,12 +213,12 @@ final class IndexSyncService implements LoggerAwareInterface
             ];
 
             // Map live data + config settings → entity.
-            $indexInfo->primaryKey    = $primaryKey;
+            $indexInfo->primaryKey = $primaryKey;
             $indexInfo->replaceSettingsPreservingRegistry($settings);
             $indexInfo->documentCount = $numDocuments;
-            $indexInfo->createdAt     = $createdAt;
-            $indexInfo->updatedAt     = $updatedAt;
-            $indexInfo->lastIndexed   = $now;
+            $indexInfo->createdAt = $createdAt;
+            $indexInfo->updatedAt = $updatedAt;
+            $indexInfo->lastIndexed = $now;
 
             $after = [
                 $indexInfo->primaryKey,
@@ -224,16 +228,16 @@ final class IndexSyncService implements LoggerAwareInterface
             ];
 
             if ($before === $after) {
-                $unchanged++;
-            } elseif ($before[0] === null) {
-                $created++;
+                ++$unchanged;
+            } elseif (null === $before[0]) {
+                ++$created;
             } else {
-                $updated++;
+                ++$updated;
             }
         }
 
         $pruned = 0;
-        if ($prune && $syncedIndexNames !== []) {
+        if ($prune && [] !== $syncedIndexNames) {
             $orphans = $this->em->createQueryBuilder()
                 ->select('i')->from(IndexInfo::class, 'i')
                 ->where('i.indexName NOT IN (:names)')
@@ -241,18 +245,18 @@ final class IndexSyncService implements LoggerAwareInterface
                 ->getQuery()->getResult();
             foreach ($orphans as $o) {
                 $this->em->remove($o);
-                $pruned++;
+                ++$pruned;
             }
         }
 
         $this->em->flush();
 
         return [
-            'created'   => $created,
-            'updated'   => $updated,
+            'created' => $created,
+            'updated' => $updated,
             'unchanged' => $unchanged,
-            'pruned'    => $pruned,
-            'total'     => count($syncedIndexNames),
+            'pruned' => $pruned,
+            'total' => count($syncedIndexNames),
         ];
     }
 

@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
@@ -23,15 +24,15 @@ final class MeiliFieldHeuristic
         $sortableFields = [];
 
         foreach ($fields as $name => $stats) {
-            $types       = $stats['types'] ?? [];
-            $distinct    = $stats['distinct'] ?? null;
-            $total       = $stats['total'] ?? null;
+            $types = $stats['types'] ?? [];
+            $distinct = $stats['distinct'] ?? null;
+            $total = $stats['total'] ?? null;
             $storageHint = $stats['storageHint'] ?? null;
             $booleanLike = $stats['booleanLike'] ?? false;
-            $urlLike     = $stats['urlLike'] ?? false;
-            $imageLike   = $stats['imageLike'] ?? false;
-            $nlpLike     = $stats['naturalLanguageLike'] ?? false;
-            $arrayCount  = $stats['arrayStats']['arrays'] ?? 0;
+            $urlLike = $stats['urlLike'] ?? false;
+            $imageLike = $stats['imageLike'] ?? false;
+            $nlpLike = $stats['naturalLanguageLike'] ?? false;
+            $arrayCount = $stats['arrayStats']['arrays'] ?? 0;
 
             if (!\is_string($name)) {
                 continue;
@@ -50,7 +51,7 @@ final class MeiliFieldHeuristic
             // Geographic sub-fields: filterable, not full-text searchable
             if ($this->looksLikeGeo($name)) {
                 $facetFields[] = $name;
-                if (\in_array('float', $types, true) || $storageHint === 'float') {
+                if (\in_array('float', $types, true) || 'float' === $storageHint) {
                     $sortableFields[] = $name;
                 }
                 continue;
@@ -70,16 +71,16 @@ final class MeiliFieldHeuristic
 
             // Heuristic: numeric / float => sortable, facetable if low cardinality
             if (\in_array('int', $types, true) || \in_array('float', $types, true)
-                || $storageHint === 'float' || $storageHint === 'int') {
+                || 'float' === $storageHint || 'int' === $storageHint) {
                 $sortableFields[] = $name;
-                if ($distinct !== null && $total !== null && $distinct <= 500) {
+                if (null !== $distinct && null !== $total && $distinct <= 500) {
                     $facetFields[] = $name;
                 }
                 continue;
             }
 
             // Heuristic: boolean-like => facet only
-            if ($booleanLike === true || $storageHint === 'bool') {
+            if (true === $booleanLike || 'bool' === $storageHint) {
                 $facetFields[] = $name;
                 continue;
             }
@@ -97,7 +98,7 @@ final class MeiliFieldHeuristic
 
             // Heuristic: short string enums => facet
             // Relaxed: allow distinct=1 (small collections still benefit from facets as data grows)
-            if (\in_array('string', $types, true) && $distinct !== null && $total !== null) {
+            if (\in_array('string', $types, true) && null !== $distinct && null !== $total) {
                 $ratio = $total > 0 ? $distinct / $total : 1.0;
                 if ($distinct <= 500 && $ratio <= 0.6) {
                     $facetFields[] = $name;
@@ -123,8 +124,8 @@ final class MeiliFieldHeuristic
         $lower = \strtolower($field);
 
         return \str_ends_with($lower, 'id')
-            || $lower === 'id'
-            || $lower === 'pk'
+            || 'id' === $lower
+            || 'pk' === $lower
             || \str_ends_with($lower, '_id');
     }
 
@@ -135,25 +136,28 @@ final class MeiliFieldHeuristic
     private function looksLikeRightsText(string $field): bool
     {
         $lower = strtolower($field);
+
         return in_array($lower, ['rights', 'license', 'licence', 'rights_statement',
-                                  'reuse_allowed', 'access_rights', 'copyright'], true);
+            'reuse_allowed', 'access_rights', 'copyright'], true);
     }
 
     private function looksLikeGeo(string $field): bool
     {
         $lower = strtolower($field);
+
         return in_array($lower, ['country', 'state', 'county', 'city', 'city_section',
-                                  'region', 'province', 'locality', 'place'], true);
+            'region', 'province', 'locality', 'place'], true);
     }
 
     private function looksLikeUrl(string $field): bool
     {
         $lower = strtolower($field);
+
         return str_ends_with($lower, '_url')
             || str_ends_with($lower, '_uri')
             || str_ends_with($lower, '_link')
-            || $lower === 'url'
-            || $lower === 'uri';
+            || 'url' === $lower
+            || 'uri' === $lower;
     }
 
     private function looksLikeIiif(string $field): bool
@@ -164,6 +168,7 @@ final class MeiliFieldHeuristic
     private function looksLikeCodeOrId(string $field): bool
     {
         $lower = \strtolower($field);
+
         return $this->looksLikeId($field)
             || \str_contains($lower, 'code')
             || \str_contains($lower, 'key')

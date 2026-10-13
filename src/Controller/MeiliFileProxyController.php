@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Controller;
@@ -12,22 +13,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Symfony\Component\Routing\Attribute\Route;
 
-use function array_filter;
-use function array_merge;
-use function basename;
-use function explode;
-use function is_array;
-use function is_string;
-use function is_file;
-use function is_readable;
-use function ltrim;
 use function realpath;
-use function rtrim;
-use function str_contains;
-use function str_replace;
-use function str_starts_with;
-use function strlen;
-use function substr;
 
 #[Route('/meili')]
 final class MeiliFileProxyController extends AbstractController
@@ -35,12 +21,13 @@ final class MeiliFileProxyController extends AbstractController
     public function __construct(
         #[Autowire('%survos_meili.file_proxy%')]
         private readonly array $config = [],
-    ) {}
+    ) {
+    }
 
     #[Route('/file', name: 'meili_file_proxy', methods: ['GET'], options: ['expose' => true])]
     public function proxyFile(Request $request): Response
     {
-        $config = array_merge([
+        $config = \array_merge([
             'enabled' => true,
             'allow_hidden' => false,
             'cache_control' => 'private, max-age=60',
@@ -52,17 +39,17 @@ final class MeiliFileProxyController extends AbstractController
         }
 
         $path = (string) $request->query->get('path', '');
-        if ($path === '') {
+        if ('' === $path) {
             return $this->jsonError('missing_path', Response::HTTP_BAD_REQUEST);
         }
 
-        $path = str_replace('\\', '/', $path);
-        if (str_contains($path, "\0")) {
+        $path = \str_replace('\\', '/', $path);
+        if (\str_contains($path, "\0")) {
             return $this->jsonError('invalid_path', Response::HTTP_BAD_REQUEST);
         }
 
         $roots = $this->normalizeRoots($config['roots']);
-        if ($roots === []) {
+        if ([] === $roots) {
             return $this->jsonError(
                 'file_proxy_no_roots',
                 Response::HTTP_INTERNAL_SERVER_ERROR,
@@ -85,7 +72,7 @@ final class MeiliFileProxyController extends AbstractController
         $response->headers->set('Cache-Control', (string) $config['cache_control']);
         $response->setContentDisposition(
             ResponseHeaderBag::DISPOSITION_INLINE,
-            basename($resolved['realpath'])
+            \basename($resolved['realpath'])
         );
 
         return $response;
@@ -94,40 +81,40 @@ final class MeiliFileProxyController extends AbstractController
     /** @param array<string,string>|array<int,string>|mixed $roots */
     private function normalizeRoots(mixed $roots): array
     {
-        if (!is_array($roots)) {
+        if (!\is_array($roots)) {
             return [];
         }
 
         $clean = [];
         foreach ($roots as $key => $root) {
-            if (!is_string($root) || $root === '') {
+            if (!\is_string($root) || '' === $root) {
                 continue;
             }
-            $root = rtrim($root, '/');
+            $root = \rtrim($root, '/');
 
-            if ($root === '') {
+            if ('' === $root) {
                 continue;
             }
 
-            $id = is_string($key) && $key !== '' ? $key : basename($root);
+            $id = \is_string($key) && '' !== $key ? $key : \basename($root);
             $clean[$id] = $root;
         }
 
-        return array_filter($clean, static fn(string $r) => $r !== '');
+        return \array_filter($clean, static fn (string $r) => '' !== $r);
     }
 
     /**
      * @param array<string,string> $roots
+     *
      * @return array{realpath:string, relative:string}|array{error:string, details:array<string,mixed>}
      */
     private function resolvePath(string $path, array $roots, bool $allowHidden): array
     {
-        $isAbsolute = str_starts_with($path, '/');
-
+        $isAbsolute = \str_starts_with($path, '/');
 
         if ($isAbsolute) {
-            $real = realpath($path);
-            if ($real === false) {
+            $real = \realpath($path);
+            if (false === $real) {
                 return [
                     'error' => 'absolute_path_not_found',
                     'details' => [
@@ -137,15 +124,15 @@ final class MeiliFileProxyController extends AbstractController
             }
 
             foreach ($roots as $root) {
-                $rootReal = realpath($root);
-                if ($rootReal === false) {
+                $rootReal = \realpath($root);
+                if (false === $rootReal) {
                     continue;
                 }
                 if (!$this->isWithinRoot($real, $rootReal)) {
                     continue;
                 }
                 if (!$allowHidden) {
-                    $relative = ltrim(substr($real, strlen($rootReal)), '/');
+                    $relative = \ltrim(\substr($real, \strlen($rootReal)), '/');
                     if ($this->isHiddenPath($relative)) {
                         return [
                             'error' => 'hidden_path_forbidden',
@@ -158,7 +145,7 @@ final class MeiliFileProxyController extends AbstractController
                         ];
                     }
                 }
-                if (!is_file($real) || !is_readable($real)) {
+                if (!\is_file($real) || !\is_readable($real)) {
                     return [
                         'error' => 'unreadable_file',
                         'details' => [
@@ -167,6 +154,7 @@ final class MeiliFileProxyController extends AbstractController
                         ],
                     ];
                 }
+
                 return ['realpath' => $real, 'relative' => $real];
             }
 
@@ -180,7 +168,7 @@ final class MeiliFileProxyController extends AbstractController
             ];
         }
 
-        $relative = ltrim($path, '/');
+        $relative = \ltrim($path, '/');
         if (!$allowHidden && $this->isHiddenPath($relative)) {
             return [
                 'error' => 'hidden_path_forbidden',
@@ -194,19 +182,19 @@ final class MeiliFileProxyController extends AbstractController
 
         $attempts = [];
         foreach ($roots as $root) {
-            $candidate = rtrim($root, '/') . '/' . $relative;
-            $real = realpath($candidate);
+            $candidate = \rtrim($root, '/').'/'.$relative;
+            $real = \realpath($candidate);
             $attempts[] = ['root' => $root, 'candidate' => $candidate, 'realpath' => $real ?: null];
-            if ($real === false) {
+            if (false === $real) {
                 continue;
             }
 
-            $rootReal = realpath($root);
-            if ($rootReal === false || !$this->isWithinRoot($real, $rootReal)) {
+            $rootReal = \realpath($root);
+            if (false === $rootReal || !$this->isWithinRoot($real, $rootReal)) {
                 continue;
             }
 
-            if (!is_file($real) || !is_readable($real)) {
+            if (!\is_file($real) || !\is_readable($real)) {
                 continue;
             }
 
@@ -226,15 +214,16 @@ final class MeiliFileProxyController extends AbstractController
 
     private function isWithinRoot(string $realPath, string $rootReal): bool
     {
-        $root = rtrim($rootReal, '/');
-        return $realPath === $root || str_starts_with($realPath, $root . '/');
+        $root = \rtrim($rootReal, '/');
+
+        return $realPath === $root || \str_starts_with($realPath, $root.'/');
     }
 
     private function isHiddenPath(string $relativePath): bool
     {
-        $parts = array_filter(explode('/', $relativePath), static fn(string $p) => $p !== '');
+        $parts = \array_filter(\explode('/', $relativePath), static fn (string $p) => '' !== $p);
         foreach ($parts as $part) {
-            if (str_starts_with($part, '.')) {
+            if (\str_starts_with($part, '.')) {
                 return true;
             }
         }
@@ -245,7 +234,7 @@ final class MeiliFileProxyController extends AbstractController
     private function jsonError(string $error, int $status, ?array $details = null): JsonResponse
     {
         $payload = ['ok' => false, 'error' => $error];
-        if ($details !== null) {
+        if (null !== $details) {
             $payload['details'] = $details;
         }
 

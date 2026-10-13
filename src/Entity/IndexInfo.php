@@ -1,20 +1,18 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Entity;
 
 use Doctrine\DBAL\Types\Types;
-use function in_array;
-use function is_array;
-use function is_string;
-use Survos\MeiliBundle\Metadata\Facet;
-use Survos\MeiliBundle\Metadata\MeiliIndex;
+use Doctrine\ORM\Mapping as ORM;
 use Survos\FieldBundle\Attribute\EntityMeta;
 use Survos\FieldBundle\Attribute\RouteIdentity;
 use Survos\FieldBundle\Entity\RouteIdentityTrait;
 use Survos\FieldBundle\Entity\RouteParametersInterface;
+use Survos\MeiliBundle\Metadata\Facet;
+use Survos\MeiliBundle\Metadata\MeiliIndex;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
-use Doctrine\ORM\Mapping as ORM;
 
 /**
  * Catalog of known Meilisearch indexes — one row per index UID.
@@ -38,8 +36,8 @@ use Doctrine\ORM\Mapping as ORM;
     sortable: ['documentCount', 'createdAt', 'updatedAt', 'indexName'],
     // Exclude computed booleans and internal fields from the index
     displayed: ['indexName', 'label', 'description', 'aggregator', 'institution',
-                'country', 'locale', 'documentCount', 'status', 'settings',
-                'primaryKey', 'createdAt', 'updatedAt', 'lastIndexed'],
+        'country', 'locale', 'documentCount', 'status', 'settings',
+        'primaryKey', 'createdAt', 'updatedAt', 'lastIndexed'],
     chats: ['meili_assistant'],
     ui: ['columns' => 3, 'layout' => 'neutral'],
 )]
@@ -94,17 +92,17 @@ class IndexInfo implements RouteParametersInterface, \Stringable
     /** Aggregator code: dc, pp, omeka, smith, euro, … */
     #[ORM\Column(nullable: true)]
     #[Facet(label: 'Aggregator', order: 1, lookup: [
-        'dc'       => 'Digital Commonwealth',
-        'pp'       => 'PastPerfect Online',
-        'omeka'    => 'Omeka',
-        'smith'    => 'Smithsonian',
-        'euro'     => 'Europeana',
+        'dc' => 'Digital Commonwealth',
+        'pp' => 'PastPerfect Online',
+        'omeka' => 'Omeka',
+        'smith' => 'Smithsonian',
+        'euro' => 'Europeana',
         'fortepan' => 'Fortepan',
-        'ddb'      => 'Deutsche Digitale Bibliothek',
-        'glam'     => 'Open GLAM Survey',
-        'aac'      => 'American Art Collaborative',
-        'md'       => 'museum-digital',
-        'mds'      => 'Museum Data Service (MDS)',
+        'ddb' => 'Deutsche Digitale Bibliothek',
+        'glam' => 'Open GLAM Survey',
+        'aac' => 'American Art Collaborative',
+        'md' => 'museum-digital',
+        'mds' => 'Museum Data Service (MDS)',
     ])]
     public ?string $aggregator = null;
 
@@ -155,67 +153,67 @@ class IndexInfo implements RouteParametersInterface, \Stringable
 
     public function __construct(string $indexName, string $primaryKey, ?string $locale = null)
     {
-        $this->indexName  = $indexName;
+        $this->indexName = $indexName;
         $this->primaryKey = $primaryKey;
-        $this->locale     = $locale;
+        $this->locale = $locale;
     }
 
     public function isComplete(): bool
     {
-        return $this->status === 'succeeded';
+        return 'succeeded' === $this->status;
     }
 
     public function isFailed(): bool
     {
-        return $this->status === 'failed';
+        return 'failed' === $this->status;
     }
 
     public function isProcessing(): bool
     {
-        return in_array($this->status, ['queued', 'processing']);
+        return \in_array($this->status, ['queued', 'processing']);
     }
 
     /** @return array<string,mixed> */
     public function getChatWorkspaceAccess(string $workspace): array
     {
         $registry = $this->settings[self::REGISTRY_KEY] ?? null;
-        if (!is_array($registry)) {
+        if (!\is_array($registry)) {
             return [];
         }
 
         $workspaces = $registry[self::CHAT_WORKSPACES_KEY] ?? null;
-        if (!is_array($workspaces)) {
+        if (!\is_array($workspaces)) {
             return [];
         }
 
         $entry = $workspaces[$workspace] ?? null;
 
-        return is_array($entry) ? $entry : [];
+        return \is_array($entry) ? $entry : [];
     }
 
     public function getChatWorkspaceApiKey(string $workspace): ?string
     {
         $apiKey = $this->getChatWorkspaceAccess($workspace)['apiKey'] ?? null;
 
-        return is_string($apiKey) && $apiKey !== '' ? $apiKey : null;
+        return \is_string($apiKey) && '' !== $apiKey ? $apiKey : null;
     }
 
     public function getChatWorkspaceKeyUid(string $workspace): ?string
     {
         $keyUid = $this->getChatWorkspaceAccess($workspace)['keyUid'] ?? null;
 
-        return is_string($keyUid) && $keyUid !== '' ? $keyUid : null;
+        return \is_string($keyUid) && '' !== $keyUid ? $keyUid : null;
     }
 
     public function setChatWorkspaceAccess(string $workspace, string $apiKey, string $keyUid): void
     {
         $registry = $this->settings[self::REGISTRY_KEY] ?? [];
-        if (!is_array($registry)) {
+        if (!\is_array($registry)) {
             $registry = [];
         }
 
         $workspaces = $registry[self::CHAT_WORKSPACES_KEY] ?? [];
-        if (!is_array($workspaces)) {
+        if (!\is_array($workspaces)) {
             $workspaces = [];
         }
 
@@ -233,7 +231,7 @@ class IndexInfo implements RouteParametersInterface, \Stringable
         $registry = $this->settings[self::REGISTRY_KEY] ?? null;
         $this->settings = $settings;
 
-        if (is_array($registry) && $registry !== []) {
+        if (\is_array($registry) && [] !== $registry) {
             $this->settings[self::REGISTRY_KEY] = $registry;
         }
     }
@@ -242,52 +240,52 @@ class IndexInfo implements RouteParametersInterface, \Stringable
     public function getServerKeyAccess(string $alias): array
     {
         $registry = $this->settings[self::REGISTRY_KEY] ?? null;
-        if (!is_array($registry)) {
+        if (!\is_array($registry)) {
             return [];
         }
 
         $serverKeys = $registry[self::SERVER_KEYS_KEY] ?? null;
-        if (!is_array($serverKeys)) {
+        if (!\is_array($serverKeys)) {
             return [];
         }
 
         $entry = $serverKeys[$alias] ?? null;
 
-        return is_array($entry) ? $entry : [];
+        return \is_array($entry) ? $entry : [];
     }
 
     public function getServerApiKey(string $alias): ?string
     {
         $apiKey = $this->getServerKeyAccess($alias)['apiKey'] ?? null;
 
-        return is_string($apiKey) && $apiKey !== '' ? $apiKey : null;
+        return \is_string($apiKey) && '' !== $apiKey ? $apiKey : null;
     }
 
     public function hasSearchApiKey(): bool
     {
-        return $this->getServerApiKey('readonly_search') !== null;
+        return null !== $this->getServerApiKey('readonly_search');
     }
 
     public function chatWorkspaceKeyCount(): int
     {
         $registry = $this->settings[self::REGISTRY_KEY] ?? null;
-        if (!is_array($registry)) {
+        if (!\is_array($registry)) {
             return 0;
         }
 
         $workspaces = $registry[self::CHAT_WORKSPACES_KEY] ?? null;
-        if (!is_array($workspaces)) {
+        if (!\is_array($workspaces)) {
             return 0;
         }
 
         $count = 0;
         foreach ($workspaces as $entry) {
-            if (!is_array($entry)) {
+            if (!\is_array($entry)) {
                 continue;
             }
 
             $apiKey = $entry['apiKey'] ?? null;
-            if (is_string($apiKey) && $apiKey !== '') {
+            if (\is_string($apiKey) && '' !== $apiKey) {
                 ++$count;
             }
         }
@@ -304,18 +302,18 @@ class IndexInfo implements RouteParametersInterface, \Stringable
     {
         $keyUid = $this->getServerKeyAccess($alias)['keyUid'] ?? null;
 
-        return is_string($keyUid) && $keyUid !== '' ? $keyUid : null;
+        return \is_string($keyUid) && '' !== $keyUid ? $keyUid : null;
     }
 
     public function setServerKeyAccess(string $alias, string $apiKey, string $keyUid): void
     {
         $registry = $this->settings[self::REGISTRY_KEY] ?? [];
-        if (!is_array($registry)) {
+        if (!\is_array($registry)) {
             $registry = [];
         }
 
         $serverKeys = $registry[self::SERVER_KEYS_KEY] ?? [];
-        if (!is_array($serverKeys)) {
+        if (!\is_array($serverKeys)) {
             $serverKeys = [];
         }
 

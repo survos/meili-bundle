@@ -1,42 +1,22 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Command;
 
-use RuntimeException;
+use Meilisearch\Exceptions\ApiException;
 use Survos\MeiliBundle\Service\ChatWorkspaceAccessKeyService;
 use Survos\MeiliBundle\Service\ChatWorkspaceResolver;
 use Survos\MeiliBundle\Service\MeiliServerKeyService;
+use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
-use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Routing\Exception\RouteNotFoundException;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Twig\Environment as TwigEnvironment;
-
-use function array_diff_key;
-use function array_fill_keys;
-use function array_filter;
-use function array_keys;
-use function array_values;
-use function array_unique;
-use function count;
-use function implode;
-use function array_map;
-use function array_merge;
-use function in_array;
-use function is_array;
-use function is_string;
-use function json_encode;
-use function sprintf;
-use function str_contains;
-
-use Meilisearch\Exceptions\ApiException;
-use function strtolower;
-use function trim;
 
 #[AsCommand('meili:settings:update', 'Update Meilisearch index settings from compiler-pass schema')]
 final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
@@ -93,13 +73,13 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
         $rawSettings = $this->meili->getRawIndexSettings(); // keyed by raw index name
         $bases = $this->resolveTargets($indexName, $class);
 
-        if ($bases === []) {
-            $io->warning($chat === true
+        if ([] === $bases) {
+            $io->warning(true === $chat
                 ? 'No matching indexes for schema updates; continuing with chat workspace sync.'
                 : 'No matching indexes.'
             );
 
-            if ($chat !== true) {
+            if (true !== $chat) {
                 return Command::SUCCESS;
             }
         }
@@ -110,59 +90,59 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
         foreach ($bases as $base) {
             $settings = $rawSettings[$base] ?? null;
             if (!$settings) {
-                $io->warning(sprintf('No compiler-pass settings found for "%s".', $base));
+                $io->warning(\sprintf('No compiler-pass settings found for "%s".', $base));
                 continue;
             }
 
             $fallbackSource = $this->localeContext?->getDefault() ?? 'en';
             $localePolicy = $this->indexNameResolver->localesFor($base, $fallbackSource);
             $sourceLocale = $localePolicy['source'] ?? $fallbackSource;
-            $policyLocales = array_map(static fn(string $loc): string => strtolower($loc), $localePolicy['all']);
+            $policyLocales = \array_map(static fn (string $loc): string => \strtolower($loc), $localePolicy['all']);
             $sourceLocales[$base] = $sourceLocale;
 
-             $schema = $settings['schema'] ?? [];
-             // Raw embedders from compiler pass may be shorthand (e.g. ["product"]).
-             // Normalize to the exact Meili API shape using the provider.
-             // $rawEmbedders is the list of embedder *names* declared on #[MeiliIndex(embedders: ['product'])].
-             // We must filter the global provider map to only those names — otherwise every index
-             // gets every globally-configured embedder pushed to it.
-             $rawEmbedders = $settings['embedders'] ?? [];
-             $embedders = [];
-             if ($rawEmbedders && $this->embeddersProvider) {
-                 $all = $this->embeddersProvider->forMeili();
-                 foreach ($rawEmbedders as $name) {
-                     if (isset($all[$name])) {
-                         $embedders[$name] = $all[$name];
-                     }
-                 }
-             }
+            $schema = $settings['schema'] ?? [];
+            // Raw embedders from compiler pass may be shorthand (e.g. ["product"]).
+            // Normalize to the exact Meili API shape using the provider.
+            // $rawEmbedders is the list of embedder *names* declared on #[MeiliIndex(embedders: ['product'])].
+            // We must filter the global provider map to only those names — otherwise every index
+            // gets every globally-configured embedder pushed to it.
+            $rawEmbedders = $settings['embedders'] ?? [];
+            $embedders = [];
+            if ($rawEmbedders && $this->embeddersProvider) {
+                $all = $this->embeddersProvider->forMeili();
+                foreach ($rawEmbedders as $name) {
+                    if (isset($all[$name])) {
+                        $embedders[$name] = $all[$name];
+                    }
+                }
+            }
             $facets = $settings['facets'] ?? [];
 
-             $isMlFor = $this->indexNameResolver->isMultiLingualFor($base, $sourceLocale);
-             // Always process base index (null locale); localized indexes come after
-             $locales = $isMlFor
-                 ? array_merge([null], $localePolicy['all'])
-                 : [null];
+            $isMlFor = $this->indexNameResolver->isMultiLingualFor($base, $sourceLocale);
+            // Always process base index (null locale); localized indexes come after
+            $locales = $isMlFor
+                ? \array_merge([null], $localePolicy['all'])
+                : [null];
 
-             foreach ($locales as $locale) {
-                  $uid = $this->indexNameResolver->uidFor($base, $locale);
-                  $processedIndexUids[] = $uid;
+            foreach ($locales as $locale) {
+                $uid = $this->indexNameResolver->uidFor($base, $locale);
+                $processedIndexUids[] = $uid;
 
-                $io->section(sprintf('Processing %s (locale=%s)', $uid, (string) $locale));
+                $io->section(\sprintf('Processing %s (locale=%s)', $uid, (string) $locale));
 
                 // Always show what would be applied when very verbose,
                 // or when --dump is requested.
-                 if ($dumpSettings || $io->isVeryVerbose()) {
-                      $io->writeln("Schema payload (updateSettings):");
-                      $io->writeln(json_encode($schema, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+                if ($dumpSettings || $io->isVeryVerbose()) {
+                    $io->writeln('Schema payload (updateSettings):');
+                    $io->writeln(\json_encode($schema, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
-                    if ($locale === null && $embedders !== []) {
-                        $io->writeln('Embedders declared for this index: ' . implode(', ', array_keys($embedders)));
+                    if (null === $locale && [] !== $embedders) {
+                        $io->writeln('Embedders declared for this index: '.\implode(', ', \array_keys($embedders)));
                     }
 
                     if ($io->isDebug()) { // -vvv
                         $io->writeln("\nFacet UI metadata (compiler pass):");
-                        $io->writeln(json_encode($facets, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+                        $io->writeln(\json_encode($facets, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
                     }
                 }
 
@@ -175,66 +155,68 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
                     $this->meili->reset($uid);
                 }
 
-                 if (!$force) {
-                     $io->warning(sprintf('Use --force to apply settings to %s', $uid));
-                     continue;
-                 }
+                if (!$force) {
+                    $io->warning(\sprintf('Use --force to apply settings to %s', $uid));
+                    continue;
+                }
 
-                 // No "ensure" semantics: just get endpoint and enqueue updateSettings.
-                 // Meilisearch will auto-create index if needed when applying settings.
-                 $index = $this->meili->getIndexEndpoint($uid);
+                // No "ensure" semantics: just get endpoint and enqueue updateSettings.
+                // Meilisearch will auto-create index if needed when applying settings.
+                $index = $this->meili->getIndexEndpoint($uid);
 
-                 // Apply embedders ONLY on base (non-localized) index.
-                 // Use updateEmbedders (PATCH) with null tombstones to remove spurious entries —
-                 // updateSettings merges embedders and cannot delete them.
-                 $payload = $schema;
-                 if ($locale === null && $embedders !== []) {
-                     if (!$pushEmbedders) {
-                         $io->warning(sprintf(
-                             'Skipping embedders for %s (pass --embedders to push): [%s]. Semantic search is disabled until you re-run with --embedders.',
-                             $uid,
-                             implode(', ', array_keys($embedders))
-                         ));
-                     } else {
-                         // If the index does not exist yet, treat existing embedders as empty —
-                         // updateSettings below will auto-create the index.
-                         try {
-                             $existing = $index->getEmbedders() ?? [];
-                         } catch (ApiException $e) {
-                             if ((int) $e->getCode() === 404) {
-                                 $existing = [];
-                                 $io->writeln(sprintf('Index %s not found; will be created by updateSettings.', $uid));
-                             } else {
-                                 throw $e;
-                             }
-                         }
-                         $toRemove = array_diff_key($existing, $embedders);
-                         $embedderPatch = $embedders;
-                         // Null-out any embedder on the server that is NOT in the declared list.
-                         foreach (array_fill_keys(array_keys($toRemove), null) as $k => $v) {
-                             $embedderPatch[$k] = null;
-                         }
-                         $embTask = $index->updateEmbedders($embedderPatch);
-                         $io->writeln(sprintf('Dispatched updateEmbedders taskUid=%s', $embTask->getTaskUid()));
-                         if ($wait) {
-                             $this->waitAndReport($io, $embTask, 'updateEmbedders', $uid);
-                         }
-                     }
-                 }
+                // Apply embedders ONLY on base (non-localized) index.
+                // Use updateEmbedders (PATCH) with null tombstones to remove spurious entries —
+                // updateSettings merges embedders and cannot delete them.
+                $payload = $schema;
+                if (null === $locale && [] !== $embedders) {
+                    if (!$pushEmbedders) {
+                        $io->warning(\sprintf(
+                            'Skipping embedders for %s (pass --embedders to push): [%s]. Semantic search is disabled until you re-run with --embedders.',
+                            $uid,
+                            \implode(', ', \array_keys($embedders))
+                        ));
+                    } else {
+                        // If the index does not exist yet, treat existing embedders as empty —
+                        // updateSettings below will auto-create the index.
+                        try {
+                            $existing = $index->getEmbedders() ?? [];
+                        } catch (ApiException $e) {
+                            if (404 === (int) $e->getCode()) {
+                                $existing = [];
+                                $io->writeln(\sprintf('Index %s not found; will be created by updateSettings.', $uid));
+                            } else {
+                                throw $e;
+                            }
+                        }
+                        $toRemove = \array_diff_key($existing, $embedders);
+                        $embedderPatch = $embedders;
+                        // Null-out any embedder on the server that is NOT in the declared list.
+                        foreach (\array_fill_keys(\array_keys($toRemove), null) as $k => $v) {
+                            $embedderPatch[$k] = null;
+                        }
+                        $embTask = $index->updateEmbedders($embedderPatch);
+                        $io->writeln(\sprintf('Dispatched updateEmbedders taskUid=%s', $embTask->getTaskUid()));
+                        if ($wait) {
+                            $this->waitAndReport($io, $embTask, 'updateEmbedders', $uid);
+                        }
+                    }
+                }
 
                 $indexLanguage = $locale ?? $sourceLocale;
-                if ($indexLanguage === null || trim($indexLanguage) === '') {
+                if (null === $indexLanguage || '' === \trim($indexLanguage)) {
                     if ($requireLocale) {
-                        $io->error(sprintf('Missing source locale for %s. Configure locales.source or pass --require-locale=0.', $base));
+                        $io->error(\sprintf('Missing source locale for %s. Configure locales.source or pass --require-locale=0.', $base));
+
                         return Command::FAILURE;
                     }
-                    $io->warning(sprintf('No source locale for %s; localizedAttributes will not be set.', $base));
+                    $io->warning(\sprintf('No source locale for %s; localizedAttributes will not be set.', $base));
                 } else {
-                    $indexLanguage = strtolower($indexLanguage);
-                    if ($policyLocales !== [] && !in_array($indexLanguage, $policyLocales, true)) {
-                        $message = sprintf('Locale "%s" not in resolver policy for %s.', $indexLanguage, $base);
+                    $indexLanguage = \strtolower($indexLanguage);
+                    if ([] !== $policyLocales && !\in_array($indexLanguage, $policyLocales, true)) {
+                        $message = \sprintf('Locale "%s" not in resolver policy for %s.', $indexLanguage, $base);
                         if ($strictLocale) {
                             $io->error($message);
+
                             return Command::FAILURE;
                         }
                         $io->warning($message);
@@ -246,8 +228,8 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
                     ]];
                 }
 
-                 $task = $index->updateSettings($payload);
-                 $io->writeln(sprintf('Dispatched updateSettings taskUid=%s', $task->getTaskUid()));
+                $task = $index->updateSettings($payload);
+                $io->writeln(\sprintf('Dispatched updateSettings taskUid=%s', $task->getTaskUid()));
 
                 if ($wait) {
                     $this->waitAndReport($io, $task, 'updateSettings', $uid);
@@ -257,12 +239,12 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 
         $this->renderIndexLinks($io, $bases, $sourceLocales);
 
-        $uniqueIndexUids = array_values(array_unique($processedIndexUids));
+        $uniqueIndexUids = \array_values(\array_unique($processedIndexUids));
         if ($keys) {
             $this->syncManagedKeys($io, $dumpSettings, $force, $uniqueIndexUids);
         }
 
-        if ($chat === true) {
+        if (true === $chat) {
             $this->syncChat($io, $dumpSettings, $force, $keys, $uniqueIndexUids);
         }
 
@@ -272,7 +254,7 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
     /** @param list<string> $indexUids */
     private function syncManagedKeys(SymfonyStyle $io, bool $dumpSettings, bool $force, array $indexUids): void
     {
-        if ($indexUids === []) {
+        if ([] === $indexUids) {
             $io->warning('No indexes available for managed key sync.');
 
             return;
@@ -280,7 +262,7 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 
         $io->section('Managed Meili keys');
         if ($dumpSettings) {
-            $io->writeln(sprintf('Would ensure managed keys for indexes: %s', implode(', ', $indexUids)));
+            $io->writeln(\sprintf('Would ensure managed keys for indexes: %s', \implode(', ', $indexUids)));
 
             return;
         }
@@ -293,7 +275,7 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 
         $keys = $this->meiliServerKeyService->ensureServerKeys($indexUids);
         foreach ($keys as $alias => $key) {
-            $io->writeln(sprintf(
+            $io->writeln(\sprintf(
                 '  [%s] %s (uid=%s)',
                 $alias,
                 $key['created'] ? 'created' : 'verified',
@@ -306,11 +288,11 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
     {
         $result = $this->meili->waitForTask($task->getTaskUid());
         $status = $result['status'] ?? 'unknown';
-        if ($status === 'succeeded') {
-            $io->writeln(sprintf('  [%s] %s succeeded (taskUid=%s)', $uid, $label, $result['uid'] ?? '?'));
+        if ('succeeded' === $status) {
+            $io->writeln(\sprintf('  [%s] %s succeeded (taskUid=%s)', $uid, $label, $result['uid'] ?? '?'));
         } else {
             $error = $result['error'] ?? [];
-            $io->error(sprintf(
+            $io->error(\sprintf(
                 '[%s] %s %s (taskUid=%s): %s — %s',
                 $uid,
                 $label,
@@ -325,20 +307,21 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
     /** @param list<string> $limitIndexUids */
     private function syncChat(SymfonyStyle $io, bool $dumpSettings, bool $force, bool $createKeys, array $limitIndexUids = []): void
     {
-        $client      = $this->meili->getMeiliClient();
+        $client = $this->meili->getMeiliClient();
         $meiliConfig = $this->meili->getConfig();
-        $host        = rtrim($meiliConfig['host'] ?? 'http://127.0.0.1:7700', '/');
-        $adminKey    = $meiliConfig['apiKey'] ?? '';
-        $workspaces  = $this->chatConfig['workspaces'] ?? [];
+        $host = rtrim($meiliConfig['host'] ?? 'http://127.0.0.1:7700', '/');
+        $adminKey = $meiliConfig['apiKey'] ?? '';
+        $workspaces = $this->chatConfig['workspaces'] ?? [];
 
-        if ($workspaces === []) {
+        if ([] === $workspaces) {
             $io->warning('No chat workspaces configured under survos_meili.chat.workspaces — skipping.');
+
             return;
         }
 
         // 1. Enable chatCompletions experimental feature (SDK has no wrapper; call directly)
         $io->section('Chat: experimental feature');
-        $featuresUrl = $host . '/experimental-features';
+        $featuresUrl = $host.'/experimental-features';
         $response = json_decode(
             file_get_contents($featuresUrl, false, stream_context_create(['http' => [
                 'header' => "Authorization: Bearer $adminKey\r\n",
@@ -352,9 +335,9 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
             $io->writeln('Would send: PATCH /experimental-features {"chatCompletions": true}');
         } elseif ($force) {
             $ctx = stream_context_create(['http' => [
-                'method'  => 'PATCH',
-                'header'  => "Authorization: Bearer $adminKey\r\nContent-Type: application/json\r\n",
-                'content' => json_encode(['chatCompletions' => true]),
+                'method' => 'PATCH',
+                'header' => "Authorization: Bearer $adminKey\r\nContent-Type: application/json\r\n",
+                'content' => \json_encode(['chatCompletions' => true]),
             ]]);
             file_get_contents($featuresUrl, false, $ctx);
             $io->writeln('<info>Enabled chatCompletions experimental feature.</info>');
@@ -365,33 +348,33 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
         // 2. Sync each workspace template into one actual workspace per index
         foreach ($workspaces as $name => $cfg) {
             $workspaceIndexUids = $this->chatWorkspaceResolver->resolveWorkspaceIndexes($name, $cfg);
-            if ($limitIndexUids !== []) {
-                $workspaceIndexUids = array_values(array_filter(
+            if ([] !== $limitIndexUids) {
+                $workspaceIndexUids = \array_values(\array_filter(
                     $workspaceIndexUids,
-                    static fn(string $indexUid): bool => in_array($indexUid, $limitIndexUids, true)
+                    static fn (string $indexUid): bool => \in_array($indexUid, $limitIndexUids, true)
                 ));
             }
 
-            if ($workspaceIndexUids === []) {
-                if ($limitIndexUids !== []) {
+            if ([] === $workspaceIndexUids) {
+                if ([] !== $limitIndexUids) {
                     continue;
                 }
 
-                throw new RuntimeException(sprintf('Workspace "%s" is not attached to any indexes.', $name));
+                throw new \RuntimeException(\sprintf('Workspace "%s" is not attached to any indexes.', $name));
             }
-            $io->writeln(sprintf('Workspace template "%s" indexes: %s', $name, implode(', ', $workspaceIndexUids)));
+            $io->writeln(\sprintf('Workspace template "%s" indexes: %s', $name, \implode(', ', $workspaceIndexUids)));
 
             foreach ($workspaceIndexUids as $indexUid) {
                 $actualWorkspace = $this->chatWorkspaceResolver->actualWorkspaceName($name, $indexUid);
-                $io->section(sprintf('Chat workspace: %s', $actualWorkspace));
+                $io->section(\sprintf('Chat workspace: %s', $actualWorkspace));
 
                 $settings = $this->workspaceSettings($name, $actualWorkspace, $cfg, [$indexUid]);
 
                 if ($dumpSettings) {
-                    $io->writeln(json_encode($settings, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-                    $io->comment(sprintf('  model "%s" will be sent per-request (not stored in workspace settings)', $cfg['model'] ?? 'gpt-4o-mini'));
+                    $io->writeln(\json_encode($settings, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+                    $io->comment(\sprintf('  model "%s" will be sent per-request (not stored in workspace settings)', $cfg['model'] ?? 'gpt-4o-mini'));
                     $debug = $this->chatWorkspaceAccessKeyService->debugInfo($indexUid, $actualWorkspace);
-                    $io->comment(sprintf(
+                    $io->comment(\sprintf(
                         '  chat key for %s: status=%s source=%s keyUid=%s',
                         $indexUid,
                         $debug['status'],
@@ -402,13 +385,13 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
                 }
 
                 if (!$force) {
-                    $io->warning(sprintf('Use --force to push workspace "%s" settings.', $actualWorkspace));
+                    $io->warning(\sprintf('Use --force to push workspace "%s" settings.', $actualWorkspace));
                     continue;
                 }
 
                 if ($createKeys) {
                     $key = $this->chatWorkspaceAccessKeyService->ensureApiKey($indexUid, $actualWorkspace);
-                    $io->writeln(sprintf(
+                    $io->writeln(\sprintf(
                         '  [%s] %s chat key %s (uid=%s)',
                         $indexUid,
                         $key['created'] ? 'created' : 'verified',
@@ -418,13 +401,13 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
                 } else {
                     $debug = $this->chatWorkspaceAccessKeyService->debugInfo($indexUid, $actualWorkspace);
                     if ($debug['hasApiKey']) {
-                        $io->writeln(sprintf(
+                        $io->writeln(\sprintf(
                             '  [%s] chat key already in registry (uid=%s)',
                             $indexUid,
                             $debug['keyUid'] ?? '?'
                         ));
                     } else {
-                        $io->warning(sprintf(
+                        $io->warning(\sprintf(
                             'No registry chat key for %s/%s. Re-run with --keys to create it.',
                             $indexUid,
                             $actualWorkspace
@@ -433,16 +416,16 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
                 }
 
                 $applied = $client->chatWorkspace($actualWorkspace)->updateSettings($settings);
-                $io->writeln(sprintf(
+                $io->writeln(\sprintf(
                     '<info>Pushed settings for workspace "%s"</info> (model per-request: %s)',
                     $actualWorkspace,
                     $cfg['model'] ?? 'gpt-4o-mini'
                 ));
                 $appliedPrompts = $applied->toArray()['prompts'] ?? [];
-                $io->comment(sprintf(
+                $io->comment(\sprintf(
                     '  applied source=%s prompts=%s',
                     $applied->getSource(),
-                    implode(', ', array_keys($appliedPrompts))
+                    \implode(', ', \array_keys($appliedPrompts))
                 ));
             }
         }
@@ -453,13 +436,14 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
      * Collects filterable/sortable attributes across the supplied indexes,
      * and renders each prompt template with that context.
      *
-     * @param array<string,mixed> $cfg workspace config
-     * @param list<string> $allIndexUids
+     * @param array<string,mixed> $cfg          workspace config
+     * @param list<string>        $allIndexUids
+     *
      * @return array<string,string>
      */
     private function buildDynamicPrompts(string $workspaceName, array $cfg, array $allIndexUids): array
     {
-        if ($this->twig === null) {
+        if (null === $this->twig) {
             return [];
         }
 
@@ -468,11 +452,11 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
         // Collect schema info across all indexes covered by this workspace.
         // A workspace may cover multiple indexes; merge their attributes.
         $filterableAttributes = [];
-        $sortableAttributes   = [];
-        $facets               = [];
-        $primaryKey           = 'id';
-        $docCount             = 0;
-        $firstIndexName       = '';
+        $sortableAttributes = [];
+        $facets = [];
+        $primaryKey = 'id';
+        $docCount = 0;
+        $firstIndexName = '';
         $indexPromptOverrides = [];
 
         foreach ($allIndexUids as $indexUid) {
@@ -486,11 +470,11 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
                 }
             }
 
-            if ($base === null) {
+            if (null === $base) {
                 continue;
             }
 
-            $s      = $rawSettings[$base];
+            $s = $rawSettings[$base];
             $schema = $s['schema'] ?? [];
 
             // Collect fields excluded from AI context (returnInChat: false).
@@ -502,16 +486,16 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
             }
 
             // Only include filterable attributes that are not excluded from chat context.
-            $indexFilterable = array_values(array_filter(
+            $indexFilterable = \array_values(\array_filter(
                 $schema['filterableAttributes'] ?? [],
-                static fn(string $f) => !in_array($f, $excludedFromChat, true)
+                static fn (string $f) => !\in_array($f, $excludedFromChat, true)
             ));
 
-            $filterableAttributes = array_values(array_unique(array_merge(
+            $filterableAttributes = \array_values(\array_unique(\array_merge(
                 $filterableAttributes,
                 $indexFilterable
             )));
-            $sortableAttributes = array_values(array_unique(array_merge(
+            $sortableAttributes = \array_values(\array_unique(\array_merge(
                 $sortableAttributes,
                 $schema['sortableAttributes'] ?? []
             )));
@@ -523,23 +507,23 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
                 }
             }
 
-            if ($firstIndexName === '') {
+            if ('' === $firstIndexName) {
                 $firstIndexName = $indexUid;
-                $primaryKey     = $s['primaryKey'] ?? 'id';
-                $indexPromptOverrides = is_array($s['prompts'] ?? null) ? $s['prompts'] : [];
+                $primaryKey = $s['primaryKey'] ?? 'id';
+                $indexPromptOverrides = \is_array($s['prompts'] ?? null) ? $s['prompts'] : [];
             }
         }
 
         $context = [
-            'indexName'            => $firstIndexName,
-            'workspaceName'        => $workspaceName,
-            'workspaceCfg'         => $cfg,
-            'primaryKey'           => $primaryKey,
+            'indexName' => $firstIndexName,
+            'workspaceName' => $workspaceName,
+            'workspaceCfg' => $cfg,
+            'primaryKey' => $primaryKey,
             'filterableAttributes' => $filterableAttributes,
-            'sortableAttributes'   => $sortableAttributes,
-            'facets'               => $facets,
-            'docCount'             => $docCount,
-            'examples'             => $cfg['examples'] ?? [],
+            'sortableAttributes' => $sortableAttributes,
+            'facets' => $facets,
+            'docCount' => $docCount,
+            'examples' => $cfg['examples'] ?? [],
         ];
 
         $prompts = [];
@@ -548,17 +532,17 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
         $context['allIndexUids'] = $allIndexUids;
 
         $templates = [
-            'system'               => '@SurvosMeili/chat/system_prompt.txt.twig',
-            'searchQParam'         => '@SurvosMeili/chat/search_q_param.txt.twig',
-            'searchFilterParam'    => '@SurvosMeili/chat/search_filter_param.txt.twig',
-            'searchDescription'    => '@SurvosMeili/chat/search_description.txt.twig',
-            'searchIndexUidParam'  => '@SurvosMeili/chat/search_index_uid_param.txt.twig',
+            'system' => '@SurvosMeili/chat/system_prompt.txt.twig',
+            'searchQParam' => '@SurvosMeili/chat/search_q_param.txt.twig',
+            'searchFilterParam' => '@SurvosMeili/chat/search_filter_param.txt.twig',
+            'searchDescription' => '@SurvosMeili/chat/search_description.txt.twig',
+            'searchIndexUidParam' => '@SurvosMeili/chat/search_index_uid_param.txt.twig',
         ];
 
         foreach ($templates as $key => $template) {
             try {
-                $rendered = trim($this->twig->render($template, $context));
-                if ($rendered !== '') {
+                $rendered = \trim($this->twig->render($template, $context));
+                if ('' !== $rendered) {
                     $prompts[$key] = $rendered;
                 }
             } catch (\Throwable $e) {
@@ -567,22 +551,22 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
         }
 
         $customSystemPrompt = $indexPromptOverrides['system'] ?? null;
-        if (is_string($customSystemPrompt) && trim($customSystemPrompt) !== '') {
-            $renderedCustomPrompt = trim($customSystemPrompt);
+        if (\is_string($customSystemPrompt) && '' !== \trim($customSystemPrompt)) {
+            $renderedCustomPrompt = \trim($customSystemPrompt);
 
             try {
-                $renderedCustomPrompt = trim($this->twig->createTemplate($customSystemPrompt)->render($context));
+                $renderedCustomPrompt = \trim($this->twig->createTemplate($customSystemPrompt)->render($context));
             } catch (\Throwable) {
                 // Keep literal fallback when custom prompt template cannot be rendered.
             }
 
-            if ($renderedCustomPrompt !== '') {
+            if ('' !== $renderedCustomPrompt) {
                 $prompts['system'] = $renderedCustomPrompt;
             }
         }
 
-        if (isset($prompts['system']) && !str_contains($prompts['system'], '[id:{value}]')) {
-            $prompts['system'] = trim($prompts['system']) . "\n\n" . sprintf(
+        if (isset($prompts['system']) && !\str_contains($prompts['system'], '[id:{value}]')) {
+            $prompts['system'] = \trim($prompts['system'])."\n\n".\sprintf(
                 'For each item you mention, append its primary key on the same line using exactly this format: [id:{value}] where {value} is the item\'s %s field value.',
                 $primaryKey
             );
@@ -593,33 +577,30 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
 
     /**
      * @param array<string,mixed> $cfg
-     * @param list<string> $indexUids
+     * @param list<string>        $indexUids
+     *
      * @return array<string,mixed>
      */
     private function workspaceSettings(string $workspaceTemplate, string $workspaceName, array $cfg, array $indexUids): array
     {
-        $settings = array_filter([
-            'source'       => $cfg['source'] ?? 'openAi',
-            'apiKey'       => $cfg['apiKey'] ?? null,
-            'baseUrl'      => $cfg['baseUrl'] ?? null,
-            'orgId'        => $cfg['orgId'] ?? null,
-            'projectId'    => $cfg['projectId'] ?? null,
-            'apiVersion'   => $cfg['apiVersion'] ?? null,
+        $settings = \array_filter([
+            'source' => $cfg['source'] ?? 'openAi',
+            'apiKey' => $cfg['apiKey'] ?? null,
+            'baseUrl' => $cfg['baseUrl'] ?? null,
+            'orgId' => $cfg['orgId'] ?? null,
+            'projectId' => $cfg['projectId'] ?? null,
+            'apiVersion' => $cfg['apiVersion'] ?? null,
             'deploymentId' => $cfg['deploymentId'] ?? null,
-        ], static fn($v) => $v !== null && $v !== '');
+        ], static fn ($v) => null !== $v && '' !== $v);
 
         if (!isset($settings['apiKey'])) {
-            throw new RuntimeException(sprintf(
-                'Workspace "%s" has no provider apiKey configured. Set survos_meili.chat.workspaces.%s.apiKey.',
-                $workspaceTemplate,
-                $workspaceTemplate
-            ));
+            throw new \RuntimeException(\sprintf('Workspace "%s" has no provider apiKey configured. Set survos_meili.chat.workspaces.%s.apiKey.', $workspaceTemplate, $workspaceTemplate));
         }
 
-        $staticPrompts = array_filter($cfg['prompts'] ?? [], static fn($v) => $v !== null && $v !== '');
+        $staticPrompts = \array_filter($cfg['prompts'] ?? [], static fn ($v) => null !== $v && '' !== $v);
         $dynamicPrompts = $this->buildDynamicPrompts($workspaceName, $cfg, $indexUids);
-        $prompts = array_merge($dynamicPrompts, $staticPrompts);
-        if ($prompts !== []) {
+        $prompts = \array_merge($dynamicPrompts, $staticPrompts);
+        if ([] !== $prompts) {
             $settings['prompts'] = $prompts;
         }
 
@@ -629,7 +610,7 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
     /** @param list<string> $bases */
     private function renderIndexLinks(SymfonyStyle $io, array $bases, array $sourceLocales): void
     {
-        if ($bases === []) {
+        if ([] === $bases) {
             return;
         }
 
@@ -637,14 +618,15 @@ final class MeiliSchemaUpdateCommand extends MeiliBaseCommand
             try {
                 $params = ['indexName' => $baseName];
                 $locale = $sourceLocales[$baseName] ?? null;
-                if ($locale !== null && trim($locale) !== '') {
+                if (null !== $locale && '' !== \trim($locale)) {
                     $params['_locale'] = $locale;
                 }
 
                 $url = $this->urlGenerator->generate('meili_insta', $params, UrlGeneratorInterface::ABSOLUTE_URL);
-                $io->writeln(sprintf('Index page: %s', $url));
+                $io->writeln(\sprintf('Index page: %s', $url));
             } catch (RouteNotFoundException) {
                 $io->warning('Route "meili_insta" not found; cannot print index URL.');
+
                 return;
             }
         }

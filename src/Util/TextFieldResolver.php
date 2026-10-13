@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Util;
@@ -7,11 +8,15 @@ use Survos\MeiliBundle\Service\SettingsService;
 
 final class TextFieldResolver
 {
-    public function __construct(private SettingsService $settings) {}
+    public function __construct(private SettingsService $settings)
+    {
+    }
 
     /**
      * Prefer fields tagged as #[Translatable], fall back to #[Searchable] if present.
+     *
      * @param class-string $class
+     *
      * @return list<string>
      */
     public function resolveSearchable(string $class): array
@@ -28,6 +33,7 @@ final class TextFieldResolver
             // ['name' => 'partial', 'code' => 'exact']
             $searchable = array_keys($searchable);
         }
+
         return array_values(array_unique($searchable));
     }
 }

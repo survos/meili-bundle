@@ -1,8 +1,8 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Survos\MeiliBundle\Command;
-
-
 
 /*
  *
@@ -12,68 +12,41 @@ namespace Survos\MeiliBundle\Command;
  *
  */
 
-
-
-
-
-
-
-
-
-
-
-use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
-use ApiPlatform\Metadata\ApiFilter;
-use ApiPlatform\Metadata\ApiResource;
-use Doctrine\ORM\EntityManagerInterface;
 use Meilisearch\Endpoints\Indexes;
 use Psr\Log\LoggerInterface;
-//use Survos\ApiGrid\Service\DatatableService;
+// use Survos\ApiGrid\Service\DatatableService;
 use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\SettingsService;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Helper\ProgressBar;
-use Symfony\Component\Console\Helper\Table;
-use Symfony\Component\Console\Input\InputArgument;
-use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Input\InputOption;
-use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
-use Symfony\Component\Intl\Languages;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
-use Symfony\Component\Serializer\SerializerInterface;
-use Symfony\Component\Yaml\Yaml;
 
-//#[AsCommand(
+// #[AsCommand(
 //    hidden: true,
 //    name: 'meili:settings',
 //    aliases: ['meili:schema:update'],
 //    description: 'view and set meilisearch settings',
-//)]
-class SettingsCommand #
+// )]
+class SettingsCommand
 {
     private SymfonyStyle $io;
+
     public function __construct(
-        protected ParameterBagInterface                       $bag,
-        private LoggerInterface                               $logger,
-        private MeiliService                                  $meiliService,
-        private SettingsService                               $settingsService,
-        private NormalizerInterface                           $normalizer,
-        #[Autowire('%env(default::OPENAI_API_KEY)%')] private ?string $openAiApiKey=null,
-        #[Autowire('%kernel.enabled_locales%')] private array $enabledLocales=[],
-    )
-    {
+        protected ParameterBagInterface $bag,
+        private LoggerInterface $logger,
+        private MeiliService $meiliService,
+        private SettingsService $settingsService,
+        private NormalizerInterface $normalizer,
+        #[Autowire('%env(default::OPENAI_API_KEY)%')] private ?string $openAiApiKey = null,
+        #[Autowire('%kernel.enabled_locales%')] private array $enabledLocales = [],
+    ) {
     }
 
-    /**
-     * @param array $settings
-     * @return array
-     */
     public function getFilterableAttributes(array $settings): array
     {
         return $this->settingsService->getFieldsWithAttribute($settings, 'browsable');
@@ -81,18 +54,17 @@ class SettingsCommand #
 
     public function __invoke(
         SymfonyStyle $io,
-        #[Argument("Class name")] ?string $class = null,
-        #[Argument("filter class name")] string $filter='',
-        #[Option("pk")] string $pk = 'id',
-        #[Option("reset the meili index")] ?bool $reset = null,
+        #[Argument('Class name')] ?string $class = null,
+        #[Argument('filter class name')] string $filter = '',
+        #[Option('pk')] string $pk = 'id',
+        #[Option('reset the meili index')] ?bool $reset = null,
         #[Option("Don't actually update the settings")] ?bool $dry = null,
-    ): int
-    {
+    ): int {
         // if !class, prompt for possible classes
         if ($class && !class_exists($class)) {
             $class = "App\\Entity\\$class";
         }
-//        dd($this->meiliService->indexedEntities);
+        //        dd($this->meiliService->indexedEntities);
         foreach ($this->meiliService->indexedEntities as $class) {
             $indexName = $this->meiliService->getPrefixedIndexName((new \ReflectionClass($class))->getShortName());
 
@@ -100,14 +72,15 @@ class SettingsCommand #
             if ($reset) {
                 // this deletes the index!
                 if ($dry) {
-                    $io->error("you cannot have both --reset and --dry");
+                    $io->error('you cannot have both --reset and --dry');
+
                     return Command::FAILURE;
                 }
                 $this->meiliService->reset($indexName);
             }
 
             // skip if no documents?  Obviously, docs could be added later, e.g. an Owner record after import
-//            $task = $this->waitForTask($this->getMeiliClient()->createIndex($indexName, ['primaryKey' => Instance::DB_CODE_FIELD]));
+            //            $task = $this->waitForTask($this->getMeiliClient()->createIndex($indexName, ['primaryKey' => Instance::DB_CODE_FIELD]));
 
             // pk of meili  index might be different than doctrine pk, e.g. $imdbId
             $index = $this->meiliService->getIndex($indexName, $pk);
@@ -115,20 +88,15 @@ class SettingsCommand #
 
             $stats = $index->stats();
 
-
             $io->title("$indexName stats");
             $io->write(json_encode($stats, JSON_PRETTY_PRINT));
-
         }
 
-
         return Command::SUCCESS;
-
     }
 
     private function configureIndex(string $class, string $indexName, Indexes $index, ?bool $dry): Indexes
     {
-
         $settings = $this->settingsService->getSettingsFromAttributes($class);
         $idFields = $this->settingsService->getFieldsWithAttribute($settings, 'is_primary');
         $primaryKey = count($idFields) ? $idFields[0] : 'id';
@@ -136,35 +104,35 @@ class SettingsCommand #
         $localizedAttributes = [];
         foreach ($this->enabledLocales as $locale) {
             $localizedAttributes[] = ['locales' => [$locale],
-                'attributePatterns' => [sprintf('_translations.%s.*',$locale)]];
+                'attributePatterns' => [sprintf('_translations.%s.*', $locale)]];
         }
 
         $index = $this->meiliService->getIndex($indexName, $primaryKey);
-//        $index->updateSortableAttributes($this->datatableService->getFieldsWithAttribute($settings, 'sortable'));
-//        $index->updateSettings(); // could do this in one call
+        //        $index->updateSortableAttributes($this->datatableService->getFieldsWithAttribute($settings, 'sortable'));
+        //        $index->updateSettings(); // could do this in one call
         $filterable = $this->getFilterableAttributes($settings);
-            $settingsConfig = [
-//                'searchFacets' => false, // search _within_ facets
-                'localizedAttributes' => $localizedAttributes,
-                'displayedAttributes' => ['*'],
-                'filterableAttributes' => $filterable,
-                'sortableAttributes' => $this->settingsService->getFieldsWithAttribute($settings, 'sortable'),
-                "faceting" => [
-                    "sortFacetValuesBy" => ["*" => "count"],
-                    "maxValuesPerFacet" => $this->meiliService->getConfig()['maxValuesPerFacet']
-                ],
-            ];
-            if (!$dry) {
-                $results = $index->updateSettings($settingsConfig);
-                dd($results);
-//            $stats = $this->meiliService->waitUntilFinished($index);
-//            dump($stats, $debug, $filterable, $index->getUid());
-//        dump($index->getSettings(), $index->getEmbedders());
-            } else {
-//                dump($settingsConfig);
-            }
+        $settingsConfig = [
+            //                'searchFacets' => false, // search _within_ facets
+            'localizedAttributes' => $localizedAttributes,
+            'displayedAttributes' => ['*'],
+            'filterableAttributes' => $filterable,
+            'sortableAttributes' => $this->settingsService->getFieldsWithAttribute($settings, 'sortable'),
+            'faceting' => [
+                'sortFacetValuesBy' => ['*' => 'count'],
+                'maxValuesPerFacet' => $this->meiliService->getConfig()['maxValuesPerFacet'],
+            ],
+        ];
+        if (!$dry) {
+            $results = $index->updateSettings($settingsConfig);
+            dd($results);
+            //            $stats = $this->meiliService->waitUntilFinished($index);
+            //            dump($stats, $debug, $filterable, $index->getUid());
+            //        dump($index->getSettings(), $index->getEmbedders());
+        }
+        //                dump($settingsConfig);
+
         dump($settingsConfig);
+
         return $index;
     }
-
 }

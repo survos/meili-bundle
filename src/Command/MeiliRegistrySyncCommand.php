@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Command;
@@ -13,9 +14,6 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
-
-use function sprintf;
-use function str_starts_with;
 
 #[AsCommand('meili:registry:sync', 'Sync Meili index info into the database')]
 final class MeiliRegistrySyncCommand
@@ -42,7 +40,7 @@ final class MeiliRegistrySyncCommand
         $prefix ??= $this->meiliService->getPrefix();
 
         if ($prefix) {
-            $io->info(sprintf('Filtering indexes by prefix: %s', $prefix));
+            $io->info(\sprintf('Filtering indexes by prefix: %s', $prefix));
         }
 
         $indexes = $this->meiliService->listIndexesFast();
@@ -54,10 +52,10 @@ final class MeiliRegistrySyncCommand
         $chatKeyMissing = 0;
 
         foreach ($indexes as $uid => $index) {
-            if ($prefix && !str_starts_with($uid, $prefix)) {
+            if ($prefix && !\str_starts_with($uid, $prefix)) {
                 continue;
             }
-            if ($limit !== null && $count >= $limit) {
+            if (null !== $limit && $count >= $limit) {
                 break;
             }
 
@@ -96,13 +94,13 @@ final class MeiliRegistrySyncCommand
                 }
             }
 
-            $count++;
+            ++$count;
         }
 
         $this->entityManager->flush();
-        $io->success(sprintf('Synced %d Meili index(es)', $count));
-        $io->writeln(sprintf('Search key in registry: %d found, %d missing', $searchKeyExists, $searchKeyMissing));
-        $io->writeln(sprintf('Index chat keys in registry: %d found, %d missing', $chatKeyExists, $chatKeyMissing));
+        $io->success(\sprintf('Synced %d Meili index(es)', $count));
+        $io->writeln(\sprintf('Search key in registry: %d found, %d missing', $searchKeyExists, $searchKeyMissing));
+        $io->writeln(\sprintf('Index chat keys in registry: %d found, %d missing', $chatKeyExists, $chatKeyMissing));
 
         return Command::SUCCESS;
     }

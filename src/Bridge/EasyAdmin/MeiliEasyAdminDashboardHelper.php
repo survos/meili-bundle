@@ -1,11 +1,12 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Bridge\EasyAdmin;
 
 use EasyCorp\Bundle\EasyAdminBundle\Config\Dashboard;
-use Survos\MeiliBundle\Service\MeiliService;
 use Survos\MeiliBundle\Service\IndexNameResolver;
+use Survos\MeiliBundle\Service\MeiliService;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 final class MeiliEasyAdminDashboardHelper
@@ -33,8 +34,8 @@ final class MeiliEasyAdminDashboardHelper
             'action.detail' => 'fa fa-eye',
             'field.text_editor.view_content' => 'fa fa-cogs',
         ];
-        return $icons[$key] ?? 'fa fa-bug';
 
+        return $icons[$key] ?? 'fa fa-bug';
     }
 
     public function configureDashboard(Dashboard $dashboard): Dashboard
@@ -62,12 +63,12 @@ final class MeiliEasyAdminDashboardHelper
         }
 
         $workspaces = $this->chatConfig['workspaces'] ?? [];
-        $defaultWorkspace = $workspaces !== [] ? array_key_first($workspaces) : null;
+        $defaultWorkspace = [] !== $workspaces ? array_key_first($workspaces) : null;
 
         return [
-            'prefix'           => $dashboardPrefix,
-            'allSettings'      => $allSettings,
-            'meiliUiUrl'       => $this->meiliUiUrl,
+            'prefix' => $dashboardPrefix,
+            'allSettings' => $allSettings,
+            'meiliUiUrl' => $this->meiliUiUrl,
             'defaultWorkspace' => $defaultWorkspace,
         ];
     }

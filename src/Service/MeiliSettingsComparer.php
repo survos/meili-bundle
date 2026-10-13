@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
@@ -12,8 +13,9 @@ final class MeiliSettingsComparer
         private readonly Client $meili,
         /** @var array<string,array<string,mixed>> indexName => compiled settings */
         private readonly array $compiledSettings,
-        private readonly ?string $prefix = null
-    ) {}
+        private readonly ?string $prefix = null,
+    ) {
+    }
 
     /** @return array{pending:int,diff:array<string,mixed>} */
     public function check(string $indexName): array
@@ -21,19 +23,20 @@ final class MeiliSettingsComparer
         $uid = $this->prefixed($indexName);
 
         $pending = $this->pendingTasks($uid);
-        $live    = $this->liveSettings($uid);
-        $want    = $this->wantSettings($indexName);
+        $live = $this->liveSettings($uid);
+        $want = $this->wantSettings($indexName);
 
         return [
             'pending' => $pending,
-            'diff'    => $this->diff($want, $live),
+            'diff' => $this->diff($want, $live),
         ];
     }
 
     private function prefixed(string $name): string
     {
-        $p = trim((string)($this->prefix ?? ''), '._-');
-        return $p !== '' ? $p . '_' . $name : $name;
+        $p = trim((string) ($this->prefix ?? ''), '._-');
+
+        return '' !== $p ? $p.'_'.$name : $name;
     }
 
     private function pendingTasks(string $uid): int
@@ -41,6 +44,7 @@ final class MeiliSettingsComparer
         $resp = $this->meili->getTasks(
             (new TasksQuery())->setIndexUids([$uid])->setStatuses(['enqueued', 'processing'])->setLimit(1000)
         );
+
         return $resp->getTotal();
     }
 
@@ -53,10 +57,11 @@ final class MeiliSettingsComparer
             // Index may not exist yet; treat as empty
             $s = [];
         }
+
         return [
-            'displayedAttributes'  => $s['displayedAttributes']  ?? ['*'],
+            'displayedAttributes' => $s['displayedAttributes'] ?? ['*'],
             'filterableAttributes' => array_values($s['filterableAttributes'] ?? []),
-            'sortableAttributes'   => array_values($s['sortableAttributes'] ?? []),
+            'sortableAttributes' => array_values($s['sortableAttributes'] ?? []),
             'searchableAttributes' => $s['searchableAttributes'] ?? ['*'],
         ];
     }
@@ -66,15 +71,15 @@ final class MeiliSettingsComparer
     {
         $cfg = $this->compiledSettings[$indexName] ?? [];
 
-        $display    = $cfg['display']    ?? ['*'];
+        $display = $cfg['display'] ?? ['*'];
         $filterable = $cfg['filterable'] ?? [];
-        $sortable   = $cfg['sortable']   ?? [];
+        $sortable = $cfg['sortable'] ?? [];
         $searchable = $cfg['searchable'] ?? [];
 
         return [
-            'displayedAttributes'  => $display ?: ['*'],
+            'displayedAttributes' => $display ?: ['*'],
             'filterableAttributes' => array_values(array_unique($filterable)),
-            'sortableAttributes'   => array_values(array_unique($sortable)),
+            'sortableAttributes' => array_values(array_unique($sortable)),
             'searchableAttributes' => $searchable ?: ['*'],
         ];
     }
@@ -83,7 +88,7 @@ final class MeiliSettingsComparer
     private function diff(array $want, array $live): array
     {
         $out = [];
-        foreach (['displayedAttributes','filterableAttributes','sortableAttributes','searchableAttributes'] as $k) {
+        foreach (['displayedAttributes', 'filterableAttributes', 'sortableAttributes', 'searchableAttributes'] as $k) {
             $w = $want[$k] ?? null;
             $l = $live[$k] ?? null;
 
@@ -92,6 +97,7 @@ final class MeiliSettingsComparer
                 $out[$k] = ['want' => $w, 'live' => $l];
             }
         }
+
         return $out;
     }
 }

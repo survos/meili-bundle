@@ -6,17 +6,12 @@ namespace Survos\MeiliBundle\Controller;
 
 use Survos\MeiliBundle\Registry\MeiliRegistry;
 use Survos\MeiliBundle\Repository\IndexInfoRepository;
+use Survos\MeiliBundle\Service\ChatWorkspaceResolver;
 use Survos\MeiliBundle\Service\IndexNameResolver;
 use Survos\MeiliBundle\Service\MeiliService;
-use Survos\MeiliBundle\Service\ChatWorkspaceResolver;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
-use function count;
-use function implode;
-use function is_array;
-use function strrpos;
-use function substr;
 
 #[Route('/meili')]
 class MeiliRegistryController extends AbstractController
@@ -38,22 +33,22 @@ class MeiliRegistryController extends AbstractController
         $rows = [];
         foreach ($this->registry->names() as $baseName) {
             $cfg = $this->registry->settingsFor($baseName) ?? [];
-            $ui = (array)($cfg['ui'] ?? []);
-            $label = (string)($ui['label'] ?? '');
-            if ($label === '') {
-                $class = (string)($cfg['class'] ?? $this->registry->classFor($baseName) ?? '');
+            $ui = (array) ($cfg['ui'] ?? []);
+            $label = (string) ($ui['label'] ?? '');
+            if ('' === $label) {
+                $class = (string) ($cfg['class'] ?? $this->registry->classFor($baseName) ?? '');
                 $label = $class ? $this->shortClass($class) : '';
             }
 
             $loc = $this->resolver->localesFor($baseName, $locale);
             $isMlFor = $this->resolver->isMultiLingualFor($baseName, $locale);
 
-            $persisted = is_array($cfg['persisted'] ?? null) ? $cfg['persisted'] : [];
-            $persistedGroups = isset($persisted['groups']) && is_array($persisted['groups'])
-                ? implode(',', $persisted['groups'])
+            $persisted = \is_array($cfg['persisted'] ?? null) ? $cfg['persisted'] : [];
+            $persistedGroups = isset($persisted['groups']) && \is_array($persisted['groups'])
+                ? \implode(',', $persisted['groups'])
                 : '';
-            $persistedFieldsCount = isset($persisted['fields']) && is_array($persisted['fields'])
-                ? count($persisted['fields'])
+            $persistedFieldsCount = isset($persisted['fields']) && \is_array($persisted['fields'])
+                ? \count($persisted['fields'])
                 : 0;
 
             // Get the raw index name for the primary locale
@@ -73,10 +68,10 @@ class MeiliRegistryController extends AbstractController
                 'workspaces' => $workspaces,
                 'multilingual' => $isMlFor ? 'yes' : 'no',
                 'locale' => $loc['source'],
-                'targetLocales' => $loc['targets'] ? implode(',', $loc['targets']) : '',
-                'primaryKey' => (string)($cfg['primaryKey'] ?? ''),
+                'targetLocales' => $loc['targets'] ? \implode(',', $loc['targets']) : '',
+                'primaryKey' => (string) ($cfg['primaryKey'] ?? ''),
                 'persistedGroups' => $persistedGroups,
-                'persistedFieldsCount' => (string)$persistedFieldsCount,
+                'persistedFieldsCount' => (string) $persistedFieldsCount,
             ];
         }
 
@@ -86,7 +81,7 @@ class MeiliRegistryController extends AbstractController
                 'indexName' => $info->indexName,
                 'searchIndexName' => $meili->baseNameFromUid($info->indexName),
                 'primaryKey' => $info->primaryKey,
-                'documentCount' => (string)$info->documentCount,
+                'documentCount' => (string) $info->documentCount,
                 'updatedAt' => $info->updatedAt?->format('Y-m-d H:i:s') ?? '',
                 'status' => $info->status ?? '',
                 'searchKey' => $info->hasSearchApiKey() ? 'yes' : 'no',
@@ -104,7 +99,8 @@ class MeiliRegistryController extends AbstractController
 
     private function shortClass(string $fqcn): string
     {
-        $p = strrpos($fqcn, '\\');
-        return $p === false ? $fqcn : substr($fqcn, $p + 1);
+        $p = \strrpos($fqcn, '\\');
+
+        return false === $p ? $fqcn : \substr($fqcn, $p + 1);
     }
 }

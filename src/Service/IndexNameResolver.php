@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Service;
@@ -41,7 +42,7 @@ final class IndexNameResolver
         $cfg = $this->registry->settingsFor($baseName) ?? [];
         [$source, $targets] = $this->extractLocalesMeta($cfg, $fallbackSource);
 
-        return $targets !== [];
+        return [] !== $targets;
     }
 
     public function passLocale(): bool
@@ -68,7 +69,7 @@ final class IndexNameResolver
 
         $isMlFor = $this->isMultiLingualFor($baseName, $fallbackSource);
 
-        if ($isMlFor && $targets === []) {
+        if ($isMlFor && [] === $targets) {
             $enabled = $this->enabledLocales();
             $targets = array_values(array_diff($enabled, [$source]));
         }
@@ -83,14 +84,14 @@ final class IndexNameResolver
     }
 
     /**
-     * base + locale -> raw (unprefixed)
+     * base + locale -> raw (unprefixed).
      */
     public function rawFor(string $baseName, ?string $locale, ?bool $isMultilingual = null): string
     {
         $locale = $this->normLocale($locale) ?? '';
 
         $ml = $isMultilingual ?? $this->isMultiLingual();
-        if (!$ml || $locale === '') {
+        if (!$ml || '' === $locale) {
             return $baseName;
         }
 
@@ -98,7 +99,7 @@ final class IndexNameResolver
     }
 
     /**
-     * raw -> uid (prefix applied once, centrally)
+     * raw -> uid (prefix applied once, centrally).
      */
     public function uidForRaw(string $rawName): string
     {
@@ -106,11 +107,12 @@ final class IndexNameResolver
     }
 
     /**
-     * base + locale -> uid
+     * base + locale -> uid.
      */
     public function uidFor(string $baseName, ?string $locale, ?bool $isMultilingual = null): string
     {
         $raw = $this->rawFor($baseName, $locale, $isMultilingual);
+
         return $this->uidForRaw($raw);
     }
 
@@ -124,6 +126,7 @@ final class IndexNameResolver
         $base = trim($datasetRef);
         $base = str_replace(['/', '\\'], '_', $base);
         $base = preg_replace('/[^a-zA-Z0-9_\-]+/', '_', $base) ?? $base;
+
         return trim($base, '_');
     }
 
@@ -131,14 +134,14 @@ final class IndexNameResolver
 
     private function anyIndexHasTargets(): bool
     {
-        if ($this->anyTargetsCache !== null) {
+        if (null !== $this->anyTargetsCache) {
             return $this->anyTargetsCache;
         }
 
         foreach ($this->registry->names() as $baseName) {
             $cfg = $this->registry->settingsFor($baseName) ?? [];
             [, $targets] = $this->extractLocalesMeta($cfg, $this->defaultLocale());
-            if ($targets !== []) {
+            if ([] !== $targets) {
                 return $this->anyTargetsCache = true;
             }
         }
@@ -148,6 +151,7 @@ final class IndexNameResolver
 
     /**
      * @param array<string,mixed> $cfg
+     *
      * @return array{0:string,1:string[]} source, targets
      */
     private function extractLocalesMeta(array $cfg, string $fallbackSource): array
@@ -162,22 +166,24 @@ final class IndexNameResolver
         $targets = $meta['targets'] ?? [];
         $targets = is_array($targets) ? $targets : [];
         $targets = array_values(array_unique(array_filter(array_map(
-            fn($v) => $this->normLocale((string)$v),
+            fn ($v) => $this->normLocale((string) $v),
             $targets
-        ), fn($v) => is_string($v) && $v !== '' && $v !== $source)));
+        ), fn ($v) => is_string($v) && '' !== $v && $v !== $source)));
 
         return [$source, $targets];
     }
 
     private function normLocale(?string $locale): ?string
     {
-        $locale = $locale !== null ? trim($locale) : null;
+        $locale = null !== $locale ? trim($locale) : null;
+
         return $locale ? strtolower($locale) : null;
     }
 
     private function defaultLocale(): string
     {
         $v = $this->bag->has('kernel.default_locale') ? $this->bag->get('kernel.default_locale') : 'en';
+
         return $this->normLocale($v) ?? 'en';
     }
 
@@ -195,18 +201,18 @@ final class IndexNameResolver
             $enabled = null;
             if (is_array($v)) {
                 $enabled = $v;
-            } elseif (is_string($v) && trim($v) !== '') {
+            } elseif (is_string($v) && '' !== trim($v)) {
                 $enabled = str_contains($v, '|') ? explode('|', $v) : explode(',', $v);
             }
 
-            if ($enabled === null) {
+            if (null === $enabled) {
                 continue;
             }
 
             $enabled = array_values(array_unique(array_filter(array_map(
-                fn($x) => $this->normLocale((string)$x),
+                fn ($x) => $this->normLocale((string) $x),
                 $enabled
-            ), fn($x) => is_string($x) && $x !== '')));
+            ), fn ($x) => is_string($x) && '' !== $x)));
 
             return $enabled;
         }

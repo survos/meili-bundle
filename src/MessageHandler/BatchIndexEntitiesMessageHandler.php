@@ -1,14 +1,14 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\MessageHandler;
 
-use Survos\DataContracts\Util\Arrays;
 use Doctrine\ORM\EntityManagerInterface;
-use Meilisearch\Contracts\TaskStatus;
 use Meilisearch\Endpoints\Index;
 use Psr\Log\LoggerInterface;
 use Survos\BabelBundle\Service\LocaleContext;
+use Survos\DataContracts\Util\Arrays;
 use Survos\MeiliBundle\Message\BatchIndexEntitiesMessage;
 use Survos\MeiliBundle\Service\IndexNameResolver;
 use Survos\MeiliBundle\Service\MeiliNdjsonUploader;
@@ -23,15 +23,16 @@ final class BatchIndexEntitiesMessageHandler
 {
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
-        private readonly MeiliPayloadBuilder    $payloadBuilder,
-        private readonly SettingsService        $settingsService,
-        private readonly NormalizerInterface    $normalizer,
-        private readonly MeiliService           $meiliService,
-        private readonly MeiliNdjsonUploader    $uploader,
-        private readonly ?IndexNameResolver     $indexNameResolver = null,
-        private readonly ?LocaleContext         $localeContext = null,
-        private readonly ?LoggerInterface       $logger = null,
-    ) {}
+        private readonly MeiliPayloadBuilder $payloadBuilder,
+        private readonly SettingsService $settingsService,
+        private readonly NormalizerInterface $normalizer,
+        private readonly MeiliService $meiliService,
+        private readonly MeiliNdjsonUploader $uploader,
+        private readonly ?IndexNameResolver $indexNameResolver = null,
+        private readonly ?LocaleContext $localeContext = null,
+        private readonly ?LoggerInterface $logger = null,
+    ) {
+    }
 
     public function __invoke(BatchIndexEntitiesMessage $message): void
     {
@@ -40,7 +41,7 @@ final class BatchIndexEntitiesMessageHandler
         $effectiveLocale = $message->locale ?: $this->localeContext?->getDefault();
         if ($effectiveLocale !== $message->locale) {
             $this->logger?->info('Normalizing message locale', [
-                'original'  => $message->locale,
+                'original' => $message->locale,
                 'effective' => $effectiveLocale,
             ]);
             $message->locale = $effectiveLocale;
@@ -48,11 +49,11 @@ final class BatchIndexEntitiesMessageHandler
 
         $this->logger?->info('BatchIndexEntitiesMessageHandler: received message', [
             'entityClass' => $message->entityClass,
-            'indexName'   => $message->indexName,
-            'locale'      => $message->locale,
-            'reload'      => $message->reload,
-            'sync'        => $this->messageSync($message),
-            'ids'         => \is_iterable($message->entityData) ? \count((array) $message->entityData) : null,
+            'indexName' => $message->indexName,
+            'locale' => $message->locale,
+            'reload' => $message->reload,
+            'sync' => $this->messageSync($message),
+            'ids' => \is_iterable($message->entityData) ? \count((array) $message->entityData) : null,
         ]);
 
         //
@@ -61,7 +62,7 @@ final class BatchIndexEntitiesMessageHandler
         if ($message->indexName) {
             $this->logger?->info('Using explicit indexName from producer', [
                 'indexName' => $message->indexName,
-                'locale'    => $message->locale,
+                'locale' => $message->locale,
             ]);
 
             $runner = function () use ($message): void {
@@ -70,14 +71,14 @@ final class BatchIndexEntitiesMessageHandler
 
             if ($this->localeContext && $message->locale) {
                 $this->logger?->info('LocaleContext->run() for explicit indexName', [
-                    'locale'    => $message->locale,
+                    'locale' => $message->locale,
                     'indexName' => $message->indexName,
                 ]);
                 $this->localeContext->run($message->locale, $runner);
             } else {
                 if ($message->locale && !$this->localeContext) {
                     $this->logger?->warning('Locale set but LocaleContext missing (no BabelBundle?)', [
-                        'locale'    => $message->locale,
+                        'locale' => $message->locale,
                         'indexName' => $message->indexName,
                     ]);
                 }
@@ -91,19 +92,20 @@ final class BatchIndexEntitiesMessageHandler
         // 🌱 DEFAULT / MAPPED PATH: derive indexName(s) from indexedByClass()
         //
         $classIndexes = $this->meiliService->indexedByClass();
-        $indexes      = $classIndexes[$message->entityClass] ?? [];
-        $count        = \count($indexes);
+        $indexes = $classIndexes[$message->entityClass] ?? [];
+        $count = \count($indexes);
 
-        if ($count === 0) {
+        if (0 === $count) {
             $this->logger?->warning('No Meili index mapping found for entityClass', [
                 'entityClass' => $message->entityClass,
             ]);
+
             return;
         }
 
         // If locale is null, treat as mono-index (plain) case.
         // If locale is set but producer didn't provide indexName, it is legacy producer behavior.
-        $plainIndex = ($message->locale === null);
+        $plainIndex = (null === $message->locale);
 
         $this->logger?->info(
             $plainIndex
@@ -111,8 +113,8 @@ final class BatchIndexEntitiesMessageHandler
                 : 'Deriving localized index mapping from indexedByClass() (legacy producer)',
             [
                 'entityClass' => $message->entityClass,
-                'count'       => $count,
-                'locale'      => $message->locale,
+                'count' => $count,
+                'locale' => $message->locale,
             ]
         );
 
@@ -136,7 +138,7 @@ final class BatchIndexEntitiesMessageHandler
                         : 'Applying derived localized index for entityClass (legacy producer)',
                     [
                         'indexName' => $resolvedUid,
-                        'locale'    => $message->locale,
+                        'locale' => $message->locale,
                     ]
                 );
 
@@ -154,14 +156,14 @@ final class BatchIndexEntitiesMessageHandler
     private function apply(BatchIndexEntitiesMessage $message): void
     {
         $entityClass = $message->entityClass;
-        $indexName   = $message->indexName;
-        $locale      = $message->locale;
+        $indexName = $message->indexName;
+        $locale = $message->locale;
 
         // 🔑 Important: drop cached entities so postLoad runs under the new locale
         $this->logger?->info('Clearing EntityManager identity map for class before indexing', [
             'entityClass' => $entityClass,
-            'indexName'   => $indexName,
-            'locale'      => $locale,
+            'indexName' => $indexName,
+            'locale' => $locale,
         ]);
         $this->entityManager->clear($entityClass);
 
@@ -171,8 +173,8 @@ final class BatchIndexEntitiesMessageHandler
         }
 
         $this->logger?->info('BatchIndexEntitiesMessageHandler.apply(): entering', [
-            'entityClass'   => $entityClass,
-            'indexName'     => $indexName,
+            'entityClass' => $entityClass,
+            'indexName' => $indexName,
             'messageLocale' => $locale,
             'contextLocale' => $currentLocale,
         ]);
@@ -200,37 +202,36 @@ final class BatchIndexEntitiesMessageHandler
 
         if (!$indexSettings) {
             $this->logger?->warning('Missing indexSettings for index', [
-                'indexName'     => $indexName,
-                'settingsKey'   => $settingsKey,
-                'entityClass'   => $entityClass,
-                'locale'        => $locale,
+                'indexName' => $indexName,
+                'settingsKey' => $settingsKey,
+                'entityClass' => $entityClass,
+                'locale' => $locale,
                 'availableKeys' => \array_keys($this->meiliService->getAllSettings()),
             ]);
+
             return;
         }
 
-        $persisted  = $indexSettings['persisted']  ?? [];
+        $persisted = $indexSettings['persisted'] ?? [];
         $primaryKey = $indexSettings['primaryKey'] ?? 'id';
 
-
-
         $this->logger?->info('Applying documents to index', [
-            'entityClass'   => $entityClass,
-            'indexUid'      => $index->getUid(),
-            'indexName'     => $indexName,
-            'settingsKey'   => $settingsKey,
+            'entityClass' => $entityClass,
+            'indexUid' => $index->getUid(),
+            'indexName' => $indexName,
+            'settingsKey' => $settingsKey,
             'messageLocale' => $locale,
             'contextLocale' => $currentLocale,
-            'primaryKey'    => $primaryKey,
-            'reload'        => $message->reload,
-            'sync'          => $this->messageSync($message),
+            'primaryKey' => $primaryKey,
+            'reload' => $message->reload,
+            'sync' => $this->messageSync($message),
         ]);
 
         //
         // Load and normalize entities under the scoped locale
         //
-        $metadata        = $this->entityManager->getClassMetadata($entityClass);
-        $repo            = $this->entityManager->getRepository($entityClass);
+        $metadata = $this->entityManager->getClassMetadata($entityClass);
+        $repo = $this->entityManager->getRepository($entityClass);
         $identifierField = $metadata->getSingleIdentifierFieldName();
 
         $sync = $this->messageSync($message);
@@ -239,15 +240,15 @@ final class BatchIndexEntitiesMessageHandler
         // Always pass $primaryKey on add-documents (first ingestion establishes PK).
         // When sync is enabled, wait for completion and fail loudly on failure.
         if ($message->reload) {
-//            dd([
-//                'indexSettings'   => $indexSettings,
-//                'persisted'       => $persisted,
-//                'persistedGroups' => $persisted['groups'] ?? null,
-//                'restrictGroups'  => $persisted['restrict_groups'] ?? null,
-//                'entityClass'     => $entityClass,
-//                'indexName'       => $indexName,
-//                'settingsKey'     => $settingsKey,
-//            ]);
+            //            dd([
+            //                'indexSettings'   => $indexSettings,
+            //                'persisted'       => $persisted,
+            //                'persistedGroups' => $persisted['groups'] ?? null,
+            //                'restrictGroups'  => $persisted['restrict_groups'] ?? null,
+            //                'entityClass'     => $entityClass,
+            //                'indexName'       => $indexName,
+            //                'settingsKey'     => $settingsKey,
+            //            ]);
             $iter = $this->yieldNormalizedDocs(
                 $repo,
                 $identifierField,
@@ -264,9 +265,9 @@ final class BatchIndexEntitiesMessageHandler
         } else {
             // If entityData is already an array of docs, NDJSON uploader is fine.
             // If it's a list of IDs (legacy), reload should have been set.
-//            dd($message->entityData);
+            //            dd($message->entityData);
             $taskUid = $this->uploader->uploadDocuments($index, $message->entityData, $primaryKey);
-            if ($sync && $taskUid !== null) {
+            if ($sync && null !== $taskUid) {
                 $task = $this->meiliService->waitForTask((int) $taskUid);
                 if (($task['status'] ?? null) !== 'succeeded') {
                     $this->logger?->error('Meilisearch task failed (sync mode)', [$index->getUid(), $task['status'] ?? null, $task['error'] ?? null]);
@@ -280,7 +281,7 @@ final class BatchIndexEntitiesMessageHandler
         if ($indexName) {
             $this->logger?->info('getMeiliIndex(): using explicit indexName', [
                 'indexName' => $indexName,
-                'locale'    => $locale,
+                'locale' => $locale,
             ]);
 
             // autoCreate: true is fine; PK is established on first addDocuments via $primaryKey
@@ -292,11 +293,11 @@ final class BatchIndexEntitiesMessageHandler
         // Prefer IndexNameResolver when available.
         //
         $short = (new \ReflectionClass($entityClass))->getShortName();
-        $loc   = $locale ?: $this->localeContext?->getDefault();
+        $loc = $locale ?: $this->localeContext?->getDefault();
 
         $classMapping = $this->meiliService->indexedByClass()[$entityClass] ?? [];
 
-        $baseKey = \count($classMapping) === 1
+        $baseKey = 1 === \count($classMapping)
             ? (string) \array_key_first($classMapping)
             : \strtolower($short);
 
@@ -311,9 +312,9 @@ final class BatchIndexEntitiesMessageHandler
         }
 
         $this->logger?->info('getMeiliIndex(): derived fallback indexName', [
-            'baseKey'    => $baseKey,
+            'baseKey' => $baseKey,
             'derivedUid' => $derivedUid,
-            'locale'     => $loc,
+            'locale' => $loc,
         ]);
 
         return $this->meiliService->getOrCreateIndex($derivedUid, autoCreate: true);
@@ -335,8 +336,8 @@ final class BatchIndexEntitiesMessageHandler
         }
 
         // No locale: mono-index, just apply prefix if available
-        if ($locale === null) {
-            return $prefix ? $prefix . $mappingKey : $mappingKey;
+        if (null === $locale) {
+            return $prefix ? $prefix.$mappingKey : $mappingKey;
         }
 
         // Treat as base name and resolve with locale
@@ -359,6 +360,7 @@ final class BatchIndexEntitiesMessageHandler
         if (method_exists($this->meiliService, 'baseNameForUid')) {
             /** @var string $base */
             $base = $this->meiliService->baseNameForUid($indexUid);
+
             return $base;
         }
 
@@ -376,7 +378,7 @@ final class BatchIndexEntitiesMessageHandler
         }
 
         if ($locale) {
-            $suffix = '_' . \strtolower($locale);
+            $suffix = '_'.\strtolower($locale);
             if (\str_ends_with($key, $suffix)) {
                 $key = \substr($key, 0, -\strlen($suffix));
             }
@@ -397,6 +399,7 @@ final class BatchIndexEntitiesMessageHandler
         foreach (['sync', 'wait'] as $prop) {
             if (\property_exists($message, $prop)) {
                 $v = $message->{$prop};
+
                 return \is_bool($v) ? $v : (bool) $v;
             }
         }
@@ -423,7 +426,7 @@ final class BatchIndexEntitiesMessageHandler
 
             if (!\is_array($doc)) {
                 $this->logger?->warning('payloadBuilder returned non-array', [
-                    'id'   => $id,
+                    'id' => $id,
                     'type' => \get_debug_type($doc),
                 ]);
                 continue;

@@ -1,10 +1,11 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Command;
 
-use Survos\MeiliBundle\Tool\GetDocumentTool;
 use Survos\MeiliBundle\Tool\DescribeCollectionTool;
+use Survos\MeiliBundle\Tool\GetDocumentTool;
 use Survos\MeiliBundle\Tool\SearchFacetsTool;
 use Survos\MeiliBundle\Tool\SearchIndexTool;
 use Survos\MeiliBundle\Tool\SimilarDocumentsTool;
@@ -13,10 +14,6 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
-
-use function json_decode;
-use function json_encode;
-use function sprintf;
 
 /**
  * Smoke-test the Meilisearch AI tool layer from the CLI.
@@ -59,28 +56,29 @@ final class MeiliMcpTestCommand
         float $semanticRatio = 0.5,
     ): int {
         $json = match ($tool) {
-            'search_index'       => ($this->searchIndexTool)($index, $query, $limit, $filter, $embedder, $semanticRatio),
-            'get_document'       => ($this->getDocumentTool)($index, $query),
+            'search_index' => ($this->searchIndexTool)($index, $query, $limit, $filter, $embedder, $semanticRatio),
+            'get_document' => ($this->getDocumentTool)($index, $query),
             // $query = documentId, $extra = embedder name (defaults to 'default')
-            'similar_documents'  => ($this->similarDocumentsTool)($index, $query, $extra ?? 'default', $limit),
+            'similar_documents' => ($this->similarDocumentsTool)($index, $query, $extra ?? 'default', $limit),
             // $extra = comma-separated facet attributes
-            'search_facets'      => ($this->searchFacetsTool)($index, $query, $extra ?? 'id', $filter),
+            'search_facets' => ($this->searchFacetsTool)($index, $query, $extra ?? 'id', $filter),
             'describe_collection' => ($this->describeCollectionTool)($index, $extra, $limit),
-            default              => null,
+            default => null,
         };
 
-        if ($json === null) {
-            $io->error(sprintf(
+        if (null === $json) {
+            $io->error(\sprintf(
                 'Unknown tool "%s". Available: search_index, get_document, similar_documents, search_facets, describe_collection',
                 $tool
             ));
+
             return Command::FAILURE;
         }
 
-        $decoded = json_decode($json, true);
-        $pretty  = (string) json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $decoded = \json_decode($json, true);
+        $pretty = (string) \json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        $io->title(sprintf('Tool: %s  |  Index: %s  |  Query: %s', $tool, $index, $query));
+        $io->title(\sprintf('Tool: %s  |  Index: %s  |  Query: %s', $tool, $index, $query));
         $io->writeln($pretty);
 
         return Command::SUCCESS;

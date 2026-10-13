@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Survos\MeiliBundle\Meili;
@@ -10,24 +11,24 @@ namespace Survos\MeiliBundle\Meili;
 final class MeiliTaskType
 {
     public const DOCUMENT_ADDITION_OR_UPDATE = 'documentAdditionOrUpdate';
-    public const DOCUMENT_EDITION            = 'documentEdition';
-    public const DOCUMENT_DELETION           = 'documentDeletion';
+    public const DOCUMENT_EDITION = 'documentEdition';
+    public const DOCUMENT_DELETION = 'documentDeletion';
 
-    public const SETTINGS_UPDATE             = 'settingsUpdate';
+    public const SETTINGS_UPDATE = 'settingsUpdate';
 
-    public const INDEX_CREATION              = 'indexCreation';
-    public const INDEX_DELETION              = 'indexDeletion';
-    public const INDEX_UPDATE                = 'indexUpdate';
-    public const INDEX_SWAP                  = 'indexSwap';
+    public const INDEX_CREATION = 'indexCreation';
+    public const INDEX_DELETION = 'indexDeletion';
+    public const INDEX_UPDATE = 'indexUpdate';
+    public const INDEX_SWAP = 'indexSwap';
 
-    public const TASK_CANCELATION            = 'taskCancelation';
-    public const TASK_DELETION               = 'taskDeletion';
+    public const TASK_CANCELATION = 'taskCancelation';
+    public const TASK_DELETION = 'taskDeletion';
 
-    public const DUMP_CREATION               = 'dumpCreation';
-    public const SNAPSHOT_CREATION           = 'snapshotCreation';
+    public const DUMP_CREATION = 'dumpCreation';
+    public const SNAPSHOT_CREATION = 'snapshotCreation';
 
-    public const EXPORT                      = 'export';
-    public const UPGRADE_DATABASE            = 'upgradeDatabase';
+    public const EXPORT = 'export';
+    public const UPGRADE_DATABASE = 'upgradeDatabase';
 
     /** @var string[] All known types */
     public const ALL = [
