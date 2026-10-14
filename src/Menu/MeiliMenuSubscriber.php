@@ -6,8 +6,9 @@ namespace Survos\MeiliBundle\Menu;
 
 use Survos\MeiliBundle\Registry\MeiliRegistry;
 use Survos\MeiliBundle\Service\MeiliService;
-use Survos\TablerBundle\Event\MenuEvent;
-use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+use Survos\MenuBundle\Attribute\AsMenuListener;
+use Survos\MenuBundle\Event\MenuEvent;
+use Survos\MenuBundle\MenuSlot;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 
 class MeiliMenuSubscriber
@@ -20,7 +21,7 @@ class MeiliMenuSubscriber
     ) {
     }
 
-    #[AsEventListener(event: MenuEvent::ADMIN_NAVBAR_MENU)]
+    #[AsMenuListener(MenuSlot::ADMIN_NAVBAR_MENU)]
     public function onAdminNavbarMenu(MenuEvent $event): void
     {
         if (empty($this->registry->names())) {

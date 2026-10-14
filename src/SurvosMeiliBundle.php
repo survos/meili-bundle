@@ -87,8 +87,8 @@ class SurvosMeiliBundle extends AbstractUxBundle
             ->tag('doctrine.event_listener', ['event' => 'preRemove'])
             ->tag('doctrine.event_listener', ['event' => 'postPersist']);
 
-        // Menu subscriber (only when tabler-bundle is installed; it's a suggest, not a hard require)
-        if (class_exists(\Survos\TablerBundle\Event\MenuEvent::class)) {
+        // Menu subscriber (only when survos/menu-bundle is installed, usually via tabler-bundle; a suggest, not a hard require)
+        if (class_exists(\Survos\MenuBundle\MenuSlot::class)) {
             $builder->autowire(MeiliMenuSubscriber::class)
                 ->setArgument('$meiliHost', $config['host'])
                 ->setAutoconfigured(true)
