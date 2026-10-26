@@ -3,9 +3,8 @@
  *
  * Creates the twig-browser engine and wires:
  *   - sais_encode()  — meili-specific URL-safe base64
- *   - path()         — from the SurvosJsTwigBundle-generated FOS routing module
- *                      (@survos/js-twig-bundle/routing). Silently skips
- *                      if the module isn't present (e.g. bundle not installed).
+ *   - path()         — from the app's assets/router.js (symfony/ux-router), mapped as
+ *                      'router' in importmap.php. Fails loudly if it isn't there.
  *
  * ux_icon() and stimulus_* are built into createEngine() and need no wiring here.
  */
@@ -30,17 +29,17 @@ export function installTwigEngine() {
     btoa(url).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
   );
 
-  // Wire Symfony Twig helpers (incl. path()) from the cache-warmed route JSON.
-  _engineReady = import('@survos/js-twig-bundle/routing')
+  // Wire Symfony Twig helpers (incl. path()) from the app's assets/router.js (symfony/ux-router).
+  _engineReady = import('router')
     .then(({ path }) => {
       installSymfonyTwigAPI(_engine, { pathGenerator: path });
     })
     .catch((error) => {
       const msg = [
         '[meili-bundle] path() is unavailable in twig-browser.',
-        'Install and enable Survos JS Twig routing support:',
-        '  composer require survos/js-twig-bundle',
-        'Then run cache:warmup to generate var/js_twig_bundle/generated/routes.json.',
+        'Install symfony/ux-router and map the app router in importmap.php:',
+        "  'router' => ['path' => './assets/router.js']",
+        'Then run cache:warmup to dump var/routes.',
       ].join('\n');
       console.error(msg, error);
       throw new Error(msg);

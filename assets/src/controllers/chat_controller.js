@@ -246,8 +246,8 @@ export default class extends Controller {
       this._engine.registerFunction("sais_encode", (url) =>
         btoa(url).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
       )
-      // Wire path() from FOS routing if available (best-effort)
-      import("@survos/js-twig-bundle/routing")
+      // Wire path() from the app's assets/router.js (symfony/ux-router) if available (best-effort)
+      import("router")
         .then(({ path }) => this._engine.registerFunction("path", path))
         .catch(() => {})
     } catch (e) {
