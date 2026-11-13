@@ -536,7 +536,6 @@ class SurvosMeiliBundle extends AbstractUxBundle
                             'type' => 'attribute',
                             'dir' => \dirname(__DIR__).'/src/Entity',
                             'prefix' => 'Survos\\MeiliBundle\\Entity',
-                            'alias' => 'SurvosMeiliBundle',
                         ],
                     ],
                 ],
