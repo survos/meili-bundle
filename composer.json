@@ -43,7 +43,7 @@
         "symfony/http-client": "^8.1",
         "symfony/intl": "^8.1",
         "symfony/ux-twig-component": "^3",
-        "doctrine/doctrine-bundle": "^3.0",
+        "doctrine/doctrine-bundle": "^3.4",
         "symfony/messenger": "^8.1",
         "survos/babel-bundle": "^2.5",
         "yethee/tiktoken": "^1.0",
